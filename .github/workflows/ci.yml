@@ -18,7 +18,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Node Dependencies
@@ -42,8 +42,8 @@ jobs:
 
       - name: Run Test Suite Verification
         run: |
-          if [ -d "tests" ]; then
-            pytest -v tests/ || true
+          if [ -d "tests" ] && [ "$(ls -A tests 2>/dev/null)" ]; then
+            pytest -v tests/
           else
-            echo "No test directory found; skipping pytest."
+            echo "No test files found; verification skipped."
           fi
