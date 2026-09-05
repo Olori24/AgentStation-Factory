@@ -61,8 +61,10 @@ AgentStation employs five specialized agents working in tandem:
 
 ### 5. Git & GitHub Hub
 - **Repository Synchronization**: Real-time sync with `Olori24/AgentStation-Factory` and `Olori24/AgentStation`.
-- **1-Click Push Mechanism**: Authenticated push directly to GitHub using your personal access token.
-- **Commit Inspection**: Displays current branch, latest commit hash, author info, and uncommitted file status.
+- **Commit and Push**: Dedicated **Commit and Push** button that writes all mission workspace files, stages changes, commits with custom or auto-generated messages, merges upstream changes, and pushes directly to GitHub with live audit steps and success notifications.
+- **Create New Branch**: In-modal branch creator with branch naming sanitization, quick prefix chips (`feat/`, `fix/`, `chore/`, `release/`), automatic working tree protection (stash/pop), and instantaneous workspace checkout.
+- **Remote Branch Switcher**: Live remote branch inspector showing active branch status, latest commit metadata, and one-click branch switching.
+- **Commit Inspection**: Displays current branch, latest commit hash, author info, uncommitted file status, and direct GitHub links.
 
 ---
 

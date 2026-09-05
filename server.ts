@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -384,24 +385,11 @@ app.post("/api/github/push", async (req, res) => {
     const customCommit = req.body?.commitMessage || "feat: AgentStation autonomous multi-agent cluster sync";
     const targetBranch = (req.body?.branch || "main").trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, "") || "main";
     const token = process.env.GITHUB_TOKEN?.trim();
+    const filesToSync = req.body?.files || req.body?.missionFiles;
 
     const auditSteps: string[] = [];
 
-    // Step 1: Stage and commit any local changes
-    await execAsync("git add -A");
-    try {
-      const statusRes = await execAsync("git status --porcelain");
-      if (statusRes.stdout.trim()) {
-        await execAsync(`git commit -m "${customCommit.replace(/"/g, '\\"')}"`);
-        auditSteps.push(`✓ Staged and committed local changes: "${customCommit}"`);
-      } else {
-        auditSteps.push("ℹ Working tree clean (all changes committed)");
-      }
-    } catch (commitErr: any) {
-      auditSteps.push("Commit note: " + (commitErr.stderr || commitErr.message || "clean"));
-    }
-
-    // Step 2: Fetch latest refs from remote origin
+    // Step 1: Fetch latest refs from remote origin
     const primaryFetchUrl = token
       ? `https://${token}@github.com/Olori24/AgentStation-Factory.git`
       : "origin";
@@ -413,17 +401,28 @@ app.post("/api/github/push", async (req, res) => {
       auditSteps.push(`ℹ Remote fetch note: ${fetchErr.stderr || fetchErr.message}`);
     }
 
-    // Step 3: Switch to / prepare target branch
+    // Step 2: Switch to / prepare target branch
     const currentBranchRes = await execAsync("git branch --show-current");
     let currentBranch = currentBranchRes.stdout.trim();
 
     if (currentBranch !== targetBranch) {
+      // Check if working tree is dirty before switching
+      let hasStashed = false;
+      const statusCheck = await execAsync("git status --porcelain");
+      if (statusCheck.stdout.trim()) {
+        try {
+          await execAsync('git stash push -u -m "agentstation_push_stash"');
+          hasStashed = true;
+          auditSteps.push("✓ Preserved working directory state before branch switch");
+        } catch {}
+      }
+
       const localBranchesRes = await execAsync("git branch --list --format='%(refname:short)'");
       const localBranches = localBranchesRes.stdout.split("\n").map((b) => b.trim()).filter(Boolean);
 
       if (localBranches.includes(targetBranch)) {
         await execAsync(`git checkout ${targetBranch}`);
-        auditSteps.push(`✓ Switched to local branch '${targetBranch}'`);
+        auditSteps.push(`✓ Switched to branch '${targetBranch}'`);
       } else {
         let hasRemoteRef = false;
         try {
@@ -439,23 +438,30 @@ app.post("/api/github/push", async (req, res) => {
           auditSteps.push(`✓ Created new branch '${targetBranch}'`);
         }
       }
+
+      if (hasStashed) {
+        try {
+          await execAsync("git stash pop");
+          auditSteps.push("✓ Restored working directory state");
+        } catch {
+          auditSteps.push("ℹ Stash restoration note: changes merged");
+        }
+      }
       currentBranch = targetBranch;
     }
 
-    // Step 4: Fetch & Merge target branch if it already exists on remote
+    // Step 3: Fetch & Merge target branch if it already exists on remote
     let hasRemoteTarget = false;
     try {
       await execAsync(`git rev-parse --verify refs/remotes/origin/${targetBranch}`);
       hasRemoteTarget = true;
     } catch {}
 
-    let mergedRemote = false;
     if (hasRemoteTarget) {
       try {
         const mergeRes = await execAsync(
           `git merge refs/remotes/origin/${targetBranch} --no-edit -m "Merge remote-tracking branch 'origin/${targetBranch}' into ${targetBranch}"`
         );
-        mergedRemote = true;
         const mergeOutput = mergeRes.stdout.trim() || mergeRes.stderr.trim() || "Up to date";
         auditSteps.push(`✓ Merged remote-tracking 'origin/${targetBranch}' (${mergeOutput.split("\n")[0]})`);
       } catch (mergeErr: any) {
@@ -471,7 +477,41 @@ app.post("/api/github/push", async (req, res) => {
       auditSteps.push(`ℹ Target branch '${targetBranch}' is new on remote (no upstream merge required)`);
     }
 
-    // Step 5: Push to remote repository / repositories
+    // Step 4: Write mission files into workspace directory
+    let filesSyncedCount = 0;
+    if (Array.isArray(filesToSync) && filesToSync.length > 0) {
+      const workspaceDir = path.join(process.cwd(), "workspace");
+      await fs.promises.mkdir(workspaceDir, { recursive: true });
+
+      for (const file of filesToSync) {
+        if (file && (file.path || file.name) && typeof file.content === "string") {
+          const rawRelPath = (file.path || file.name).replace(/^[\\\/]+/, "");
+          const safeRelPath = path.normalize(rawRelPath).replace(/^(\.\.[\/\\])+/, "");
+          const targetFile = path.join(workspaceDir, safeRelPath);
+
+          await fs.promises.mkdir(path.dirname(targetFile), { recursive: true });
+          await fs.promises.writeFile(targetFile, file.content, "utf8");
+          filesSyncedCount++;
+        }
+      }
+      auditSteps.push(`✓ Synced ${filesSyncedCount} mission file(s) into workspace/`);
+    }
+
+    // Step 5: Stage and commit all changes
+    await execAsync("git add -A");
+    try {
+      const statusRes = await execAsync("git status --porcelain");
+      if (statusRes.stdout.trim()) {
+        await execAsync(`git commit -m "${customCommit.replace(/"/g, '\\"')}"`);
+        auditSteps.push(`✓ Staged and committed changes: "${customCommit}"`);
+      } else {
+        auditSteps.push("ℹ Working tree clean (all changes committed)");
+      }
+    } catch (commitErr: any) {
+      auditSteps.push("Commit note: " + (commitErr.stderr || commitErr.message || "clean"));
+    }
+
+    // Step 6: Push to remote repository / repositories
     if (token) {
       const repos = [
         "https://" + token + "@github.com/Olori24/AgentStation-Factory.git",
@@ -494,12 +534,13 @@ app.post("/api/github/push", async (req, res) => {
         success: true,
         branch: targetBranch,
         commitHash: finalHash,
+        filesSynced: filesSyncedCount,
         branchUrl: `https://github.com/Olori24/AgentStation/tree/${targetBranch}`,
         fetchedAndMerged: hasRemoteTarget,
         auditSteps,
         message: hasRemoteTarget
-          ? `Successfully fetched, merged 'origin/${targetBranch}', and pushed to remote branch '${targetBranch}'!`
-          : `Successfully pushed new branch '${targetBranch}' to remote!`,
+          ? `Successfully fetched, merged 'origin/${targetBranch}', and pushed ${filesSyncedCount > 0 ? `${filesSyncedCount} mission file(s)` : 'changes'} to remote branch '${targetBranch}'!`
+          : `Successfully committed and pushed ${filesSyncedCount > 0 ? `${filesSyncedCount} mission file(s)` : 'changes'} to branch '${targetBranch}'!`,
         output: outputs.join("\n"),
       });
     } else {
@@ -512,6 +553,7 @@ app.post("/api/github/push", async (req, res) => {
           success: true,
           branch: targetBranch,
           commitHash: finalHash,
+          filesSynced: filesSyncedCount,
           branchUrl: `https://github.com/Olori24/AgentStation/tree/${targetBranch}`,
           fetchedAndMerged: hasRemoteTarget,
           auditSteps,

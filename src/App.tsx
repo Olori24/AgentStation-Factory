@@ -553,6 +553,8 @@ export default function App() {
         onClose={() => setIsGitHubModalOpen(false)}
         commitMessage={mission.gitCommitMessage}
         currentBranch={mission.gitBranch || 'main'}
+        missionFiles={mission.files}
+        onSuccessNotification={(msg) => showToast(msg)}
         onBranchChange={(newBranch) => {
           setMission((prev) => {
             const updated = { ...prev, gitBranch: newBranch };
