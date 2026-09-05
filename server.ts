@@ -33,6 +33,21 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+// Helper to ensure git repo is initialized in sandbox container
+async function ensureGitRepo() {
+  try {
+    const isGit = await execAsync("git rev-parse --is-inside-work-tree");
+    if (isGit.stdout.trim() !== "true") throw new Error("not inside work tree");
+  } catch {
+    try {
+      await execAsync("git init && git branch -m main");
+      await execAsync('git config user.name "Bolaji Akande" && git config user.email "bakande11@gmail.com"');
+      await execAsync("git remote add origin https://github.com/Olori24/AgentStation-Factory.git");
+      await execAsync('git add -A && git commit -m "feat: AgentStation autonomous multi-agent cluster sync"');
+    } catch {}
+  }
+}
+
 // GitHub repository info
 app.get("/api/github/meta", (_req, res) => {
   res.json({
@@ -47,6 +62,7 @@ app.get("/api/github/meta", (_req, res) => {
 // Real-time Git Repository Status
 app.get("/api/github/status", async (_req, res) => {
   try {
+    await ensureGitRepo();
     let branch = "main";
     let commitHash = "";
     let commitMessage = "";
@@ -204,6 +220,7 @@ app.get("/api/github/status", async (_req, res) => {
 // Create a new branch and automatically switch to it
 app.post("/api/github/create-branch", async (req, res) => {
   try {
+    await ensureGitRepo();
     const rawBranch = (req.body?.branch || "").trim();
     const cleanBranch = rawBranch.replace(/[^a-zA-Z0-9_\-\.\/]/g, "-").replace(/-+/g, "-").replace(/^\/+|\/+$/g, "");
     if (!cleanBranch) {
@@ -264,6 +281,7 @@ app.post("/api/github/create-branch", async (req, res) => {
 // Switch to or checkout a target branch
 app.post("/api/github/switch-branch", async (req, res) => {
   try {
+    await ensureGitRepo();
     const targetBranch = (req.body?.branch || "").trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, "");
     if (!targetBranch) {
       return res.status(400).json({ success: false, error: "Invalid branch name provided." });
@@ -362,6 +380,7 @@ app.post("/api/github/switch-branch", async (req, res) => {
 // Execute Git Push to GitHub with automatic upstream fetch & merge
 app.post("/api/github/push", async (req, res) => {
   try {
+    await ensureGitRepo();
     const customCommit = req.body?.commitMessage || "feat: AgentStation autonomous multi-agent cluster sync";
     const targetBranch = (req.body?.branch || "main").trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, "") || "main";
     const token = process.env.GITHUB_TOKEN?.trim();
