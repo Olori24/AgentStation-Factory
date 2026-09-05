@@ -24,11 +24,64 @@ import {
 import { VideoProject, VideoScene } from '../types';
 
 interface VideoStudioProps {
-  video: VideoProject;
+  video?: VideoProject | null;
   onUpdateVideo?: (updated: VideoProject) => void;
 }
 
+const DEFAULT_FALLBACK_VIDEO: VideoProject = {
+  title: 'Autonomous System Demo',
+  hook: 'AUTONOMOUS SQUAD DEMO',
+  subtitle: 'Generated kinetic product video',
+  totalDurationSec: 16,
+  soundtrackMood: 'energetic-tech',
+  audioScript: 'Autonomous engineering with AgentStation multi-agent squad.',
+  scenes: [
+    {
+      id: 'scene-1',
+      sceneIndex: 0,
+      durationSec: 4,
+      badge: 'THE CHALLENGE',
+      heading: 'ENGINEERING BOTTLENECK',
+      subheading: 'Manual software workflows slow down deployment velocity',
+      bulletPoints: ['Boilerplate generation', 'Fragmented testing', 'Manual release pipelines'],
+      accentColor: '#3b82f6',
+    },
+    {
+      id: 'scene-2',
+      sceneIndex: 1,
+      durationSec: 4,
+      badge: 'THE SOLUTION',
+      heading: 'AUTONOMOUS MULTI-AGENT SQUAD',
+      subheading: 'Collaborative AI agents architect, develop, and test in real time',
+      bulletPoints: ['Atlas: System Architect', 'Cypher: Senior Engineer', 'Sentinel: QA Auditor'],
+      accentColor: '#10b981',
+    },
+    {
+      id: 'scene-3',
+      sceneIndex: 2,
+      durationSec: 4,
+      badge: 'VERIFIED IN SANDBOX',
+      heading: '100% TEST COVERAGE',
+      subheading: 'Isolated Docker sandbox execution with automated assertions',
+      bulletPoints: ['All unit tests passing', 'Clean data contracts', 'Zero regressions'],
+      accentColor: '#f59e0b',
+    },
+    {
+      id: 'scene-4',
+      sceneIndex: 3,
+      durationSec: 4,
+      badge: 'DEPLOY NOW',
+      heading: 'PUSH TO GITHUB',
+      subheading: 'Synchronized directly with github.com/Olori24/AgentStation',
+      bulletPoints: ['GitHub Actions verification', 'One-click PR generation', 'Production deployment ready'],
+      accentColor: '#8b5cf6',
+      callToAction: 'github.com/Olori24/AgentStation',
+    },
+  ],
+};
+
 export const VideoStudio: React.FC<VideoStudioProps> = ({ video, onUpdateVideo }) => {
+  const safeVideo = video || DEFAULT_FALLBACK_VIDEO;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -44,8 +97,8 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video, onUpdateVideo }
   const pausedTimeRef = useRef<number>(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  const totalDuration = video.totalDurationSec || 16;
-  const scenes = video.scenes || [];
+  const totalDuration = safeVideo.totalDurationSec || 16;
+  const scenes = safeVideo.scenes || [];
   const scenesCount = scenes.length;
 
   // Determine current active scene based on time
@@ -60,8 +113,8 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video, onUpdateVideo }
         sceneIndex: 0,
         durationSec: 4,
         badge: 'ACTIVE RUN',
-        heading: video?.title || 'AUTONOMOUS SQUAD',
-        subheading: video?.subtitle || 'Processing project parameters...',
+        heading: safeVideo.title || 'AUTONOMOUS SQUAD',
+        subheading: safeVideo.subtitle || 'Processing project parameters...',
         bulletPoints: ['Architecting specifications', 'Executing unit test assertions', 'Bundling for GitHub'],
         accentColor: '#3b82f6',
       };
@@ -677,10 +730,10 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video, onUpdateVideo }
               <Sparkles className="w-3 h-3 text-purple-400" />
               Creative Director Script
             </span>
-            <span>Mood: {video.soundtrackMood}</span>
+            <span>Mood: {safeVideo.soundtrackMood}</span>
           </div>
           <p className="text-slate-300 leading-relaxed italic">
-            "{video.audioScript}"
+            "{safeVideo.audioScript}"
           </p>
         </div>
       </div>
