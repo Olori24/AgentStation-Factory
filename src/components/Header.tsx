@@ -1,11 +1,13 @@
 import React from 'react';
-import { Bot, GitBranch, Github, Cpu, Radio, Sparkles } from 'lucide-react';
+import { Bot, GitBranch, Github, Cpu, Radio, Sparkles, History } from 'lucide-react';
 import { GITHUB_REPO_INFO } from '../data/defaults';
 
 interface HeaderProps {
   onOpenGitHub: () => void;
   onOpenOllama: () => void;
   onNewMission: () => void;
+  onOpenHistory: () => void;
+  historyCount?: number;
   isExecuting: boolean;
 }
 
@@ -13,6 +15,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenGitHub,
   onOpenOllama,
   onNewMission,
+  onOpenHistory,
+  historyCount = 0,
   isExecuting,
 }) => {
   return (
@@ -53,6 +57,20 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Action Buttons */}
       <div className="flex items-center gap-2.5">
+        <button
+          onClick={onOpenHistory}
+          title="Mission History Archive"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition"
+        >
+          <History className="w-3.5 h-3.5 text-amber-400" />
+          <span className="hidden sm:inline">History</span>
+          {historyCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-[10px] font-bold">
+              {historyCount}
+            </span>
+          )}
+        </button>
+
         <button
           onClick={onOpenOllama}
           title="Configure Local Ollama"

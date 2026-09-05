@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Code2,
   Film,
@@ -8,6 +8,7 @@ import {
   Github,
   CheckCircle2,
   AlertTriangle,
+  History,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { SquadBar } from './components/SquadBar';
@@ -17,19 +18,59 @@ import { CodeWorkspace } from './components/CodeWorkspace';
 import { VideoStudio } from './components/VideoStudio';
 import { GitHubModal } from './components/GitHubModal';
 import { OllamaModal } from './components/OllamaModal';
+import { MissionHistoryPanel } from './components/MissionHistoryPanel';
 import { DEFAULT_AGENTS, INITIAL_MISSION, GITHUB_REPO_INFO } from './data/defaults';
-import { SquadMission, AgentProfile, AgentRole, AgentLogEntry } from './types';
+import { SAMPLE_MISSIONS } from './data/sampleMissions';
+import { SquadMission, AgentProfile, AgentRole, AgentLogEntry, WorkspaceFile, VideoProject } from './types';
 
 export default function App() {
-  const [mission, setMission] = useState<SquadMission>(INITIAL_MISSION);
+  const [missionHistory, setMissionHistory] = useState<SquadMission[]>(() => {
+    try {
+      const saved = localStorage.getItem('agentstation_missions_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return SAMPLE_MISSIONS;
+  });
+
+  const [mission, setMission] = useState<SquadMission>(() => {
+    return missionHistory[0] || INITIAL_MISSION;
+  });
   const [agents, setAgents] = useState<AgentProfile[]>(DEFAULT_AGENTS);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [activeAgentRole, setActiveAgentRole] = useState<AgentRole | undefined>(undefined);
   const [isRunningCommand, setIsRunningCommand] = useState<boolean>(false);
   const [isGitHubModalOpen, setIsGitHubModalOpen] = useState<boolean>(false);
   const [isOllamaModalOpen, setIsOllamaModalOpen] = useState<boolean>(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'split' | 'code' | 'video' | 'stream'>('split');
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Sync mission history changes to localStorage
+  const saveHistoryToStorage = (updatedList: SquadMission[]) => {
+    try {
+      localStorage.setItem('agentstation_missions_v1', JSON.stringify(updatedList));
+    } catch (err) {
+      console.warn('Failed to persist mission history:', err);
+    }
+  };
+
+  const updateHistoryWithMission = (updatedMission: SquadMission) => {
+    setMissionHistory((prev) => {
+      const idx = prev.findIndex((m) => m.id === updatedMission.id);
+      let next: SquadMission[];
+      if (idx >= 0) {
+        next = [...prev];
+        next[idx] = updatedMission;
+      } else {
+        next = [updatedMission, ...prev];
+      }
+      saveHistoryToStorage(next);
+      return next;
+    });
+  };
 
   const showToast = (msg: string) => {
     setNotification(msg);
@@ -155,7 +196,7 @@ export default function App() {
         message: `Mission completed successfully! Code artifacts, PyTest sandbox tests, and 1080p promo video compiled.`,
       };
 
-      setMission({
+      const finalMission: SquadMission = {
         id: newMissionId,
         prompt: promptText,
         createdAt: 'Just now',
@@ -175,7 +216,10 @@ export default function App() {
         logs: [completeLog, ...newLogs, ...mission.logs],
         gitBranch: 'main',
         gitCommitMessage: generated.gitCommitMessage || `feat: implement ${promptText.slice(0, 30)}`,
-      });
+      };
+
+      setMission(finalMission);
+      updateHistoryWithMission(finalMission);
 
       setAgents((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
       setActiveAgentRole(undefined);
@@ -234,32 +278,71 @@ export default function App() {
           content: newContent,
         };
       }
-      return { ...prev, files: updatedFiles };
+      const updated = { ...prev, files: updatedFiles };
+      updateHistoryWithMission(updated);
+      return updated;
     });
   };
 
   const handleAddFile = (newFile: any) => {
-    setMission((prev) => ({
-      ...prev,
-      files: [...prev.files, newFile],
-    }));
+    setMission((prev) => {
+      const updated = {
+        ...prev,
+        files: [...prev.files, newFile],
+      };
+      updateHistoryWithMission(updated);
+      return updated;
+    });
     showToast(`Created file ${newFile.name}`);
   };
 
   const handleDeleteFile = (fileIndex: number) => {
     setMission((prev) => {
       const fileName = prev.files[fileIndex]?.name;
-      const updated = prev.files.filter((_, idx) => idx !== fileIndex);
+      const updatedFiles = prev.files.filter((_, idx) => idx !== fileIndex);
+      const updated = { ...prev, files: updatedFiles };
+      updateHistoryWithMission(updated);
       showToast(`Removed ${fileName}`);
-      return { ...prev, files: updated };
+      return updated;
     });
   };
 
   const handleUpdateVideo = (updatedVideo: any) => {
-    setMission((prev) => ({
-      ...prev,
-      video: updatedVideo,
-    }));
+    setMission((prev) => {
+      const updated = {
+        ...prev,
+        video: updatedVideo,
+      };
+      updateHistoryWithMission(updated);
+      return updated;
+    });
+  };
+
+  const handleSelectMission = (selected: SquadMission) => {
+    setMission(selected);
+    showToast(`Loaded mission ${selected.id}: "${selected.prompt.slice(0, 36)}..."`);
+  };
+
+  const handleDeleteMission = (id: string) => {
+    setMissionHistory((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      saveHistoryToStorage(next);
+      return next;
+    });
+    if (mission.id === id) {
+      const remaining = missionHistory.filter((m) => m.id !== id);
+      if (remaining.length > 0) {
+        setMission(remaining[0]);
+      }
+    }
+    showToast('Mission removed from history.');
+  };
+
+  const handleResetToDefaults = () => {
+    setMissionHistory(SAMPLE_MISSIONS);
+    setMission(SAMPLE_MISSIONS[0]);
+    saveHistoryToStorage(SAMPLE_MISSIONS);
+    showToast('Mission history reset to seed templates.');
   };
 
   return (
@@ -279,6 +362,8 @@ export default function App() {
         onNewMission={() => {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
+        onOpenHistory={() => setIsHistoryOpen(true)}
+        historyCount={missionHistory.length}
         isExecuting={isExecuting}
       />
 
@@ -296,7 +381,7 @@ export default function App() {
       />
 
       {/* View Mode Switcher */}
-      <div className="max-w-7xl w-full mx-auto px-4 lg:px-8 pt-4 pb-2 flex items-center justify-between">
+      <div className="max-w-7xl w-full mx-auto px-4 lg:px-8 pt-4 pb-2 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs">
           <button
             onClick={() => setViewMode('split')}
@@ -347,15 +432,29 @@ export default function App() {
           </button>
         </div>
 
-        {/* Quick Sync with GitHub button */}
-        <button
-          onClick={() => setIsGitHubModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-blue-400 hover:text-blue-300 transition"
-        >
-          <Github className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Sync with</span>
-          <span>Olori24/AgentStation</span>
-        </button>
+        {/* Action Controls Right */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsHistoryOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-amber-400 hover:text-amber-300 transition"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Mission History</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-[10px]">
+              {missionHistory.length}
+            </span>
+          </button>
+
+          {/* Quick Sync with GitHub button */}
+          <button
+            onClick={() => setIsGitHubModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-blue-400 hover:text-blue-300 transition"
+          >
+            <Github className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Sync with</span>
+            <span>Olori24/AgentStation</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Content Panels */}
@@ -459,6 +558,17 @@ export default function App() {
       <OllamaModal
         isOpen={isOllamaModalOpen}
         onClose={() => setIsOllamaModalOpen(false)}
+      />
+
+      {/* Mission Execution History Side-Panel */}
+      <MissionHistoryPanel
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        missions={missionHistory}
+        activeMissionId={mission.id}
+        onSelectMission={handleSelectMission}
+        onDeleteMission={handleDeleteMission}
+        onResetToDefaults={handleResetToDefaults}
       />
     </div>
   );
