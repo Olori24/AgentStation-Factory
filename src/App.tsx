@@ -47,6 +47,35 @@ export default function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'split' | 'code' | 'video' | 'stream'>('split');
   const [notification, setNotification] = useState<string | null>(null);
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'ollama'>(() => {
+    try {
+      return (localStorage.getItem('agentstation_provider') as 'gemini' | 'ollama') || 'gemini';
+    } catch {
+      return 'gemini';
+    }
+  });
+  const [ollamaModel, setOllamaModel] = useState<string>(() => {
+    try {
+      return localStorage.getItem('agentstation_ollama_model') || 'llama3';
+    } catch {
+      return 'llama3';
+    }
+  });
+
+  const handleSelectProvider = (p: 'gemini' | 'ollama') => {
+    setAiProvider(p);
+    try {
+      localStorage.setItem('agentstation_provider', p);
+    } catch {}
+    showToast(`Switched active AI engine to ${p === 'gemini' ? 'Gemini 2.5 Flash (Cloud)' : 'Ollama (Local Private)'}`);
+  };
+
+  const handleSelectOllamaModel = (m: string) => {
+    setOllamaModel(m);
+    try {
+      localStorage.setItem('agentstation_ollama_model', m);
+    } catch {}
+  };
 
   // Sync mission history changes to localStorage
   const saveHistoryToStorage = (updatedList: SquadMission[]) => {
@@ -162,19 +191,22 @@ export default function App() {
         );
       }, 3600);
 
-      // Make API call to server
+      // Make API call to server with chosen AI provider
       const res = await fetch('/api/agents/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptText }),
+        body: JSON.stringify({
+          prompt: promptText,
+          provider: aiProvider,
+          ollamaModel: ollamaModel,
+        }),
       });
 
       const data = await res.json();
-      if (!data.success || !data.mission) {
+      const generated = data.mission || (data.files ? data : null);
+      if (!data.success || !generated) {
         throw new Error(data.error || 'Squad pipeline failed');
       }
-
-      const generated = data.mission;
       const timestamp = new Date().toLocaleTimeString();
 
       const newLogs: AgentLogEntry[] = (generated.logs || []).map((l: any, idx: number) => ({
@@ -365,6 +397,8 @@ export default function App() {
         onOpenHistory={() => setIsHistoryOpen(true)}
         historyCount={missionHistory.length}
         isExecuting={isExecuting}
+        aiProvider={aiProvider}
+        ollamaModel={ollamaModel}
       />
 
       {/* Active Squad Bar */}
@@ -568,6 +602,10 @@ export default function App() {
       <OllamaModal
         isOpen={isOllamaModalOpen}
         onClose={() => setIsOllamaModalOpen(false)}
+        aiProvider={aiProvider}
+        onSelectProvider={handleSelectProvider}
+        selectedModel={ollamaModel}
+        onSelectModel={handleSelectOllamaModel}
       />
 
       {/* Mission Execution History Side-Panel */}

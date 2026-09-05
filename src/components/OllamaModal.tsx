@@ -4,9 +4,20 @@ import { X, Cpu, CheckCircle2, AlertCircle, RefreshCw, Terminal, Copy, Check } f
 interface OllamaModalProps {
   isOpen: boolean;
   onClose: () => void;
+  aiProvider?: 'gemini' | 'ollama';
+  onSelectProvider?: (provider: 'gemini' | 'ollama') => void;
+  selectedModel?: string;
+  onSelectModel?: (model: string) => void;
 }
 
-export const OllamaModal: React.FC<OllamaModalProps> = ({ isOpen, onClose }) => {
+export const OllamaModal: React.FC<OllamaModalProps> = ({
+  isOpen,
+  onClose,
+  aiProvider = 'gemini',
+  onSelectProvider,
+  selectedModel = 'llama3',
+  onSelectModel,
+}) => {
   const [endpoint, setEndpoint] = useState('http://localhost:11434');
   const [checking, setChecking] = useState(false);
   const [status, setStatus] = useState<{ checked: boolean; online: boolean; models?: any[]; message?: string }>({
@@ -14,6 +25,7 @@ export const OllamaModal: React.FC<OllamaModalProps> = ({ isOpen, onClose }) => 
     online: false,
   });
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
+  const [activeModel, setActiveModel] = useState<string>(selectedModel);
 
   if (!isOpen) return null;
 
@@ -75,6 +87,47 @@ export const OllamaModal: React.FC<OllamaModalProps> = ({ isOpen, onClose }) => 
 
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs">
+          {/* Active Provider Selector */}
+          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-slate-300 font-semibold">Active Agent Engine:</label>
+              <span className="text-[10px] text-slate-400">Controls backend synthesis route</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onSelectProvider?.('gemini')}
+                className={`p-3 rounded-lg border text-left transition ${
+                  aiProvider === 'gemini'
+                    ? 'bg-blue-600/20 border-blue-500 text-white shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <div className="font-bold flex items-center justify-between">
+                  <span>Gemini 2.5 Flash</span>
+                  {aiProvider === 'gemini' && <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">High-speed cloud cluster orchestrator</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectProvider?.('ollama')}
+                className={`p-3 rounded-lg border text-left transition ${
+                  aiProvider === 'ollama'
+                    ? 'bg-purple-600/20 border-purple-500 text-white shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <div className="font-bold flex items-center justify-between">
+                  <span>Ollama Local</span>
+                  {aiProvider === 'ollama' && <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Offline, private on localhost:11434</div>
+              </button>
+            </div>
+          </div>
+
           {/* Endpoint Ping Bar */}
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
             <label className="text-slate-300 font-semibold block">
@@ -100,6 +153,25 @@ export const OllamaModal: React.FC<OllamaModalProps> = ({ isOpen, onClose }) => 
                 )}
                 <span>Ping</span>
               </button>
+            </div>
+
+            {/* Model input for Ollama */}
+            <div className="pt-2 border-t border-slate-800/80">
+              <label className="text-[11px] text-slate-400 block mb-1">
+                Target Ollama Model Name:
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={activeModel}
+                  onChange={(e) => {
+                    setActiveModel(e.target.value);
+                    onSelectModel?.(e.target.value);
+                  }}
+                  placeholder="llama3, qwen2.5-coder:14b, deepseek-coder"
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 font-mono focus:outline-none focus:border-purple-500 text-xs"
+                />
+              </div>
             </div>
 
             {status.checked && (

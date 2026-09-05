@@ -9,6 +9,8 @@ interface HeaderProps {
   onOpenHistory: () => void;
   historyCount?: number;
   isExecuting: boolean;
+  aiProvider?: 'gemini' | 'ollama';
+  ollamaModel?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,6 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenHistory,
   historyCount = 0,
   isExecuting,
+  aiProvider = 'gemini',
+  ollamaModel = 'llama3',
 }) => {
   return (
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
@@ -73,11 +77,20 @@ export const Header: React.FC<HeaderProps> = ({
 
         <button
           onClick={onOpenOllama}
-          title="Configure Local Ollama"
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition"
+          title={`Configure AI Provider (Active: ${aiProvider === 'gemini' ? 'Gemini 2.5 Flash' : `Ollama ${ollamaModel}`})`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition ${
+            aiProvider === 'ollama'
+              ? 'bg-purple-950/60 border-purple-500/50 text-purple-200 hover:bg-purple-900/60'
+              : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white'
+          }`}
         >
-          <Cpu className="w-3.5 h-3.5 text-purple-400" />
-          <span className="hidden sm:inline">Local Ollama</span>
+          <Cpu className={`w-3.5 h-3.5 ${aiProvider === 'ollama' ? 'text-purple-300' : 'text-purple-400'}`} />
+          <span className="hidden sm:inline">
+            {aiProvider === 'ollama' ? `Ollama: ${ollamaModel}` : 'AI Engine'}
+          </span>
+          {aiProvider === 'ollama' && (
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+          )}
         </button>
 
         <button

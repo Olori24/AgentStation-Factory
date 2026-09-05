@@ -105,6 +105,24 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
     auditSteps?: string[];
     instructions?: string[];
   } | null>(null);
+  const [isPulling, setIsPulling] = useState<boolean>(false);
+  const [pullResult, setPullResult] = useState<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    output?: string;
+    commitHash?: string;
+    branch?: string;
+  } | null>(null);
+  const [isCreatingPr, setIsCreatingPr] = useState<boolean>(false);
+  const [prResult, setPrResult] = useState<{
+    success: boolean;
+    prUrl?: string;
+    prNumber?: number;
+    message?: string;
+    createdViaApi?: boolean;
+    error?: string;
+  } | null>(null);
 
   // Sync commit message prop when changed
   useEffect(() => {
@@ -270,6 +288,63 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
       });
     } finally {
       setIsPushing(false);
+    }
+  };
+
+  const handlePullFromRemote = async () => {
+    setIsPulling(true);
+    setPullResult(null);
+    setPushResult(null);
+    setPrResult(null);
+    try {
+      const res = await fetch('/api/github/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: activeBranch }),
+      });
+      const data = await res.json();
+      setPullResult(data);
+      if (data.success) {
+        const msg = data.message || `Pulled latest changes from origin/${activeBranch}!`;
+        onSuccessNotification?.(msg);
+        await fetchStatus();
+      }
+    } catch (err: any) {
+      setPullResult({
+        success: false,
+        error: err.message || 'Failed to pull from GitHub',
+      });
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
+  const handleCreatePr = async () => {
+    setIsCreatingPr(true);
+    setPrResult(null);
+    try {
+      const res = await fetch('/api/github/create-pr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          head: activeBranch,
+          base: 'main',
+          title: `feat: sync ${activeBranch} into main`,
+          body: `Automated PR from AgentStation multi-agent cluster for branch ${activeBranch}.\nIncludes verified code artifacts and sandbox test suites.`,
+        }),
+      });
+      const data = await res.json();
+      setPrResult(data);
+      if (data.success && data.prUrl) {
+        window.open(data.prUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err: any) {
+      setPrResult({
+        success: false,
+        error: err.message || 'Failed to generate PR',
+      });
+    } finally {
+      setIsCreatingPr(false);
     }
   };
 
@@ -888,7 +963,7 @@ git push -u origin main`;
                     </div>
                   )}
 
-                  {/* Trigger Commit & Push Row */}
+                  {/* Action Toolbar Row: Pull, Create PR, Commit and Push */}
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80 text-[11px]">
                     <div className="text-slate-400 font-mono truncate max-w-xs sm:max-w-md">
                       Remote: <span className="text-slate-300">{liveStatus?.remoteUrl || GITHUB_REPO_INFO.cloneUrl}</span>
@@ -896,26 +971,136 @@ git push -u origin main`;
                       Branch: <span className="text-blue-400 font-semibold">{activeBranch}</span>
                     </div>
 
-                    <button
-                      id="commit-and-push-button"
-                      onClick={handleCommitAndPush}
-                      disabled={isPushing}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-500 hover:via-teal-500 hover:to-blue-500 text-white font-bold shadow-lg shadow-emerald-600/25 transition disabled:opacity-50 text-xs cursor-pointer active:scale-95"
-                    >
-                      {isPushing ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                          <span>Committing & Pushing to '{activeBranch}'...</span>
-                        </>
-                      ) : (
-                        <>
-                          <GitCommit className="w-4 h-4 text-emerald-200" />
-                          <span>Commit and Push</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Pull Latest Changes from GitHub */}
+                      <button
+                        type="button"
+                        id="pull-from-remote-button"
+                        onClick={handlePullFromRemote}
+                        disabled={isPulling || isPushing}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-slate-600 font-medium transition disabled:opacity-50 text-xs cursor-pointer active:scale-95"
+                        title="Pull and merge latest remote commits into local workspace"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isPulling ? 'animate-spin text-blue-400' : 'text-slate-400'}`} />
+                        <span>{isPulling ? 'Pulling...' : 'Pull Latest'}</span>
+                      </button>
+
+                      {/* 1-Click Pull Request Generator */}
+                      <button
+                        type="button"
+                        id="create-pr-button"
+                        onClick={handleCreatePr}
+                        disabled={isCreatingPr || isPushing}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-purple-300 border border-purple-500/30 hover:border-purple-500/60 font-medium transition disabled:opacity-50 text-xs cursor-pointer active:scale-95"
+                        title="Generate or open Pull Request to merge this branch into main"
+                      >
+                        <GitPullRequest className={`w-3.5 h-3.5 ${isCreatingPr ? 'animate-spin text-purple-400' : 'text-purple-400'}`} />
+                        <span>{isCreatingPr ? 'Generating...' : 'Create PR'}</span>
+                      </button>
+
+                      {/* Commit and Push */}
+                      <button
+                        id="commit-and-push-button"
+                        onClick={handleCommitAndPush}
+                        disabled={isPushing || isPulling}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-500 hover:via-teal-500 hover:to-blue-500 text-white font-bold shadow-lg shadow-emerald-600/25 transition disabled:opacity-50 text-xs cursor-pointer active:scale-95"
+                      >
+                        {isPushing ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                            <span>Committing & Pushing to '{activeBranch}'...</span>
+                          </>
+                        ) : (
+                          <>
+                            <GitCommit className="w-4 h-4 text-emerald-200" />
+                            <span>Commit and Push</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
+
+                {/* Pull feedback output */}
+                {pullResult && (
+                  <div
+                    className={`p-3.5 rounded-xl border text-xs leading-relaxed space-y-2 ${
+                      pullResult.success
+                        ? 'bg-blue-950/50 border-blue-500/30 text-blue-300'
+                        : 'bg-amber-950/40 border-amber-500/30 text-amber-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        {pullResult.success ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                            <span>Upstream Pull Completed</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-4 h-4 text-amber-400" />
+                            <span>Pull Notice</span>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPullResult(null)}
+                        className="p-1 rounded text-slate-400 hover:text-slate-200"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {pullResult.message && <p>{pullResult.message}</p>}
+                    {pullResult.error && <p className="text-rose-300 font-semibold">{pullResult.error}</p>}
+                    {pullResult.output && (
+                      <pre className="p-2 rounded bg-slate-950 text-[11px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap">
+                        {pullResult.output}
+                      </pre>
+                    )}
+                  </div>
+                )}
+
+                {/* PR feedback output */}
+                {prResult && (
+                  <div
+                    className={`p-3.5 rounded-xl border text-xs leading-relaxed space-y-2 ${
+                      prResult.success
+                        ? 'bg-purple-950/50 border-purple-500/30 text-purple-300'
+                        : 'bg-amber-950/40 border-amber-500/30 text-amber-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <GitPullRequest className="w-4 h-4 text-purple-400" />
+                        <span>{prResult.createdViaApi ? 'Pull Request Created' : 'Pull Request Comparison Ready'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPrResult(null)}
+                        className="p-1 rounded text-slate-400 hover:text-slate-200"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {prResult.message && <p>{prResult.message}</p>}
+                    {prResult.error && <p className="text-rose-300 font-semibold">{prResult.error}</p>}
+                    {prResult.prUrl && (
+                      <div className="pt-1">
+                        <a
+                          href={prResult.prUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold transition text-xs"
+                        >
+                          <span>Open Pull Request on GitHub</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Push feedback output */}
                 {pushResult && (
