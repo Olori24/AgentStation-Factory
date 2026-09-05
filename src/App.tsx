@@ -225,6 +225,43 @@ export default function App() {
     }
   };
 
+  const handleUpdateFile = (fileIndex: number, newContent: string) => {
+    setMission((prev) => {
+      const updatedFiles = [...prev.files];
+      if (updatedFiles[fileIndex]) {
+        updatedFiles[fileIndex] = {
+          ...updatedFiles[fileIndex],
+          content: newContent,
+        };
+      }
+      return { ...prev, files: updatedFiles };
+    });
+  };
+
+  const handleAddFile = (newFile: any) => {
+    setMission((prev) => ({
+      ...prev,
+      files: [...prev.files, newFile],
+    }));
+    showToast(`Created file ${newFile.name}`);
+  };
+
+  const handleDeleteFile = (fileIndex: number) => {
+    setMission((prev) => {
+      const fileName = prev.files[fileIndex]?.name;
+      const updated = prev.files.filter((_, idx) => idx !== fileIndex);
+      showToast(`Removed ${fileName}`);
+      return { ...prev, files: updated };
+    });
+  };
+
+  const handleUpdateVideo = (updatedVideo: any) => {
+    setMission((prev) => ({
+      ...prev,
+      video: updatedVideo,
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Toast Notification */}
@@ -337,12 +374,19 @@ export default function App() {
                 execution={mission.execution}
                 onRunCommand={handleRunCommand}
                 isRunningCommand={isRunningCommand}
+                onUpdateFile={handleUpdateFile}
+                onAddFile={handleAddFile}
+                onDeleteFile={handleDeleteFile}
+                onPushToGitHub={() => setIsGitHubModalOpen(true)}
               />
             </div>
 
             {/* Right: Video Studio (4 cols) */}
             <div className="lg:col-span-4 h-full">
-              <VideoStudio video={mission.video} />
+              <VideoStudio
+                video={mission.video}
+                onUpdateVideo={handleUpdateVideo}
+              />
             </div>
           </div>
         )}
@@ -354,13 +398,20 @@ export default function App() {
               execution={mission.execution}
               onRunCommand={handleRunCommand}
               isRunningCommand={isRunningCommand}
+              onUpdateFile={handleUpdateFile}
+              onAddFile={handleAddFile}
+              onDeleteFile={handleDeleteFile}
+              onPushToGitHub={() => setIsGitHubModalOpen(true)}
             />
           </div>
         )}
 
         {viewMode === 'video' && (
           <div className="h-[740px]">
-            <VideoStudio video={mission.video} />
+            <VideoStudio
+              video={mission.video}
+              onUpdateVideo={handleUpdateVideo}
+            />
           </div>
         )}
 

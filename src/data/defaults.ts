@@ -55,9 +55,9 @@ export const DEFAULT_AGENTS: AgentProfile[] = [
 
 export const GITHUB_REPO_INFO: GitHubRepoMeta = {
   owner: 'Olori24',
-  repo: 'AgentStation',
-  cloneUrl: 'https://github.com/Olori24/AgentStation.git',
-  webUrl: 'https://github.com/Olori24/AgentStation',
+  repo: 'AgentStation-Factory',
+  cloneUrl: 'https://github.com/Olori24/AgentStation-Factory.git',
+  webUrl: 'https://github.com/Olori24/AgentStation-Factory',
   defaultBranch: 'main',
   recommendedWorkflow: `name: AgentStation CI/CD Sandbox
 

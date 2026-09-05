@@ -12,25 +12,38 @@ import {
   Github,
   Loader2,
   CheckCircle,
+  Edit,
+  Save,
+  X,
+  Sliders,
+  Smartphone,
+  Monitor,
+  Square,
+  Music,
 } from 'lucide-react';
-import { VideoProject } from '../types';
+import { VideoProject, VideoScene } from '../types';
 
 interface VideoStudioProps {
   video: VideoProject;
+  onUpdateVideo?: (updated: VideoProject) => void;
 }
 
-export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
+export const VideoStudio: React.FC<VideoStudioProps> = ({ video, onUpdateVideo }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
+  const [isSynthEnabled, setIsSynthEnabled] = useState<boolean>(true);
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordProgress, setRecordProgress] = useState<number>(0);
-  const [selectedSceneIndex, setSelectedSceneIndex] = useState<number>(0);
+  const [isEditingScene, setIsEditingScene] = useState<boolean>(false);
+  const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16' | '1:1'>('16:9');
 
   const requestRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(Date.now());
   const pausedTimeRef = useRef<number>(0);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
   const totalDuration = video.totalDurationSec || 16;
   const scenes = video.scenes || [];
   const scenesCount = scenes.length;
@@ -40,7 +53,67 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
     ? Math.max(0, Math.min(Math.floor((currentTime / totalDuration) * scenesCount), scenesCount - 1))
     : 0;
 
-  // Synchronized voiceover speech
+  const activeScene = (scenes && scenes.length > 0 && scenes[currentSceneIndex])
+    ? scenes[currentSceneIndex]
+    : {
+        id: 'scene-default',
+        sceneIndex: 0,
+        durationSec: 4,
+        badge: 'ACTIVE RUN',
+        heading: video?.title || 'AUTONOMOUS SQUAD',
+        subheading: video?.subtitle || 'Processing project parameters...',
+        bulletPoints: ['Architecting specifications', 'Executing unit test assertions', 'Bundling for GitHub'],
+        accentColor: '#3b82f6',
+      };
+
+  // Local draft for scene editing
+  const [draftScene, setDraftScene] = useState<VideoScene>(activeScene);
+
+  useEffect(() => {
+    setDraftScene(activeScene);
+  }, [currentSceneIndex, activeScene.id]);
+
+  // Dimensions based on aspect ratio
+  const canvasDimensions = {
+    '16:9': { width: 1280, height: 720, aspectClass: 'aspect-video' },
+    '9:16': { width: 720, height: 1280, aspectClass: 'aspect-[9/16] max-h-[460px]' },
+    '1:1': { width: 1080, height: 1080, aspectClass: 'aspect-square max-h-[460px]' },
+  }[aspectRatio];
+
+  // Synthesizer beep / chime on scene transition
+  const playSynthPulse = (freq: number = 440) => {
+    if (!isAudioEnabled || !isSynthEnabled) return;
+    try {
+      if (!audioCtxRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) audioCtxRef.current = new AudioCtx();
+      }
+      const ctx = audioCtxRef.current;
+      if (!ctx || ctx.state === 'suspended') {
+        ctx?.resume();
+      }
+      if (!ctx) return;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.5, ctx.currentTime + 0.15);
+
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {
+      // AudioContext restricted in some sandboxes
+    }
+  };
+
+  // Synchronized voiceover speech & synth chime
   useEffect(() => {
     try {
       if ('speechSynthesis' in window) {
@@ -49,24 +122,28 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
       if (!isAudioEnabled || !isPlaying || scenesCount === 0 || !scenes[currentSceneIndex]) {
         return;
       }
-      const activeScene = scenes[currentSceneIndex];
+      playSynthPulse(520 + currentSceneIndex * 65);
+      const scene = scenes[currentSceneIndex];
       const utterance = new SpeechSynthesisUtterance(
-        `${activeScene.badge || ''}. ${activeScene.heading || ''}. ${activeScene.subheading || ''}`
+        `${scene.badge || ''}. ${scene.heading || ''}. ${scene.subheading || ''}`
       );
       utterance.rate = 1.05;
       utterance.pitch = 1.0;
       window.speechSynthesis.speak(utterance);
     } catch {
-      // Speech synthesis might be restricted in some iframes
+      // Speech synthesis might be restricted
     }
   }, [currentSceneIndex, isPlaying, isAudioEnabled, scenesCount]);
 
-  // Clean up speech on unmount
+  // Clean up on unmount
   useEffect(() => {
     return () => {
       try {
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
+        }
+        if (audioCtxRef.current) {
+          audioCtxRef.current.close();
         }
       } catch {
         // Ignored
@@ -81,9 +158,11 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const { width: W, height: H } = canvasDimensions;
+
     let particles = Array.from({ length: 45 }, () => ({
-      x: Math.random() * 1280,
-      y: Math.random() * 720,
+      x: Math.random() * W,
+      y: Math.random() * H,
       size: Math.random() * 2 + 1,
       speed: Math.random() * 0.8 + 0.2,
       opacity: Math.random() * 0.6 + 0.2,
@@ -100,239 +179,168 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
         }
       }
 
-      const defaultScene = {
-        id: 'scene-default',
-        sceneIndex: 0,
-        durationSec: 4,
-        badge: 'ACTIVE RUN',
-        heading: video?.title || 'AUTONOMOUS SQUAD',
-        subheading: video?.subtitle || 'Processing project parameters...',
-        bulletPoints: ['Architecting specifications', 'Executing unit test assertions', 'Bundling for GitHub'],
-        accentColor: '#3b82f6',
-      };
-
-      const activeScene = (scenes && scenes.length > 0 && scenes[currentSceneIndex])
-        ? scenes[currentSceneIndex]
-        : defaultScene;
-      const accent = activeScene.accentColor || '#3b82f6';
-      const bulletList = Array.isArray(activeScene.bulletPoints) && activeScene.bulletPoints.length > 0
-        ? activeScene.bulletPoints
+      const scene = isEditingScene ? draftScene : activeScene;
+      const accent = scene.accentColor || '#3b82f6';
+      const bulletList = Array.isArray(scene.bulletPoints) && scene.bulletPoints.length > 0
+        ? scene.bulletPoints
         : ['Autonomous multi-agent execution', 'Sandboxed container verification', 'Production ready code'];
 
       // 1. Clear background
       ctx.fillStyle = '#090d16';
-      ctx.fillRect(0, 0, 1280, 720);
+      ctx.fillRect(0, 0, W, H);
 
-      // 2. Animated Particle Grid / Background Glow
+      // 2. Animated Particles
       particles.forEach((p) => {
         p.y -= p.speed;
-        if (p.y < 0) p.y = 720;
+        if (p.y < 0) p.y = H;
         ctx.fillStyle = `rgba(147, 197, 253, ${p.opacity * 0.4})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
       });
 
-      // Ambient radial glow behind content
-      const radialGrad = ctx.createRadialGradient(640, 360, 50, 640, 360, 550);
-      radialGrad.addColorStop(0, `${accent}18`);
+      // Ambient radial glow
+      const radialGrad = ctx.createRadialGradient(W / 2, H / 2, 50, W / 2, H / 2, Math.max(W, H) * 0.6);
+      radialGrad.addColorStop(0, `${accent}20`);
       radialGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = radialGrad;
-      ctx.fillRect(0, 0, 1280, 720);
+      ctx.fillRect(0, 0, W, H);
+
+      // Frame Inset Margin
+      const padX = W * 0.06;
+      const padY = H * 0.07;
+      const frameW = W - padX * 2;
+      const frameH = H - padY * 2;
 
       // 3. Futuristic HUD Frame
       ctx.strokeStyle = '#1e293b';
       ctx.lineWidth = 1.5;
-      ctx.strokeRect(60, 60, 1160, 600);
+      ctx.strokeRect(padX, padY, frameW, frameH);
 
       // Glowing corner accents
-      const cornerSize = 25;
+      const cornerSize = Math.min(W, H) * 0.035;
       ctx.strokeStyle = accent;
       ctx.lineWidth = 3;
 
-      // Top Left
+      // Top-left
       ctx.beginPath();
-      ctx.moveTo(60, 60 + cornerSize);
-      ctx.lineTo(60, 60);
-      ctx.lineTo(60 + cornerSize, 60);
+      ctx.moveTo(padX, padY + cornerSize);
+      ctx.lineTo(padX, padY);
+      ctx.lineTo(padX + cornerSize, padY);
       ctx.stroke();
 
-      // Top Right
+      // Top-right
       ctx.beginPath();
-      ctx.moveTo(1220 - cornerSize, 60);
-      ctx.lineTo(1220, 60);
-      ctx.lineTo(1220, 60 + cornerSize);
+      ctx.moveTo(padX + frameW - cornerSize, padY);
+      ctx.lineTo(padX + frameW, padY);
+      ctx.lineTo(padX + frameW, padY + cornerSize);
       ctx.stroke();
 
-      // Bottom Left
+      // Bottom-left
       ctx.beginPath();
-      ctx.moveTo(60, 660 - cornerSize);
-      ctx.lineTo(60, 660);
-      ctx.lineTo(60 + cornerSize, 660);
+      ctx.moveTo(padX, padY + frameH - cornerSize);
+      ctx.lineTo(padX, padY + frameH);
+      ctx.lineTo(padX + cornerSize, padY + frameH);
       ctx.stroke();
 
-      // Bottom Right
+      // Bottom-right
       ctx.beginPath();
-      ctx.moveTo(1220 - cornerSize, 660);
-      ctx.lineTo(1220, 660);
-      ctx.lineTo(1220, 660 - cornerSize);
+      ctx.moveTo(padX + frameW - cornerSize, padY + frameH);
+      ctx.lineTo(padX + frameW, padY + frameH);
+      ctx.lineTo(padX + frameW, padY + frameH - cornerSize);
       ctx.stroke();
 
-      // 4. Header Bar: System Brand & Scene Progress
+      // 4. Header Badge: Brand
+      const headerY = padY + 40;
       ctx.font = 'bold 15px monospace';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText('AGENTSTATION VIDEO STUDIO // AUTONOMOUS MULTI-AGENT CLUSTER', 90, 105);
+      ctx.fillStyle = accent;
+      ctx.fillText('⚡ AGENTSTATION // AUTONOMOUS MULTI-AGENT CLUSTER', padX + 25, headerY);
 
-      ctx.fillStyle = activeScene.accentColor;
-      ctx.font = 'bold 13px monospace';
-      ctx.fillText(
-        `SCENE ${currentSceneIndex + 1} OF ${scenes.length} • [${activeScene.badge}]`,
-        1220 - 320,
-        105
-      );
-
-      // 5. Active Scene Badge Pill
-      ctx.fillStyle = `${activeScene.accentColor}25`;
-      ctx.strokeStyle = activeScene.accentColor;
-      ctx.lineWidth = 1.5;
+      // 5. Scene Badge Pill
+      const badgeY = headerY + 35;
+      ctx.fillStyle = `${accent}25`;
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect(90, 140, 220, 32, 8);
+      ctx.roundRect(padX + 25, badgeY, 180, 28, 14);
       ctx.fill();
       ctx.stroke();
 
-      ctx.font = 'bold 13px monospace';
+      ctx.font = 'bold 12px monospace';
       ctx.fillStyle = '#f8fafc';
-      ctx.fillText(activeScene.badge, 110, 161);
+      ctx.fillText(scene.badge, padX + 45, badgeY + 18);
 
-      // 6. Kinetic Title (Animated Slide & Fade)
-      ctx.font = '900 44px sans-serif';
+      // 6. Kinetic Title & Subtitle
+      const titleY = badgeY + 60;
+      const titleFontSize = Math.max(26, Math.min(44, Math.floor(W * 0.035)));
+      ctx.font = `900 ${titleFontSize}px sans-serif`;
       ctx.fillStyle = '#f8fafc';
-      ctx.shadowColor = `${activeScene.accentColor}40`;
+      ctx.shadowColor = `${accent}50`;
       ctx.shadowBlur = 12;
-      ctx.fillText(activeScene.heading, 90, 225);
+      ctx.fillText(scene.heading, padX + 25, titleY);
       ctx.shadowBlur = 0;
 
-      // 7. Subheading
-      ctx.font = '500 20px sans-serif';
+      // Subheading
+      const subY = titleY + 38;
+      ctx.font = '500 18px sans-serif';
       ctx.fillStyle = '#94a3b8';
-      ctx.fillText(activeScene.subheading, 90, 268);
+      ctx.fillText(scene.subheading, padX + 25, subY);
 
-      // 8. Content Body: Bullet Points or Code Preview
-      if (activeScene.codePreview) {
-        // Render 2-column layout: Bullets on left, Code box on right
-        // Bullets
-        bulletList.forEach((point, idx) => {
-          const y = 330 + idx * 46;
-          // Checkmark
-          ctx.fillStyle = accent;
-          ctx.beginPath();
-          ctx.arc(104, y - 6, 7, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.font = '600 18px sans-serif';
-          ctx.fillStyle = '#e2e8f0';
-          ctx.fillText(point, 125, y);
-        });
-
-        // Code Box HUD
-        const codeX = 660;
-        const codeY = 300;
-        const codeW = 500;
-        const codeH = 220;
-
-        ctx.fillStyle = '#050811';
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 1.5;
+      // 7. Content Body
+      const bodyY = subY + 45;
+      bulletList.slice(0, 4).forEach((point, idx) => {
+        const y = bodyY + idx * (aspectRatio === '9:16' ? 70 : 48);
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(codeX, codeY, codeW, codeH, 12);
+        ctx.roundRect(padX + 25, y - 24, frameW - 50, 42, 8);
         ctx.fill();
         ctx.stroke();
 
-        // Header
-        ctx.fillStyle = '#0f172a';
+        // Dot
+        ctx.fillStyle = accent;
         ctx.beginPath();
-        ctx.roundRect(codeX, codeY, codeW, 36, [12, 12, 0, 0]);
+        ctx.arc(padX + 48, y - 4, 5, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.arc(codeX + 20, codeY + 18, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#f59e0b';
-        ctx.beginPath();
-        ctx.arc(codeX + 36, codeY + 18, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#10b981';
-        ctx.beginPath();
-        ctx.arc(codeX + 52, codeY + 18, 5, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.font = '600 15px sans-serif';
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillText(point, padX + 68, y + 2);
+      });
 
-        ctx.font = '12px monospace';
-        ctx.fillStyle = '#64748b';
-        ctx.fillText('autonomous_engine.py', codeX + 72, codeY + 22);
-
-        // Code Lines
-        ctx.font = '15px monospace';
-        ctx.fillStyle = '#38bdf8';
-        const lines = (activeScene.codePreview || '').split('\n');
-        lines.forEach((line, lIdx) => {
-          ctx.fillText(line, codeX + 24, codeY + 70 + lIdx * 28);
-        });
-      } else {
-        // Large 3 bullet points with visual icons
-        bulletList.forEach((point, idx) => {
-          const y = 340 + idx * 56;
-          // Accent pill box
-          ctx.fillStyle = '#0f172a';
-          ctx.strokeStyle = '#1e293b';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.roundRect(90, y - 28, 950, 44, 8);
-          ctx.fill();
-          ctx.stroke();
-
-          // Dot
-          ctx.fillStyle = accent;
-          ctx.beginPath();
-          ctx.arc(115, y - 6, 6, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.font = '600 18px sans-serif';
-          ctx.fillStyle = '#e2e8f0';
-          ctx.fillText(point, 138, y);
-        });
-      }
-
-      // 9. Bottom Banner: Call To Action & Repository Link
+      // 8. Bottom CTA Banner
+      const ctaH = 54;
+      const ctaY = padY + frameH - ctaH - 25;
       ctx.fillStyle = '#0a1020';
       ctx.strokeStyle = '#1e293b';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect(90, 560, 1100, 68, 12);
+      ctx.roundRect(padX + 25, ctaY, frameW - 50, ctaH, 10);
       ctx.fill();
       ctx.stroke();
 
-      ctx.font = 'bold 15px sans-serif';
+      ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#94a3b8';
-      ctx.fillText('TARGET REPOSITORY:', 120, 600);
+      ctx.fillText('TARGET REPO:', padX + 45, ctaY + 32);
 
-      ctx.font = 'bold 18px monospace';
+      ctx.font = 'bold 14px monospace';
       ctx.fillStyle = '#60a5fa';
-      ctx.fillText('https://github.com/Olori24/AgentStation.git', 300, 600);
+      ctx.fillText('github.com/Olori24/AgentStation-Factory', padX + 155, ctaY + 32);
 
       ctx.fillStyle = '#10b981';
-      ctx.font = 'bold 13px monospace';
-      ctx.fillText('● 100% PASSING', 1040, 600);
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText('● 100% VERIFIED', padX + frameW - 170, ctaY + 32);
 
-      // 10. Scrub Timeline Bar at Bottom
-      const timelineW = 1100;
-      const progressW = (currentTime / totalDuration) * timelineW;
+      // 9. Scrub Timeline Bar at Bottom
+      const timelineY = padY + frameH - 12;
+      const progressW = (currentTime / totalDuration) * (frameW - 50);
 
       ctx.fillStyle = '#1e293b';
-      ctx.fillRect(90, 642, timelineW, 4);
+      ctx.fillRect(padX + 25, timelineY, frameW - 50, 4);
 
-      ctx.fillStyle = activeScene.accentColor;
-      ctx.fillRect(90, 642, progressW, 4);
+      ctx.fillStyle = accent;
+      ctx.fillRect(padX + 25, timelineY, progressW, 4);
 
       requestRef.current = requestAnimationFrame(render);
     };
@@ -344,7 +352,7 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
         cancelAnimationFrame(requestRef.current);
       }
     };
-  }, [isPlaying, currentTime, currentSceneIndex, scenes, totalDuration]);
+  }, [isPlaying, currentTime, currentSceneIndex, scenes, totalDuration, canvasDimensions, isEditingScene, draftScene, aspectRatio]);
 
   const togglePlay = () => {
     if (isPlaying) {
@@ -366,10 +374,18 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
     const sceneTime = (index / scenes.length) * totalDuration;
     startTimeRef.current = Date.now() - sceneTime * 1000;
     setCurrentTime(sceneTime);
-    setSelectedSceneIndex(index);
   };
 
-  // One-click MediaRecorder Video Exporter
+  const handleSaveDraftScene = () => {
+    if (onUpdateVideo) {
+      const updatedScenes = [...scenes];
+      updatedScenes[currentSceneIndex] = draftScene;
+      onUpdateVideo({ ...video, scenes: updatedScenes });
+    }
+    setIsEditingScene(false);
+  };
+
+  // Video Exporter via MediaRecorder
   const handleExportVideo = async () => {
     const canvas = canvasRef.current;
     if (!canvas || isRecording) return;
@@ -386,9 +402,7 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
       const chunks: Blob[] = [];
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
+        if (e.data.size > 0) chunks.push(e.data);
       };
 
       recorder.onstop = () => {
@@ -396,7 +410,7 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `AgentStation_${video.title.replace(/\s+/g, '_')}_Promo.webm`;
+        a.download = `AgentStation_${video.title.replace(/\s+/g, '_')}_${aspectRatio}.webm`;
         a.click();
         URL.revokeObjectURL(url);
         setIsRecording(false);
@@ -432,14 +446,58 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse" />
           <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-            Motion Video Producer (Nova)
+            Kinetic Video Producer
           </span>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
-            1080p Kinetic Canvas
+            {canvasDimensions.width}x{canvasDimensions.height}
           </span>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Aspect Ratio Switcher */}
+          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
+            <button
+              onClick={() => setAspectRatio('16:9')}
+              title="16:9 Landscape"
+              className={`p-1 rounded flex items-center gap-1 ${
+                aspectRatio === '16:9' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Monitor className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => setAspectRatio('9:16')}
+              title="9:16 Vertical (Shorts/TikTok/Reels)"
+              className={`p-1 rounded flex items-center gap-1 ${
+                aspectRatio === '9:16' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Smartphone className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => setAspectRatio('1:1')}
+              title="1:1 Square"
+              className={`p-1 rounded flex items-center gap-1 ${
+                aspectRatio === '1:1' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Square className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Synth Audio Toggle */}
+          <button
+            onClick={() => setIsSynthEnabled(!isSynthEnabled)}
+            className={`p-1.5 rounded-md border text-xs flex items-center gap-1 transition ${
+              isSynthEnabled
+                ? 'bg-blue-500/15 border-blue-500/30 text-blue-300'
+                : 'bg-slate-800 border-slate-700 text-slate-500'
+            }`}
+            title="Toggle Synthesizer Chimes"
+          >
+            <Music className="w-3.5 h-3.5" />
+          </button>
+
           {/* Audio toggle */}
           <button
             onClick={() => setIsAudioEnabled(!isAudioEnabled)}
@@ -463,25 +521,25 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
             {isRecording ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Recording {recordProgress}%</span>
+                <span>REC {recordProgress}%</span>
               </>
             ) : (
               <>
                 <Download className="w-3.5 h-3.5" />
-                <span>Export Video (.webm)</span>
+                <span>Export (.webm)</span>
               </>
             )}
           </button>
         </div>
       </div>
 
-      {/* Canvas Display Viewport */}
+      {/* Canvas Viewport */}
       <div className="relative flex-1 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 min-h-[300px]">
         <canvas
           ref={canvasRef}
-          width={1280}
-          height={720}
-          className="w-full max-w-3xl aspect-video rounded-xl border border-slate-800 shadow-2xl bg-[#090d16]"
+          width={canvasDimensions.width}
+          height={canvasDimensions.height}
+          className={`w-full max-w-2xl rounded-xl border border-slate-800 shadow-2xl bg-[#090d16] ${canvasDimensions.aspectClass}`}
         />
 
         {/* Recording Overlay Indicator */}
@@ -492,6 +550,74 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
           </div>
         )}
       </div>
+
+      {/* Scene Editor Drawer */}
+      {isEditingScene && (
+        <div className="p-3 bg-slate-950 border-t border-slate-800 space-y-2 text-xs animate-in fade-in">
+          <div className="flex items-center justify-between font-mono font-bold text-slate-300">
+            <span>Edit Scene {currentSceneIndex + 1} Parameters:</span>
+            <button onClick={() => setIsEditingScene(false)} className="text-slate-500 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-slate-500">Badge Label:</label>
+              <input
+                type="text"
+                value={draftScene.badge}
+                onChange={(e) => setDraftScene({ ...draftScene, badge: e.target.value })}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500">Accent Color:</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={draftScene.accentColor}
+                  onChange={(e) => setDraftScene({ ...draftScene, accentColor: e.target.value })}
+                  className="w-7 h-7 rounded border-none bg-transparent cursor-pointer"
+                />
+                <span className="font-mono text-slate-400">{draftScene.accentColor}</span>
+              </div>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-[10px] text-slate-500">Heading:</label>
+              <input
+                type="text"
+                value={draftScene.heading}
+                onChange={(e) => setDraftScene({ ...draftScene, heading: e.target.value })}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 font-bold"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-[10px] text-slate-500">Subheading:</label>
+              <input
+                type="text"
+                value={draftScene.subheading}
+                onChange={(e) => setDraftScene({ ...draftScene, subheading: e.target.value })}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={() => setIsEditingScene(false)}
+              className="px-3 py-1 rounded bg-slate-800 text-slate-300 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveDraftScene}
+              className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-semibold flex items-center gap-1"
+            >
+              <Save className="w-3 h-3" />
+              <span>Apply to Scene</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Playback Controls & Scene Navigation */}
       <div className="p-3 bg-slate-950 border-t border-slate-800 space-y-2.5">
@@ -510,6 +636,15 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({ video }) => {
               className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
             >
               <RotateCcw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setIsEditingScene(!isEditingScene)}
+              title="Edit Current Scene"
+              className={`p-2 rounded-lg transition ${
+                isEditingScene ? 'bg-purple-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+              }`}
+            >
+              <Edit className="w-4 h-4" />
             </button>
             <span className="text-xs font-mono text-slate-400 pl-2">
               {Math.floor(currentTime)}s / {totalDuration}s

@@ -14,7 +14,7 @@ export interface AgentProfile {
 export interface WorkspaceFile {
   name: string;
   path: string;
-  language: 'python' | 'javascript' | 'typescript' | 'json' | 'yaml' | 'markdown' | 'dockerfile' | 'bash';
+  language: 'python' | 'javascript' | 'typescript' | 'json' | 'yaml' | 'markdown' | 'dockerfile' | 'bash' | 'html' | 'css' | 'sql' | string;
   content: string;
   sizeBytes?: number;
 }

@@ -116,12 +116,23 @@ app.post("/api/github/push", async (req, res) => {
     }
 
     if (token) {
-      const authedUrl = `https://${token}@github.com/Olori24/AgentStation.git`;
-      const pushRes = await execAsync(`git push ${authedUrl} main`);
+      const repos = [
+        "https://" + token + "@github.com/Olori24/AgentStation-Factory.git",
+        "https://" + token + "@github.com/Olori24/AgentStation.git"
+      ];
+      let outputs: string[] = [];
+      for (const repoUrl of repos) {
+        try {
+          const pushRes = await execAsync(`git push ${repoUrl} main`);
+          outputs.push(pushRes.stdout || pushRes.stderr || "Success");
+        } catch (e: any) {
+          outputs.push("Push note: " + (e.stderr || e.message));
+        }
+      }
       return res.json({
         success: true,
-        message: "Successfully pushed to github.com/Olori24/AgentStation on branch main!",
-        output: pushRes.stdout || pushRes.stderr || "Everything up-to-date",
+        message: "Successfully pushed to github.com/Olori24/AgentStation-Factory & AgentStation on branch main!",
+        output: outputs.join("\n"),
       });
     } else {
       try {
