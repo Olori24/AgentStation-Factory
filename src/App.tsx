@@ -552,6 +552,14 @@ export default function App() {
         isOpen={isGitHubModalOpen}
         onClose={() => setIsGitHubModalOpen(false)}
         commitMessage={mission.gitCommitMessage}
+        currentBranch={mission.gitBranch || 'main'}
+        onBranchChange={(newBranch) => {
+          setMission((prev) => {
+            const updated = { ...prev, gitBranch: newBranch };
+            updateHistoryWithMission(updated);
+            return updated;
+          });
+        }}
       />
 
       {/* Ollama Local Configuration Modal */}

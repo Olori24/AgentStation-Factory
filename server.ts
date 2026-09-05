@@ -82,11 +82,46 @@ app.get("/api/github/status", async (_req, res) => {
     } catch {}
 
     const hasToken = Boolean(process.env.GITHUB_TOKEN && process.env.GITHUB_TOKEN.trim());
+    const token = process.env.GITHUB_TOKEN?.trim();
+
+    let localBranches: string[] = [];
+    try {
+      const branchesRes = await execAsync("git branch --list --format='%(refname:short)'");
+      localBranches = branchesRes.stdout
+        .split("\n")
+        .map((b) => b.trim())
+        .filter(Boolean);
+    } catch {}
+
+    let remoteBranches: string[] = [];
+    if (hasToken && token) {
+      try {
+        const ghRes = await fetch("https://api.github.com/repos/Olori24/AgentStation/branches", {
+          headers: { Authorization: `Bearer ${token}`, "User-Agent": "AgentStation" },
+        });
+        if (ghRes.ok) {
+          const ghData = (await ghRes.json()) as any[];
+          remoteBranches = ghData.map((b) => b.name);
+        }
+      } catch {}
+    }
+
+    const branches = Array.from(
+      new Set([
+        branch,
+        ...localBranches,
+        ...remoteBranches,
+        "main",
+        "develop",
+        "staging",
+      ])
+    ).filter(Boolean);
 
     res.json({
       success: true,
       repo: "Olori24/AgentStation",
       branch,
+      branches,
       commitHash,
       commitMessage,
       commitAuthor,
@@ -105,6 +140,7 @@ app.get("/api/github/status", async (_req, res) => {
 app.post("/api/github/push", async (req, res) => {
   try {
     const customCommit = req.body?.commitMessage || "feat: AgentStation autonomous multi-agent cluster sync";
+    const targetBranch = (req.body?.branch || "main").trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, "") || "main";
     const token = process.env.GITHUB_TOKEN?.trim();
 
     // Stage any changes
@@ -123,7 +159,7 @@ app.post("/api/github/push", async (req, res) => {
       let outputs: string[] = [];
       for (const repoUrl of repos) {
         try {
-          const pushRes = await execAsync(`git push ${repoUrl} main`);
+          const pushRes = await execAsync(`git push ${repoUrl} HEAD:${targetBranch}`);
           outputs.push(pushRes.stdout || pushRes.stderr || "Success");
         } catch (e: any) {
           outputs.push("Push note: " + (e.stderr || e.message));
@@ -131,15 +167,19 @@ app.post("/api/github/push", async (req, res) => {
       }
       return res.json({
         success: true,
-        message: "Successfully pushed to github.com/Olori24/AgentStation-Factory & AgentStation on branch main!",
+        branch: targetBranch,
+        branchUrl: `https://github.com/Olori24/AgentStation/tree/${targetBranch}`,
+        message: `Successfully pushed to github.com/Olori24/AgentStation-Factory & AgentStation on branch '${targetBranch}'!`,
         output: outputs.join("\n"),
       });
     } else {
       try {
-        const pushRes = await execAsync("git push origin main");
+        const pushRes = await execAsync(`git push origin HEAD:${targetBranch}`);
         return res.json({
           success: true,
-          message: "Successfully pushed to github.com/Olori24/AgentStation on branch main!",
+          branch: targetBranch,
+          branchUrl: `https://github.com/Olori24/AgentStation/tree/${targetBranch}`,
+          message: `Successfully pushed to github.com/Olori24/AgentStation on branch '${targetBranch}'!`,
           output: pushRes.stdout || pushRes.stderr || "Everything up-to-date",
         });
       } catch (err: any) {
