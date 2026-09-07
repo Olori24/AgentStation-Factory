@@ -107,9 +107,9 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-sm tracking-tight text-white">Manus</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-blue-400 border border-slate-700 font-semibold">
-                  AGENT
+                <span className="font-extrabold text-sm tracking-tight text-white">AgentStation</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-950/70 text-blue-400 border border-blue-800/60 font-semibold">
+                  SQUAD
                 </span>
               </div>
             </div>

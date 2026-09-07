@@ -90,3 +90,10 @@ export function listArtifacts(missionId?: string): ArtifactMeta[] {
   }
   return all.slice(-20).reverse();
 }
+
+export async function createMissionArtifactBundle(
+  missionId: string,
+  files: Array<{ path: string; content: string }>
+): Promise<ArtifactMeta> {
+  return generateMissionBundle(missionId, `release-${missionId}`, files);
+}

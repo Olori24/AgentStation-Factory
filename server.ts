@@ -14,6 +14,8 @@ import { jobQueue } from "./server/queue";
 import { executeSandboxedCommand } from "./server/sandbox";
 import { generateMissionBundle, getArtifact, listArtifacts } from "./server/artifacts";
 import { terminalWs } from "./server/terminalWs";
+import { AgentOrchestrator } from "./server/orchestrator";
+import { ToolExecutionEngine, TOOL_DEFINITIONS } from "./server/tools";
 
 dotenv.config();
 
@@ -1970,6 +1972,262 @@ app.get("/api/artifacts/download/:id", (req, res) => {
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename="${artifact.meta.name}"`);
   res.send(artifact.buffer);
+});
+
+// ==========================================
+// Phase 6: Autonomous Agent Orchestration & Tool Execution API
+// ==========================================
+
+// Plan a mission into structured subtasks
+app.post("/api/tasks/plan", async (req, res) => {
+  try {
+    const { prompt, missionId = `mission-${Date.now()}` } = req.body || {};
+    if (!prompt) {
+      return res.status(400).json({ success: false, error: "Task prompt is required." });
+    }
+
+    // Ensure mission record is initialized in the database
+    let mission = db.getMissionById(missionId);
+    if (!mission) {
+      db.upsertMission({
+        id: missionId,
+        prompt,
+        createdAt: new Date().toISOString(),
+        status: 'running',
+        currentStage: 'Subtask Generation & Autonomous Planning',
+        progressPercent: 10,
+        files: [],
+        execution: {
+          command: 'pytest -v tests/',
+          stdout: 'Initializing plan...',
+          exitCode: 0,
+          testsPassed: 0,
+          testsFailed: 0,
+          durationMs: 0,
+        },
+        video: {
+          title: 'Autonomous Execution',
+          hook: 'Autonomous Squad Active',
+          subtitle: prompt,
+          scenes: [],
+          totalDurationSec: 16,
+          audioScript: '',
+          soundtrackMood: 'energetic-tech',
+        },
+        logs: [],
+        gitBranch: 'main',
+        gitCommitMessage: `feat: autonomous execution for "${prompt.slice(0, 40)}"`,
+      });
+    }
+
+    const plan = await AgentOrchestrator.planMission(missionId, prompt);
+    res.json({ success: true, plan });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Start autonomous execution loop
+app.post("/api/tasks/execute", async (req, res) => {
+  try {
+    const { missionId, prompt, options = {} } = req.body || {};
+    if (!missionId) {
+      return res.status(400).json({ success: false, error: "missionId is required." });
+    }
+
+    let mission = db.getMissionById(missionId);
+    if (!mission && prompt) {
+      mission = db.upsertMission({
+        id: missionId,
+        prompt,
+        createdAt: new Date().toISOString(),
+        status: 'running',
+        currentStage: 'Planning & Subtask Generation',
+        progressPercent: 5,
+        files: [],
+        execution: {
+          command: 'pytest -v',
+          stdout: 'Initializing sandbox test runner...',
+          exitCode: 0,
+          testsPassed: 0,
+          testsFailed: 0,
+          durationMs: 0,
+        },
+        video: {
+          title: 'Autonomous Execution',
+          hook: 'Autonomous Squad Active',
+          subtitle: prompt,
+          scenes: [],
+          totalDurationSec: 16,
+          audioScript: '',
+          soundtrackMood: 'energetic-tech',
+        },
+        logs: [],
+        gitBranch: 'main',
+        gitCommitMessage: `feat: autonomous execution for "${prompt.slice(0, 40)}"`,
+      });
+    }
+
+    // Launch background execution loop
+    AgentOrchestrator.executeMission(missionId, options).catch((err) => {
+      console.error('[API Execute Error]:', err);
+    });
+
+    res.json({
+      success: true,
+      missionId,
+      message: 'Autonomous multi-agent execution loop launched.',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Inspect a task/mission with subtasks, tool executions, files, approvals
+app.get("/api/tasks/:id", (req, res) => {
+  const missionId = req.params.id;
+  const mission = db.getMissionById(missionId);
+  if (!mission) {
+    return res.status(404).json({ success: false, error: "Task/mission not found" });
+  }
+
+  const subtasks = db.getSubtasks(missionId);
+  const toolExecutions = db.getToolExecutions(missionId);
+  const approvals = db.getApprovals(missionId);
+  const files = db.getFilesByMission(missionId);
+  const logs = db.getLogsByMission(missionId);
+
+  res.json({
+    success: true,
+    task: {
+      ...mission,
+      subtasks,
+      toolExecutions,
+      approvals,
+      files,
+      logs,
+    },
+  });
+});
+
+// Task execution controls
+app.post("/api/tasks/:id/pause", (req, res) => {
+  const success = AgentOrchestrator.pauseMission(req.params.id);
+  res.json({ success, message: success ? "Task paused." : "Task not currently active or already paused." });
+});
+
+app.post("/api/tasks/:id/resume", (req, res) => {
+  const success = AgentOrchestrator.resumeMission(req.params.id);
+  res.json({ success, message: success ? "Task resumed." : "Task not currently paused." });
+});
+
+app.post("/api/tasks/:id/cancel", (req, res) => {
+  const success = AgentOrchestrator.cancelMission(req.params.id);
+  res.json({ success, message: success ? "Task cancelled." : "Task not active." });
+});
+
+app.get("/api/tasks/:id/subtasks", (req, res) => {
+  const subtasks = db.getSubtasks(req.params.id);
+  res.json({ success: true, subtasks });
+});
+
+// Operator Approval endpoint
+app.post("/api/tasks/:id/approve", (req, res) => {
+  const { approvalId, approved = true, responder = "operator" } = req.body || {};
+  if (!approvalId) {
+    return res.status(400).json({ success: false, error: "approvalId is required." });
+  }
+  const result = db.resolveApproval(approvalId, Boolean(approved), responder);
+  if (!result) {
+    return res.status(404).json({ success: false, error: "Approval request not found." });
+  }
+  res.json({ success: true, approval: result });
+});
+
+// Tool Registry: list all available tools & schema
+app.get("/api/tools", (_req, res) => {
+  res.json({
+    success: true,
+    count: TOOL_DEFINITIONS.length,
+    tools: TOOL_DEFINITIONS,
+  });
+});
+
+// Direct Tool Execution endpoint
+app.post("/api/tools/execute", async (req, res) => {
+  try {
+    const { toolName, input = {}, missionId = "manual-run", agentRole = "system", skipApprovalCheck = false } = req.body || {};
+    if (!toolName) {
+      return res.status(400).json({ success: false, error: "toolName is required." });
+    }
+
+    const result = await ToolExecutionEngine.executeTool({
+      missionId,
+      agentRole,
+      toolName,
+      input,
+      skipApprovalCheck,
+    });
+
+    res.json({ success: result.success, execution: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Approvals query
+app.get("/api/approvals", (req, res) => {
+  const missionId = req.query.missionId as string | undefined;
+  const approvals = db.getApprovals(missionId);
+  res.json({ success: true, approvals });
+});
+
+// User settings
+app.get("/api/settings", (req: any, res) => {
+  const user = req.user || getActiveUser();
+  const settings = db.getUserSettings(user.id);
+  res.json({ success: true, settings });
+});
+
+app.post("/api/settings", (req: any, res) => {
+  const user = req.user || getActiveUser();
+  const updated = db.updateUserSettings(user.id, req.body || {});
+  res.json({ success: true, settings: updated });
+});
+
+// Direct file management
+app.get("/api/files/download", async (req, res) => {
+  try {
+    const relPath = req.query.path as string;
+    if (!relPath) return res.status(400).send("Path required");
+    const workspaceDir = path.resolve(process.cwd(), "workspace");
+    const target = path.join(workspaceDir, relPath);
+    if (!target.startsWith(workspaceDir) || !fs.existsSync(target)) {
+      return res.status(404).send("File not found");
+    }
+    res.download(target);
+  } catch (err: any) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.post("/api/files/save", async (req, res) => {
+  try {
+    const { path: relPath, content } = req.body || {};
+    if (!relPath || typeof content !== "string") {
+      return res.status(400).json({ success: false, error: "path and content required" });
+    }
+    const workspaceDir = path.resolve(process.cwd(), "workspace");
+    const target = path.join(workspaceDir, relPath);
+    if (!target.startsWith(workspaceDir)) {
+      return res.status(403).json({ success: false, error: "Access denied" });
+    }
+    await fs.promises.mkdir(path.dirname(target), { recursive: true });
+    await fs.promises.writeFile(target, content, "utf8");
+    res.json({ success: true, path: relPath, sizeBytes: Buffer.byteLength(content, "utf8") });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Vite middleware setup

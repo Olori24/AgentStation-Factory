@@ -51,6 +51,16 @@ export const DEFAULT_AGENTS: AgentProfile[] = [
     status: 'completed',
     color: '#8b5cf6', // purple
   },
+  {
+    id: 'researcher',
+    name: 'Hermes',
+    roleTitle: 'Market Intelligence & Deep Researcher',
+    badge: 'Web Research & Synthesis',
+    specialty: 'Market Analysis, Competitor Intelligence, Dossier & Slide Generation',
+    model: 'Gemini 2.5 Flash / Web Grounding',
+    status: 'completed',
+    color: '#06b6d4', // cyan
+  },
 ];
 
 export const GITHUB_REPO_INFO: GitHubRepoMeta = {

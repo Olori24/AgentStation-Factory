@@ -33,6 +33,11 @@ const ROLE_COLORS: Record<AgentRole, { bg: string; text: string; icon: React.Rea
     text: 'text-purple-400',
     icon: <Film className="w-3.5 h-3.5" />,
   },
+  researcher: {
+    bg: 'bg-cyan-500/10 border-cyan-500/30',
+    text: 'text-cyan-400',
+    icon: <Compass className="w-3.5 h-3.5" />,
+  },
   system: {
     bg: 'bg-slate-800/60 border-slate-700/60',
     text: 'text-slate-300',

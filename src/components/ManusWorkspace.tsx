@@ -187,7 +187,7 @@ export const ManusWorkspace: React.FC<ManusWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* Main Dual-Pane Manus Layout */}
+      {/* Main Dual-Pane AgentStation Layout */}
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-3 min-h-0">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[760px]">
           {/* Left Column: Autonomous Squad Activity & Follow-up Chat (4 cols) */}
@@ -197,7 +197,7 @@ export const ManusWorkspace: React.FC<ManusWorkspaceProps> = ({
               <AgentActivityStream logs={mission.logs} isExecuting={isExecuting} />
             </div>
 
-            {/* Follow-up Prompt Input Box (Manus Chat) */}
+            {/* Follow-up Prompt Input Box (AgentStation Chat) */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-xl">
               <div className="text-[11px] font-mono text-slate-400 font-semibold mb-2 flex items-center justify-between">
                 <span className="flex items-center gap-1 text-blue-400">

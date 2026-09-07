@@ -39,7 +39,257 @@
       "createdAt": "2026-09-07T20:42:27.252Z"
     }
   ],
-  "missions": [],
+  "missions": [
+    {
+      "id": "mission-ci-test",
+      "prompt": "Automated CI test runner",
+      "createdAt": "2026-09-07T21:47:43.766Z",
+      "status": "running",
+      "currentStage": "Subtask Generation & Autonomous Planning",
+      "progressPercent": 10,
+      "files": [],
+      "execution": {
+        "command": "pytest -v tests/",
+        "stdout": "Initializing plan...",
+        "exitCode": 0,
+        "testsPassed": 0,
+        "testsFailed": 0,
+        "durationMs": 0
+      },
+      "video": {
+        "title": "Autonomous Execution",
+        "hook": "Autonomous Squad Active",
+        "subtitle": "Automated CI test runner",
+        "scenes": [],
+        "totalDurationSec": 16,
+        "audioScript": "",
+        "soundtrackMood": "energetic-tech"
+      },
+      "logs": [],
+      "gitBranch": "main",
+      "gitCommitMessage": "feat: autonomous execution for \"Automated CI test runner\""
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "subtask-mission-health-1-1",
+      "missionId": "mission-health-1",
+      "order": 1,
+      "title": "Define Telemetry Schemas and Alerting Policies",
+      "description": "Specify the JSON schema for system health metrics (CPU, memory, disk, network) and threshold configuration files defining alert triggers.",
+      "agentRole": "architect",
+      "toolName": "file_write",
+      "status": "pending",
+      "requiresApproval": false,
+      "retries": 0,
+      "maxRetries": 2,
+      "createdAt": "2026-09-07T21:47:00.232Z",
+      "updatedAt": "2026-09-07T21:47:00.232Z"
+    },
+    {
+      "id": "subtask-mission-health-1-2",
+      "missionId": "mission-health-1",
+      "order": 2,
+      "title": "Implement Monitoring Core and Notification Dispatcher",
+      "description": "Write the asynchronous Python daemon collecting system telemetry and dispatching webhook/email notifications upon threshold breach.",
+      "agentRole": "developer",
+      "toolName": "file_write",
+      "status": "pending",
+      "requiresApproval": false,
+      "retries": 0,
+      "maxRetries": 2,
+      "createdAt": "2026-09-07T21:47:00.232Z",
+      "updatedAt": "2026-09-07T21:47:00.232Z"
+    },
+    {
+      "id": "subtask-mission-health-1-3",
+      "missionId": "mission-health-1",
+      "order": 3,
+      "title": "Validate Telemetry Ingestion and Alert Triggering",
+      "description": "Execute PyTest suites simulating resource saturation and verifying that alerts are accurately triggered and deduplicated.",
+      "agentRole": "qa",
+      "toolName": "test_runner",
+      "status": "pending",
+      "requiresApproval": false,
+      "retries": 0,
+      "maxRetries": 2,
+      "createdAt": "2026-09-07T21:47:00.232Z",
+      "updatedAt": "2026-09-07T21:47:00.232Z"
+    },
+    {
+      "id": "subtask-mission-health-1-4",
+      "missionId": "mission-health-1",
+      "order": 4,
+      "title": "Generate Operational Runbook and Setup Documentation",
+      "description": "Generate an operational runbook detailing metric definitions, configuration options, and remediation protocols for raised alerts.",
+      "agentRole": "creative",
+      "toolName": "document_generate",
+      "status": "pending",
+      "requiresApproval": false,
+      "retries": 0,
+      "maxRetries": 2,
+      "createdAt": "2026-09-07T21:47:00.232Z",
+      "updatedAt": "2026-09-07T21:47:00.232Z"
+    },
+    {
+      "id": "subtask-mission-ci-test-1",
+      "missionId": "mission-ci-test",
+      "order": 1,
+      "title": "Architecture and Configuration Schema Specification",
+      "description": "Define the CI runner configuration schema (YAML/JSON), workspace structure, and event hook interfaces.",
+      "agentRole": "architect",
+      "toolName": "file_write",
+      "status": "pending",
+      "requiresApproval": false,
+      "retries": 0,
+      "maxRetries": 2,
+      "createdAt": "2026-09-07T21:47:43.766Z",
+      "updatedAt": "2026-09-07T21:47:43.766Z"
+    },
+    {
+      "id": "subtask-mission-ci-test-2",
+      "missionId": "mission-ci-test",
+      "order": 2,
+      "title": "Test Discovery and Execution Engine Implementation",
+      "description": "Implement the core test runner module to discover test suites, spawn sandboxed execution processes, and capture exit codes and telemetry.",
+      "agentRole": "developer",
+      "toolName": "file_write",
+      "status": "pending",
+      "requiresApproval": false,
+      "retries": 0,
+      "maxRetries": 2,
+      "createdAt": "2026-09-07T21:47:43.766Z",
+      "updatedAt": "2026-09-07T21:47:43.766Z"
+    },
+    {
+      "id": "subtask-mission-ci-test-3",
+      "missionId": "mission-ci-test",
+      "order": 3,
+      "title": "Sandbox Verification and Resilience Testing",
+      "description": "Run the runner against standard test matrices and fault injection suites using the automated test environment to verify isolation and accurate failure reporting.",
+      "agentRole": "qa",
+      "toolName": "test_runner",
+      "status": "pending",
+      "requiresApproval": false,
+      "retries": 0,
+      "maxRetries": 2,
+      "createdAt": "2026-09-07T21:47:43.766Z",
+      "updatedAt": "2026-09-07T21:47:43.766Z"
+    },
+    {
+      "id": "subtask-mission-ci-test-4",
+      "missionId": "mission-ci-test",
+      "order": 4,
+      "title": "CLI Entrypoint and Artifact Packaging",
+      "description": "Expose the unified CLI entrypoint, bundle artifact output handlers (JUnit/JSON reporters), and finalize package configurations.",
+      "agentRole": "developer",
+      "toolName": "artifact_bundle",
+      "status": "pending",
+      "requiresApproval": false,
+      "retries": 0,
+      "maxRetries": 2,
+      "createdAt": "2026-09-07T21:47:43.766Z",
+      "updatedAt": "2026-09-07T21:47:43.766Z"
+    },
+    {
+      "id": "subtask-mission-ci-test-5",
+      "missionId": "mission-ci-test",
+      "order": 5,
+      "title": "Technical Documentation and Integration Guide",
+      "description": "Generate comprehensive setup guides, integration documentation for common VCS providers, and exit code reference manuals.",
+      "agentRole": "creative",
+      "toolName": "document_generate",
+      "status": "pending",
+      "requiresApproval": false,
+      "retries": 0,
+      "maxRetries": 2,
+      "createdAt": "2026-09-07T21:47:43.766Z",
+      "updatedAt": "2026-09-07T21:47:43.766Z"
+    }
+  ],
+  "toolExecutions": [
+    {
+      "missionId": "manual-run",
+      "agentRole": "system",
+      "toolName": "file_list",
+      "inputParams": {},
+      "outputResult": {
+        "directory": "workspace",
+        "totalEntries": 3,
+        "files": [
+          {
+            "name": ".github",
+            "path": ".github",
+            "isDirectory": true
+          },
+          {
+            "name": "workflows",
+            "path": ".github/workflows",
+            "isDirectory": true
+          },
+          {
+            "name": "agentstation-ci.yml",
+            "path": ".github/workflows/agentstation-ci.yml",
+            "isDirectory": false,
+            "sizeBytes": 1742
+          }
+        ]
+      },
+      "exitCode": 0,
+      "status": "success",
+      "durationMs": 0,
+      "id": "tool-exec-1788817607910-4f1171",
+      "timestamp": "2026-09-07T21:46:47.910Z"
+    },
+    {
+      "missionId": "test-mission-1",
+      "agentRole": "developer",
+      "toolName": "code_execute",
+      "inputParams": {
+        "command": "git push origin main"
+      },
+      "outputResult": {
+        "command": "git push origin main",
+        "exitCode": 0,
+        "stdout": "",
+        "stderr": "Everything up-to-date\n",
+        "durationMs": 480,
+        "timedOut": false
+      },
+      "exitCode": 0,
+      "status": "success",
+      "durationMs": 481,
+      "id": "tool-exec-1788817610181-e3f37c",
+      "timestamp": "2026-09-07T21:46:50.181Z"
+    },
+    {
+      "missionId": "test-mission-approval",
+      "agentRole": "developer",
+      "toolName": "code_execute",
+      "inputParams": {
+        "command": "rm -rf /"
+      },
+      "status": "requires_approval",
+      "durationMs": 0,
+      "id": "tool-exec-1788817615536-40ac3c",
+      "timestamp": "2026-09-07T21:46:55.536Z"
+    }
+  ],
+  "approvals": [
+    {
+      "missionId": "test-mission-approval",
+      "toolName": "code_execute",
+      "actionDescription": "Command contains high-risk pattern: rm -rf /",
+      "riskLevel": "high",
+      "id": "appr-1788817615536-9adb6d",
+      "status": "approved",
+      "requestedAt": "2026-09-07T21:46:55.536Z",
+      "respondedAt": "2026-09-07T21:46:58.146Z",
+      "respondedBy": "Lead Architect"
+    }
+  ],
+  "errors": [],
+  "settings": [],
   "files": [],
   "logs": [],
   "jobs": [
@@ -59,8 +309,8 @@
     }
   ],
   "systemMetrics": {
-    "totalMissionsSynthesized": 0,
-    "totalSandboxExecutions": 5,
+    "totalMissionsSynthesized": 1,
+    "totalSandboxExecutions": 6,
     "totalGitCommits": 0,
     "totalVideosRendered": 0
   }

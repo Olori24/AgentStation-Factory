@@ -386,6 +386,16 @@ export default function App() {
         );
       }, 3600);
 
+      // Trigger autonomous task planner to generate actionable subtasks in database
+      fetch('/api/tasks/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          missionId: newMissionId,
+          prompt: promptText,
+        }),
+      }).catch(() => {});
+
       // Make API call to server with chosen AI provider
       const res = await fetch('/api/agents/run', {
         method: 'POST',
@@ -620,7 +630,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Main 3-Panel Manus Application */}
+      {/* Main 3-Panel AgentStation Application */}
       <div className="flex-1 flex min-h-0 w-full overflow-hidden">
         {/* Panel 1: Left Navigation Rail / Sidebar */}
         <ManusSidebar
@@ -639,7 +649,7 @@ export default function App() {
           aiProvider={aiProvider}
         />
 
-        {/* Panel 2 & 3: Manus Workstation */}
+        {/* Panel 2 & 3: AgentStation Workstation */}
         {isHomePromptMode ? (
           <div className="flex-1 flex flex-col justify-center overflow-y-auto min-h-0 bg-slate-950">
             <ManusHeroPrompt
@@ -664,7 +674,7 @@ export default function App() {
               />
             </div>
 
-            {/* Panel 3: Right "Manus's Computer" (Virtual Desktop / MicroVM) */}
+            {/* Panel 3: Right "AgentStation Workstation" (Virtual Sandbox / Live MicroVM) */}
             <div className="hidden lg:flex flex-1 h-full min-h-0 p-3 bg-slate-900/30 flex-col">
               <ManusComputer
                 files={mission.files}

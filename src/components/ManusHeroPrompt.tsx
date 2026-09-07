@@ -25,9 +25,18 @@ interface ManusHeroPromptProps {
 
 const INSPIRATION_CARDS = [
   {
+    id: 'nigeria-real-estate',
+    title: 'Nigerian Real Estate Market Analysis & Pitch',
+    description: 'Autonomous research into top 5 market opportunities, competitor breakdown, financial feasibility report, and pitch presentation.',
+    prompt: 'Research the Nigerian real estate market, identify the top five opportunities, analyze competitors, create a detailed report and prepare a presentation.',
+    category: 'Market Intelligence & Strategy',
+    badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+    icon: <Sparkles className="w-4 h-4 text-cyan-400" />,
+  },
+  {
     id: 'kanban',
-    title: 'Full-Stack Task Board',
-    description: 'Enterprise task manager with SQLite persistence, REST API, drag-and-drop, and PyTest validation suite.',
+    title: 'Full-Stack Task Board & PyTest Suite',
+    description: 'Enterprise task manager with SQLite persistence, REST API, drag-and-drop Kanban, and complete PyTest verification suite.',
     prompt: 'Build an enterprise task manager with SQLite storage, REST API, drag-and-drop Kanban, and complete PyTest suite.',
     category: 'Full-Stack Web App',
     badgeColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
@@ -35,28 +44,19 @@ const INSPIRATION_CARDS = [
   },
   {
     id: 'crypto',
-    title: 'Crypto Market Streamer',
-    description: 'Real-time cryptocurrency arbitrage terminal with live WebSocket ticker, risk calculators, and alerts.',
+    title: 'Crypto Arbitrage Terminal & Live Ticker',
+    description: 'High-frequency cryptocurrency arbitrage terminal with real-time WebSocket ticker, risk calculators, and alerts.',
     prompt: 'Create a high-frequency cryptocurrency arbitrage terminal with real-time WebSocket ticker and price charts.',
     category: 'Real-Time / WebSocket',
     badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
     icon: <Terminal className="w-4 h-4 text-emerald-400" />,
   },
   {
-    id: 'security',
-    title: 'Zero-Knowledge Auth Vault',
-    description: 'Encrypted credential safe with client-side hashing, session tokens, security audits, and sandbox tests.',
-    prompt: 'Build a zero-knowledge credential vault CLI and web dashboard with PBKDF2 hashing and SQLite backend.',
-    category: 'Security & DevOps',
-    badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-    icon: <Shield className="w-4 h-4 text-amber-400" />,
-  },
-  {
     id: 'video',
-    title: 'Kinetic SaaS Launch Video',
-    description: 'Viral product announcement with animated kinetic typography, audio soundtrack cues, and storyboard.',
+    title: 'Kinetic SaaS Launch Video & Storyboard',
+    description: 'Viral product launch video campaign with kinetic typography, audio soundtrack cues, and complete storyboard.',
     prompt: 'Generate a kinetic 1080p SaaS launch video campaign with punchy hook scenes, audio cues, and voiceover script.',
-    category: 'Video Production',
+    category: 'Video & Marketing Studio',
     badgeColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
     icon: <Video className="w-4 h-4 text-purple-400" />,
   },
@@ -86,25 +86,25 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-8 sm:py-14 flex flex-col items-center justify-center min-h-[80vh]">
-      {/* Top Manus Brand Header */}
+      {/* Top AgentStation Brand Header */}
       <div className="flex flex-col items-center text-center space-y-3 mb-8">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-700/80 text-xs font-mono text-slate-300 shadow-lg">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-semibold text-white">Manus Autonomous Agent</span>
+          <span className="font-semibold text-white tracking-wide">AGENTSTATION</span>
           <span className="text-slate-500">•</span>
-          <span className="text-blue-400 font-bold">Virtual Computer Active</span>
+          <span className="text-blue-400 font-medium">Autonomous Digital Workforce</span>
         </div>
 
         <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
-          What can I do for you today?
+          What objective shall AgentStation execute today?
         </h1>
 
         <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          Assign a complex task, build full-stack web applications, or execute test suites. Manus plans, writes code, and executes autonomously.
+          Assign any complex engineering, research, or market intelligence objective. AgentStation decomposes tasks, deploys specialist agents, invokes sandboxed tools, and delivers verified artifacts.
         </p>
       </div>
 
-      {/* Center Manus Omnibox */}
+      {/* Center AgentStation Omnibox */}
       <div className="w-full relative mb-10">
         <form onSubmit={handleSubmit} className="relative group">
           <div className="relative rounded-2xl bg-slate-900/95 border border-slate-700/80 hover:border-slate-600 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/20 shadow-2xl transition-all duration-200">
@@ -113,7 +113,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Assign a task or ask a question... (e.g. Build an enterprise task manager with SQLite, REST API, tests, and launch video)"
+                placeholder="Assign an objective... (e.g. Research the Nigerian real estate market and prepare a pitch deck, or build an enterprise task manager with SQLite & PyTest)"
                 rows={3}
                 disabled={isExecuting}
                 className="w-full bg-transparent text-slate-100 placeholder-slate-500 text-base sm:text-lg focus:outline-none resize-none leading-relaxed font-sans"
@@ -157,7 +157,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
                 ) : (
                   <>
                     <Play className="w-4 h-4 fill-current" />
-                    <span>Run Agent</span>
+                    <span>Dispatch Squad</span>
                     <span className="hidden sm:inline text-xs font-mono text-blue-200 ml-1">↵</span>
                   </>
                 )}

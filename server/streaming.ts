@@ -94,6 +94,15 @@ class StreamingEngine extends EventEmitter {
     });
   }
 
+  public emitToMission(missionId: string, data: any) {
+    this.broadcast({
+      type: 'mission_status',
+      channel: missionId,
+      data: { missionId, ...data },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   public getConnectedClientCount(): number {
     return this.clients.size;
   }

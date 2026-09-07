@@ -18,9 +18,16 @@ import {
   ExternalLink,
   Plus,
   Play,
+  Pause,
   RotateCcw,
+  ShieldAlert,
+  AlertCircle,
+  XCircle,
+  Wrench,
+  Layers,
+  CheckCircle,
 } from 'lucide-react';
-import { SquadMission, AgentLogEntry, AgentRole } from '../types';
+import { SquadMission, AgentLogEntry, AgentRole, SubtaskRecord, ApprovalRecord } from '../types';
 
 interface ManusConversationProps {
   mission: SquadMission;
@@ -35,7 +42,9 @@ interface PlanStep {
   id: string;
   title: string;
   role: AgentRole;
-  status: 'completed' | 'in_progress' | 'pending';
+  status: 'completed' | 'in_progress' | 'pending' | 'failed';
+  toolName?: string;
+  description?: string;
 }
 
 export const ManusConversation: React.FC<ManusConversationProps> = ({
@@ -50,25 +59,60 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isLogsExpanded, setIsLogsExpanded] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [subtasks, setSubtasks] = useState<SubtaskRecord[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<ApprovalRecord[]>([]);
+  const [isResolvingApproval, setIsResolvingApproval] = useState(false);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Poll for subtasks and approvals for active mission
+  const fetchTaskDetails = async () => {
+    if (!mission?.id) return;
+    try {
+      const res = await fetch(`/api/tasks/${mission.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.task) {
+          if (Array.isArray(data.task.subtasks) && data.task.subtasks.length > 0) {
+            setSubtasks(data.task.subtasks);
+          }
+          if (Array.isArray(data.task.approvals)) {
+            setPendingApprovals(data.task.approvals.filter((a: ApprovalRecord) => a.status === 'pending'));
+          }
+        }
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchTaskDetails();
+    let pollInterval: any = null;
+    if (isExecuting) {
+      pollInterval = setInterval(fetchTaskDetails, 3000);
+    }
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [mission?.id, isExecuting]);
 
   useEffect(() => {
     let interval: any = null;
-    if (isExecuting) {
+    if (isExecuting && !isPaused) {
       setElapsedSeconds(0);
       interval = setInterval(() => {
         setElapsedSeconds((s) => s + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isExecuting]);
+  }, [isExecuting, isPaused]);
 
   // Auto scroll to bottom when new logs arrive while executing
   useEffect(() => {
     if (isExecuting && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [mission.logs?.length, isExecuting]);
+  }, [mission.logs?.length, isExecuting, pendingApprovals.length]);
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -84,8 +128,57 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
     }
   };
 
-  // Build the 5 autonomous stages for the plan
+  const handlePauseResume = async () => {
+    if (!mission?.id) return;
+    try {
+      const endpoint = isPaused ? `/api/tasks/${mission.id}/resume` : `/api/tasks/${mission.id}/pause`;
+      const res = await fetch(endpoint, { method: 'POST' });
+      if (res.ok) {
+        setIsPaused(!isPaused);
+      }
+    } catch {}
+  };
+
+  const handleCancelTask = async () => {
+    if (!mission?.id) return;
+    try {
+      await fetch(`/api/tasks/${mission.id}/cancel`, { method: 'POST' });
+      setIsPaused(false);
+    } catch {}
+  };
+
+  const handleRespondApproval = async (approvalId: string, approved: boolean) => {
+    setIsResolvingApproval(true);
+    try {
+      const res = await fetch(`/api/tasks/${mission.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvalId, approved, responder: 'Operator (You)' }),
+      });
+      if (res.ok) {
+        setPendingApprovals((prev) => prev.filter((a) => a.id !== approvalId));
+        fetchTaskDetails();
+      }
+    } catch (err) {
+      console.error('Failed to resolve approval', err);
+    } finally {
+      setIsResolvingApproval(false);
+    }
+  };
+
+  // Build the autonomous stages for the plan (from server subtasks or fallback default)
   const getPlanSteps = (): PlanStep[] => {
+    if (subtasks.length > 0) {
+      return subtasks.map((st) => ({
+        id: st.id,
+        title: st.title,
+        description: st.description,
+        role: (st.assignedAgent as AgentRole) || 'developer',
+        status: st.status,
+        toolName: st.toolName,
+      }));
+    }
+
     const roleOrder: AgentRole[] = ['architect', 'developer', 'qa', 'video_producer'];
     const currentIdx = activeAgentRole ? roleOrder.indexOf(activeAgentRole) : 1;
 
@@ -94,20 +187,20 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
       { id: '2', title: 'Scaffold application structure & data models', role: 'architect' },
       { id: '3', title: 'Implement full-stack source code, styling & state', role: 'developer' },
       { id: '4', title: 'Run isolated sandbox PyTest test suite', role: 'qa' },
-      { id: '5', title: 'Launch live interactive app in Manus’s Computer', role: 'video_producer' },
+      { id: '5', title: 'Launch live interactive app in AgentStation Workstation', role: 'video_producer' },
     ];
 
     return baseSteps.map((step, idx) => {
       if (!isExecuting) {
-        return { ...step, status: 'completed' };
+        return { ...step, status: 'completed' as const };
       }
       if (idx < currentIdx) {
-        return { ...step, status: 'completed' };
+        return { ...step, status: 'completed' as const };
       }
       if (idx === currentIdx) {
-        return { ...step, status: 'in_progress' };
+        return { ...step, status: 'in_progress' as const };
       }
-      return { ...step, status: 'pending' };
+      return { ...step, status: 'pending' as const };
     });
   };
 
@@ -140,12 +233,28 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
           </div>
         </div>
 
-        {/* Status indicator */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Status indicator & Execution Controls */}
+        <div className="flex items-center gap-2.5 shrink-0">
           {isExecuting ? (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
-              <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              <span>Manus Working ({elapsedSeconds}s)</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePauseResume}
+                title={isPaused ? "Resume execution" : "Pause execution"}
+                className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition"
+              >
+                {isPaused ? <Play className="w-3.5 h-3.5 text-emerald-400" /> : <Pause className="w-3.5 h-3.5 text-amber-400" />}
+              </button>
+              <button
+                onClick={handleCancelTask}
+                title="Cancel execution"
+                className="p-1.5 rounded-lg bg-slate-900 hover:bg-red-950/40 border border-slate-700 hover:border-red-600/50 text-slate-400 hover:text-red-400 transition"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+              </button>
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
+                <div className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-amber-400 animate-ping'}`} />
+                <span>{isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-mono">
@@ -174,7 +283,62 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
           </div>
         </div>
 
-        {/* 2. Manus Agent Message */}
+        {/* 2. OPERATOR APPROVAL REQUESTS (Live Human-in-the-Loop) */}
+        {pendingApprovals.length > 0 && (
+          <div className="max-w-3xl space-y-3">
+            {pendingApprovals.map((approval) => (
+              <div
+                key={approval.id}
+                className="p-4 rounded-2xl bg-amber-950/40 border-2 border-amber-500/60 shadow-lg shadow-amber-950/50 space-y-3 animate-pulse-slow"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-xs font-mono">
+                    <ShieldAlert className="w-4 h-4" />
+                    <span>OPERATOR APPROVAL REQUIRED</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    High-Risk Action
+                  </span>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold text-white">
+                    {approval.action}
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-1 font-sans">
+                    {approval.reason}
+                  </p>
+                  {approval.details && (
+                    <pre className="mt-2 p-2.5 rounded-lg bg-slate-950 border border-amber-500/30 text-amber-300/90 font-mono text-xs overflow-x-auto">
+                      {JSON.stringify(approval.details, null, 2)}
+                    </pre>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    onClick={() => handleRespondApproval(approval.id, true)}
+                    disabled={isResolvingApproval}
+                    className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>Approve & Continue</span>
+                  </button>
+                  <button
+                    onClick={() => handleRespondApproval(approval.id, false)}
+                    disabled={isResolvingApproval}
+                    className="px-4 py-1.5 rounded-lg bg-slate-900 hover:bg-red-950/50 border border-slate-700 hover:border-red-600/60 text-slate-300 hover:text-red-400 font-medium text-xs transition flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Reject Action</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 3. AgentStation Autonomous Message */}
         <div className="flex items-start gap-3 max-w-3xl">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-blue-500/30">
             <Bot className="w-4 h-4" />
@@ -183,13 +347,13 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
           <div className="flex-1 space-y-4">
             {/* Agent Header */}
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white">Manus</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-slate-400">
-                Autonomous Agent
+              <span className="text-xs font-bold text-white tracking-wide">AgentStation</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-blue-400">
+                Autonomous Squad
               </span>
             </div>
 
-            {/* A. Manus Plan Checklist Box */}
+            {/* A. AgentStation Plan Checklist Box */}
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
               <div
                 onClick={() => setIsPlanExpanded(!isPlanExpanded)}
@@ -216,39 +380,62 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                   {planSteps.map((step, idx) => (
                     <div
                       key={step.id}
-                      className="flex items-center justify-between p-2 rounded-xl bg-slate-950/50 border border-slate-800/60 text-xs"
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/50 border border-slate-800/60 text-xs"
                     >
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         {step.status === 'completed' ? (
-                          <div className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                          <div className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                             <Check className="w-3 h-3 stroke-[3]" />
                           </div>
                         ) : step.status === 'in_progress' ? (
-                          <div className="w-4 h-4 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin" />
+                          <div className="w-4 h-4 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin shrink-0" />
+                        ) : step.status === 'failed' ? (
+                          <div className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+                            <XCircle className="w-3 h-3 stroke-[3]" />
+                          </div>
                         ) : (
-                          <div className="w-4 h-4 rounded-full border border-slate-700 bg-slate-800" />
+                          <div className="w-4 h-4 rounded-full border border-slate-700 bg-slate-800 shrink-0" />
                         )}
 
-                        <span
-                          className={`font-sans ${
-                            step.status === 'completed'
-                              ? 'text-slate-300'
-                              : step.status === 'in_progress'
-                              ? 'text-amber-300 font-semibold'
-                              : 'text-slate-500'
-                          }`}
-                        >
-                          {idx + 1}. {step.title}
-                        </span>
+                        <div className="truncate">
+                          <span
+                            className={`font-sans ${
+                              step.status === 'completed'
+                                ? 'text-slate-300'
+                                : step.status === 'in_progress'
+                                ? 'text-amber-300 font-semibold'
+                                : step.status === 'failed'
+                                ? 'text-red-400'
+                                : 'text-slate-500'
+                            }`}
+                          >
+                            {idx + 1}. {step.title}
+                          </span>
+                          {step.description && step.description !== step.title && (
+                            <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                              {step.description}
+                            </p>
+                          )}
+                        </div>
                       </div>
 
-                      <span className="text-[10px] font-mono text-slate-500 uppercase">
-                        {step.status === 'completed'
-                          ? 'Done'
-                          : step.status === 'in_progress'
-                          ? 'Running'
-                          : 'Pending'}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        {step.toolName && (
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-blue-400 flex items-center gap-1">
+                            <Wrench className="w-2.5 h-2.5" />
+                            {step.toolName}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-mono text-slate-500 uppercase">
+                          {step.status === 'completed'
+                            ? 'Done'
+                            : step.status === 'in_progress'
+                            ? 'Running'
+                            : step.status === 'failed'
+                            ? 'Failed'
+                            : 'Pending'}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -268,36 +455,47 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                   </span>
                 </div>
                 {isLogsExpanded ? (
-                  <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
                 ) : (
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
                 )}
               </div>
 
               {isLogsExpanded && (
                 <div className="p-3 space-y-2 max-h-64 overflow-y-auto scrollbar-thin text-xs font-mono">
                   {mission.logs && mission.logs.length > 0 ? (
-                    mission.logs.map((log) => (
-                      <div
-                        key={log.id}
-                        className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/60 flex items-start gap-2.5 leading-relaxed"
-                      >
-                        <span className="text-[10px] text-slate-500 shrink-0 mt-0.5">
-                          {log.timestamp}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 text-slate-200">
-                            <span className="text-blue-400 font-semibold">[{log.agentName}]:</span>
-                            <span className="text-slate-300 font-sans">{log.message}</span>
+                    mission.logs.map((log) => {
+                      const isExpanded = expandedLogId === log.id;
+                      return (
+                        <div
+                          key={log.id}
+                          onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                          className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/60 hover:border-slate-700/80 cursor-pointer transition flex flex-col gap-1 leading-relaxed"
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <span className="text-[10px] text-slate-500 shrink-0 mt-0.5">
+                              {log.timestamp}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 text-slate-200">
+                                <span className="text-blue-400 font-semibold">[{log.agentName}]:</span>
+                                <span className="text-slate-300 font-sans">{log.message}</span>
+                              </div>
+                            </div>
+                            {log.details && (
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                {isExpanded ? '▲' : '▼'}
+                              </span>
+                            )}
                           </div>
-                          {log.details && (
-                            <div className="mt-1 text-[11px] text-slate-400 bg-slate-900/90 px-2 py-1 rounded border border-slate-800 break-all font-mono">
+                          {log.details && isExpanded && (
+                            <div className="mt-1 text-[11px] text-slate-400 bg-slate-900/90 px-3 py-2 rounded border border-slate-800 break-all font-mono whitespace-pre-wrap">
                               {log.details}
                             </div>
                           )}
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="text-slate-500 py-2 text-center text-xs">
                       Initializing autonomous agent...
@@ -313,7 +511,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Task Ready in Manus’s Computer</span>
+                    <span>Objective Completed by AgentStation</span>
                   </div>
                   <span className="text-[11px] font-mono text-slate-400">
                     {mission.files?.length || 0} files created • {mission.execution?.testsPassed || 0} tests passed
@@ -321,8 +519,8 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed font-sans">
-                  The application has been generated, tested in the sandbox with PyTest, and is running live.
-                  You can interact with the app, examine code, or test commands in <strong>Manus’s Computer</strong> on the right panel.
+                  The objective has been executed and verified in the sandbox.
+                  You can interact with the app, examine artifacts and source code, or run commands in the <strong>AgentStation Virtual Computer</strong> on the right panel.
                 </p>
 
                 {onSelectTab && (
@@ -331,7 +529,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                       onClick={() => onSelectTab('browser')}
                       className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
                     >
-                      <span>Open Live Browser</span>
+                      <span>Open Workstation Browser</span>
                       <ArrowRight className="w-3 h-3" />
                     </button>
                     <button
@@ -364,7 +562,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
             value={followUpText}
             onChange={(e) => setFollowUpText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Direct Manus or ask for adjustments... (e.g. Add dark mode, run tests)"
+            placeholder="Direct AgentStation squad or refine objective... (e.g. Add dark mode, run tests)"
             disabled={isExecuting}
             className="w-full bg-slate-900 text-slate-100 text-sm rounded-xl pl-4 pr-12 py-3 border border-slate-700/80 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-sans disabled:opacity-50 transition"
           />
@@ -372,7 +570,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
             type="submit"
             disabled={!followUpText.trim() || isExecuting}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 transition shadow-md shadow-blue-600/30"
-            title="Send instruction to Manus"
+            title="Send instruction to AgentStation"
           >
             <Send className="w-4 h-4" />
           </button>

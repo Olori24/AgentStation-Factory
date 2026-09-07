@@ -14,6 +14,7 @@ const AGENT_ICONS: Record<AgentRole, React.ReactNode> = {
   qa: <ShieldCheck className="w-4 h-4" />,
   creative: <Megaphone className="w-4 h-4" />,
   video_producer: <Film className="w-4 h-4" />,
+  researcher: <Compass className="w-4 h-4" />,
   system: <Compass className="w-4 h-4" />,
 };
 

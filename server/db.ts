@@ -23,18 +23,26 @@ export interface OrganizationRecord {
 
 export interface DbMissionRecord {
   id: string;
-  userId: string;
-  organizationId: string;
-  title: string;
+  userId?: string;
+  organizationId?: string;
+  title?: string;
   prompt: string;
-  status: 'draft' | 'running' | 'completed' | 'failed';
-  targetRepo: string;
-  branch: string;
-  filesCount: number;
-  durationMs: number;
+  status: 'draft' | 'running' | 'completed' | 'failed' | string;
+  targetRepo?: string;
+  branch?: string;
+  filesCount?: number;
+  durationMs?: number;
+  currentStage?: string;
+  progressPercent?: number;
+  files?: any[];
+  execution?: any;
+  video?: any;
+  logs?: any[];
+  gitBranch?: string;
+  gitCommitMessage?: string;
   metadata?: Record<string, any>;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface WorkspaceFileRecord {
@@ -51,9 +59,12 @@ export interface AgentLogRecord {
   id: string;
   missionId: string;
   agentName: string;
-  stepType: string;
-  status: 'info' | 'running' | 'success' | 'warning' | 'error';
+  role?: string;
+  stepType?: string;
+  type?: string;
+  status?: 'info' | 'running' | 'success' | 'warning' | 'error' | string;
   message: string;
+  details?: string;
   payload?: any;
   createdAt: string;
 }
@@ -73,11 +84,88 @@ export interface JobRecord {
   finishedAt?: string;
 }
 
+export interface SubtaskRecord {
+  id: string;
+  missionId: string;
+  order: number;
+  title: string;
+  description: string;
+  agentRole: 'architect' | 'developer' | 'qa' | 'creative' | 'video_producer' | 'researcher' | 'system';
+  toolName?: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'waiting_approval' | 'skipped';
+  requiresApproval?: boolean;
+  retries: number;
+  maxRetries: number;
+  output?: any;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ToolExecutionRecord {
+  id: string;
+  missionId: string;
+  subtaskId?: string;
+  agentRole: string;
+  toolName: string;
+  inputParams: Record<string, any>;
+  outputResult?: any;
+  exitCode?: number;
+  status: 'success' | 'failed' | 'requires_approval' | 'rejected';
+  durationMs: number;
+  timestamp: string;
+}
+
+export interface ApprovalRecord {
+  id: string;
+  missionId: string;
+  subtaskId?: string;
+  toolName: string;
+  actionDescription: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string;
+  respondedAt?: string;
+  respondedBy?: string;
+}
+
+export interface ErrorLogRecord {
+  id: string;
+  missionId: string;
+  subtaskId?: string;
+  agentRole: string;
+  errorType: string;
+  message: string;
+  stack?: string;
+  resolved: boolean;
+  resolutionAttempt?: string;
+  timestamp: string;
+}
+
+export interface UserSettingsRecord {
+  id: string;
+  userId: string;
+  defaultProvider: 'gemini' | 'ollama';
+  ollamaUrl: string;
+  ollamaModel: string;
+  geminiModel: string;
+  safeMode: boolean;
+  autoApproveSafeTools: boolean;
+  maxSubtasksPerMission: number;
+  executionTimeoutSec: number;
+  updatedAt: string;
+}
+
 export interface DatabaseSchema {
   version: number;
   users: UserRecord[];
   organizations: OrganizationRecord[];
   missions: DbMissionRecord[];
+  subtasks: SubtaskRecord[];
+  toolExecutions: ToolExecutionRecord[];
+  approvals: ApprovalRecord[];
+  errors: ErrorLogRecord[];
+  settings: UserSettingsRecord[];
   files: WorkspaceFileRecord[];
   logs: AgentLogRecord[];
   jobs: JobRecord[];
@@ -86,6 +174,9 @@ export interface DatabaseSchema {
     totalSandboxExecutions: number;
     totalGitCommits: number;
     totalVideosRendered: number;
+    totalToolExecutions: number;
+    totalApprovalsProcessed: number;
+    totalErrorsRecovered: number;
   };
 }
 
@@ -137,6 +228,11 @@ class RelationalDatabase {
     users: DEFAULT_USERS,
     organizations: [DEFAULT_ORG],
     missions: [],
+    subtasks: [],
+    toolExecutions: [],
+    approvals: [],
+    errors: [],
+    settings: [],
     files: [],
     logs: [],
     jobs: [],
@@ -145,6 +241,9 @@ class RelationalDatabase {
       totalSandboxExecutions: 0,
       totalGitCommits: 0,
       totalVideosRendered: 0,
+      totalToolExecutions: 0,
+      totalApprovalsProcessed: 0,
+      totalErrorsRecovered: 0,
     },
   };
   private isLoaded = false;
@@ -166,6 +265,11 @@ class RelationalDatabase {
         this.data = {
           ...this.data,
           ...parsed,
+          subtasks: parsed.subtasks || [],
+          toolExecutions: parsed.toolExecutions || [],
+          approvals: parsed.approvals || [],
+          errors: parsed.errors || [],
+          settings: parsed.settings || [],
           users: parsed.users?.length ? parsed.users : DEFAULT_USERS,
           organizations: parsed.organizations?.length ? parsed.organizations : [DEFAULT_ORG],
         };
@@ -239,10 +343,154 @@ class RelationalDatabase {
   public deleteMission(id: string): boolean {
     const prevLen = this.data.missions.length;
     this.data.missions = this.data.missions.filter((m) => m.id !== id);
+    this.data.subtasks = this.data.subtasks.filter((s) => s.missionId !== id);
+    this.data.toolExecutions = this.data.toolExecutions.filter((t) => t.missionId !== id);
+    this.data.approvals = this.data.approvals.filter((a) => a.missionId !== id);
+    this.data.errors = this.data.errors.filter((e) => e.missionId !== id);
     this.data.files = this.data.files.filter((f) => f.missionId !== id);
     this.data.logs = this.data.logs.filter((l) => l.missionId !== id);
     this.scheduleSave();
     return this.data.missions.length < prevLen;
+  }
+
+  // --- Subtasks ---
+  public getSubtasks(missionId: string): SubtaskRecord[] {
+    return this.data.subtasks.filter((s) => s.missionId === missionId).sort((a, b) => a.order - b.order);
+  }
+
+  public saveSubtasks(missionId: string, subtasks: SubtaskRecord[]) {
+    this.data.subtasks = this.data.subtasks.filter((s) => s.missionId !== missionId);
+    this.data.subtasks.push(...subtasks);
+    this.scheduleSave();
+  }
+
+  public updateSubtask(subtaskId: string, patch: Partial<SubtaskRecord>): SubtaskRecord | undefined {
+    const idx = this.data.subtasks.findIndex((s) => s.id === subtaskId);
+    if (idx >= 0) {
+      this.data.subtasks[idx] = {
+        ...this.data.subtasks[idx],
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      };
+      this.scheduleSave();
+      return this.data.subtasks[idx];
+    }
+    return undefined;
+  }
+
+  // --- Tool Executions ---
+  public addToolExecution(exec: Omit<ToolExecutionRecord, 'id' | 'timestamp'>): ToolExecutionRecord {
+    const record: ToolExecutionRecord = {
+      ...exec,
+      id: `tool-exec-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      timestamp: new Date().toISOString(),
+    };
+    this.data.toolExecutions.push(record);
+    this.incrementMetric('totalToolExecutions');
+    if (this.data.toolExecutions.length > 2000) {
+      this.data.toolExecutions.splice(0, this.data.toolExecutions.length - 2000);
+    }
+    this.scheduleSave();
+    return record;
+  }
+
+  public getToolExecutions(missionId?: string): ToolExecutionRecord[] {
+    if (missionId) {
+      return this.data.toolExecutions.filter((t) => t.missionId === missionId);
+    }
+    return this.data.toolExecutions.slice(-100);
+  }
+
+  // --- Approvals ---
+  public createApproval(approval: Omit<ApprovalRecord, 'id' | 'requestedAt' | 'status'>): ApprovalRecord {
+    const record: ApprovalRecord = {
+      ...approval,
+      id: `appr-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+    };
+    this.data.approvals.push(record);
+    this.scheduleSave();
+    return record;
+  }
+
+  public getApprovals(missionId?: string): ApprovalRecord[] {
+    if (missionId) {
+      return this.data.approvals.filter((a) => a.missionId === missionId);
+    }
+    return this.data.approvals;
+  }
+
+  public getPendingApprovals(missionId?: string): ApprovalRecord[] {
+    return this.data.approvals.filter((a) => a.status === 'pending' && (!missionId || a.missionId === missionId));
+  }
+
+  public resolveApproval(approvalId: string, approved: boolean, responder = 'admin'): ApprovalRecord | undefined {
+    const record = this.data.approvals.find((a) => a.id === approvalId);
+    if (record) {
+      record.status = approved ? 'approved' : 'rejected';
+      record.respondedAt = new Date().toISOString();
+      record.respondedBy = responder;
+      this.incrementMetric('totalApprovalsProcessed');
+      this.scheduleSave();
+      return record;
+    }
+    return undefined;
+  }
+
+  // --- Errors ---
+  public addErrorLog(err: Omit<ErrorLogRecord, 'id' | 'timestamp'>): ErrorLogRecord {
+    const record: ErrorLogRecord = {
+      ...err,
+      id: `err-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      timestamp: new Date().toISOString(),
+    };
+    this.data.errors.push(record);
+    if (record.resolved) {
+      this.incrementMetric('totalErrorsRecovered');
+    }
+    if (this.data.errors.length > 500) {
+      this.data.errors.splice(0, this.data.errors.length - 500);
+    }
+    this.scheduleSave();
+    return record;
+  }
+
+  public getErrors(missionId?: string): ErrorLogRecord[] {
+    if (missionId) {
+      return this.data.errors.filter((e) => e.missionId === missionId);
+    }
+    return this.data.errors.slice(-50);
+  }
+
+  // --- Settings ---
+  public getUserSettings(userId: string): UserSettingsRecord {
+    let setting = this.data.settings.find((s) => s.userId === userId);
+    if (!setting) {
+      setting = {
+        id: `settings-${userId}`,
+        userId,
+        defaultProvider: 'gemini',
+        ollamaUrl: 'http://localhost:11434',
+        ollamaModel: 'llama3',
+        geminiModel: 'gemini-3.8-flash',
+        safeMode: true,
+        autoApproveSafeTools: true,
+        maxSubtasksPerMission: 6,
+        executionTimeoutSec: 120,
+        updatedAt: new Date().toISOString(),
+      };
+      this.data.settings.push(setting);
+      this.scheduleSave();
+    }
+    return setting;
+  }
+
+  public updateUserSettings(userId: string, patch: Partial<UserSettingsRecord>): UserSettingsRecord {
+    const setting = this.getUserSettings(userId);
+    Object.assign(setting, patch, { updatedAt: new Date().toISOString() });
+    this.scheduleSave();
+    return setting;
   }
 
   // --- Workspace Files ---

@@ -84,7 +84,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
           : 'h-full min-h-0'
       }`}
     >
-      {/* 1. Manus's Computer Titlebar */}
+      {/* 1. AgentStation Computer Titlebar */}
       <div className="h-11 px-4 bg-slate-900/95 border-b border-slate-800/90 flex items-center justify-between shrink-0 select-none">
         {/* Window controls & Name */}
         <div className="flex items-center gap-3">
@@ -97,11 +97,11 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold font-mono tracking-tight text-white flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-blue-400" />
-              Manus's Computer
+              AgentStation Workstation
             </span>
             <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              VM Online • 1080p
+              Sandbox Active • 1080p
             </span>
           </div>
         </div>

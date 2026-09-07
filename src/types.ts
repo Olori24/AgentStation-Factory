@@ -1,4 +1,4 @@
-export type AgentRole = 'architect' | 'developer' | 'qa' | 'creative' | 'video_producer' | 'system';
+export type AgentRole = 'architect' | 'developer' | 'qa' | 'creative' | 'video_producer' | 'researcher' | 'system';
 
 export interface AgentProfile {
   id: AgentRole;
@@ -144,4 +144,45 @@ export interface FullStackArtifact {
   sha256: string;
   downloadUrl: string;
   createdAt: string;
+}
+
+export interface SubtaskRecord {
+  id: string;
+  missionId: string;
+  stepNumber: number;
+  title: string;
+  description: string;
+  assignedAgent: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  toolName?: string;
+  toolInput?: Record<string, any>;
+  toolResult?: any;
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface ApprovalRecord {
+  id: string;
+  missionId: string;
+  action: string;
+  reason: string;
+  details?: Record<string, any>;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string;
+  respondedAt?: string;
+  responder?: string;
+}
+
+export interface ToolExecutionRecord {
+  id: string;
+  missionId: string;
+  agentRole: string;
+  toolName: string;
+  inputPayload: Record<string, any>;
+  outputPayload?: any;
+  status: 'success' | 'failed' | 'pending';
+  durationMs: number;
+  errorMessage?: string;
+  executedAt: string;
 }
