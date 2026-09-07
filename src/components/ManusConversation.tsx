@@ -35,7 +35,7 @@ interface ManusConversationProps {
   activeAgentRole?: AgentRole;
   onExecuteFollowUp: (prompt: string) => void;
   onNewTask: () => void;
-  onSelectTab?: (tab: 'browser' | 'terminal' | 'code' | 'video') => void;
+  onSelectTab?: (tab: 'browser' | 'terminal' | 'code' | 'video' | 'pipeline') => void;
 }
 
 interface PlanStep {
@@ -553,6 +553,13 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                       className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 font-medium text-xs transition"
                     >
                       Watch Promo Video
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSelectTab('pipeline')}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 font-medium text-xs transition"
+                    >
+                      CI/CD Pipeline
                     </button>
                   </div>
                 )}

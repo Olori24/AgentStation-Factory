@@ -18,10 +18,13 @@ import {
   FileArchive,
   ShieldCheck,
   Cpu,
+  Workflow,
+  GitBranch,
 } from 'lucide-react';
-import { WorkspaceFile, TestExecutionResult, VideoProject } from '../types';
+import { WorkspaceFile, TestExecutionResult, VideoProject, CiStatusInfo } from '../types';
 import { CodeWorkspace } from './CodeWorkspace';
 import { VideoStudio } from './VideoStudio';
+import { PipelineStatus } from './PipelineStatus';
 
 interface ManusComputerProps {
   files: WorkspaceFile[];
@@ -38,8 +41,12 @@ interface ManusComputerProps {
   onAddFile?: (newFile: WorkspaceFile) => void;
   onDeleteFile?: (fileIndex: number) => void;
   onPushToGitHub?: () => void;
-  activeTab?: 'browser' | 'terminal' | 'code' | 'video';
-  onTabChange?: (tab: 'browser' | 'terminal' | 'code' | 'video') => void;
+  activeTab?: 'browser' | 'terminal' | 'code' | 'video' | 'pipeline';
+  onTabChange?: (tab: 'browser' | 'terminal' | 'code' | 'video' | 'pipeline') => void;
+  missionStatus?: 'idle' | 'running' | 'completed' | 'failed';
+  ciStatus?: CiStatusInfo | null;
+  gitBranch?: string;
+  gitCommitMessage?: string;
 }
 
 export const ManusComputer: React.FC<ManusComputerProps> = ({
@@ -59,15 +66,20 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
   onPushToGitHub,
   activeTab = 'browser',
   onTabChange,
+  missionStatus = 'completed',
+  ciStatus,
+  gitBranch = 'main',
+  gitCommitMessage,
 }) => {
-  const [internalTab, setInternalTab] = useState<'browser' | 'terminal' | 'code' | 'video'>(activeTab);
+  const [internalTab, setInternalTab] = useState<'browser' | 'terminal' | 'code' | 'video' | 'pipeline'>(activeTab);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isPipelineRibbonOpen, setIsPipelineRibbonOpen] = useState(true);
   const [viewportMode, setViewportMode] = useState<'desktop' | 'mobile'>('desktop');
   const [browserUrl, setBrowserUrl] = useState('http://localhost:3000/app');
   const [browserKey, setBrowserKey] = useState(0);
 
   const currentTab = onTabChange ? activeTab : internalTab;
-  const setTab = (tab: 'browser' | 'terminal' | 'code' | 'video') => {
+  const setTab = (tab: 'browser' | 'terminal' | 'code' | 'video' | 'pipeline') => {
     if (onTabChange) onTabChange(tab);
     setInternalTab(tab);
   };
@@ -155,10 +167,38 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
             <Film className="w-3.5 h-3.5" />
             <span>Video</span>
           </button>
+
+          <button
+            onClick={() => setTab('pipeline')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs ${
+              currentTab === 'pipeline'
+                ? 'bg-emerald-600 text-slate-950 shadow-sm font-bold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Workflow className="w-3.5 h-3.5" />
+            <span>CI/CD</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          </button>
         </div>
 
         {/* Window actions */}
         <div className="flex items-center gap-2">
+          {currentTab !== 'pipeline' && (
+            <button
+              onClick={() => setIsPipelineRibbonOpen(!isPipelineRibbonOpen)}
+              title={isPipelineRibbonOpen ? 'Hide Pipeline Timeline' : 'Show Pipeline Timeline'}
+              className={`px-2 py-1 rounded-md text-xs font-mono flex items-center gap-1.5 transition ${
+                isPipelineRibbonOpen
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Workflow className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline text-[11px]">Timeline</span>
+            </button>
+          )}
+
           <button
             onClick={() => setIsMaximized(!isMaximized)}
             title={isMaximized ? 'Restore Viewport' : 'Maximize Computer'}
@@ -171,6 +211,21 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
 
       {/* 2. Content Area */}
       <div className="flex-1 flex flex-col min-h-0 bg-slate-950 overflow-hidden relative">
+        {/* Interactive CI/CD Timeline Ribbon across tabs */}
+        {isPipelineRibbonOpen && currentTab !== 'pipeline' && (
+          <div className="px-3 pt-2 pb-1 bg-slate-950 border-b border-slate-800/70 shrink-0">
+            <PipelineStatus
+              missionStatus={missionStatus}
+              execution={execution}
+              ciStatus={ciStatus}
+              gitBranch={gitBranch}
+              gitCommitMessage={gitCommitMessage}
+              onRunCommand={onRunCommand}
+              isRunningCommand={isRunningCommand}
+              variant="compact"
+            />
+          </div>
+        )}
         {/* TAB 1: BROWSER OPERATOR */}
         {currentTab === 'browser' && (
           <div className="flex-1 flex flex-col min-h-0">
@@ -290,6 +345,46 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
         {currentTab === 'video' && (
           <div className="flex-1 flex flex-col min-h-0">
             <VideoStudio video={video} onUpdateVideo={onUpdateVideo} />
+          </div>
+        )}
+
+        {/* TAB 5: CONTINUOUS INTEGRATION & DELIVERY (CI/CD) PIPELINE */}
+        {currentTab === 'pipeline' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-3 sm:p-4 bg-slate-950">
+            <div className="max-w-4xl mx-auto w-full flex flex-col gap-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+                    <Workflow className="w-4 h-4 text-emerald-400" />
+                    <span>Automated CI/CD Pipeline & GitHub Sync</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Interactive stage timeline visualizing Lint, Transpile & Bundle, Sandbox Unit Testing, and Edge Deployment.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onPushToGitHub?.()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 font-mono transition border border-slate-700/80"
+                  >
+                    <GitBranch className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Sync GitHub</span>
+                  </button>
+                </div>
+              </div>
+
+              <PipelineStatus
+                missionStatus={missionStatus}
+                execution={execution}
+                ciStatus={ciStatus}
+                gitBranch={gitBranch}
+                gitCommitMessage={gitCommitMessage}
+                onRunCommand={onRunCommand}
+                isRunningCommand={isRunningCommand}
+                variant="expanded"
+              />
+            </div>
           </div>
         )}
       </div>

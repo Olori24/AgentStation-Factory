@@ -51,7 +51,7 @@ export default function App() {
   });
   const [isHomePromptMode, setIsHomePromptMode] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
-  const [computerTab, setComputerTab] = useState<'browser' | 'terminal' | 'code' | 'video'>('browser');
+  const [computerTab, setComputerTab] = useState<'browser' | 'terminal' | 'code' | 'video' | 'pipeline'>('browser');
   const [mobileActiveView, setMobileActiveView] = useState<'chat' | 'workstation'>('chat');
   const [agents, setAgents] = useState<AgentProfile[]>(DEFAULT_AGENTS);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -723,6 +723,10 @@ export default function App() {
                   onAddFile={handleAddFile}
                   onDeleteFile={handleDeleteFile}
                   onPushToGitHub={() => setIsGitHubModalOpen(true)}
+                  missionStatus={mission.status}
+                  ciStatus={ciStatus}
+                  gitBranch={mission.gitBranch || 'main'}
+                  gitCommitMessage={mission.gitCommitMessage}
                 />
               </div>
             </div>
