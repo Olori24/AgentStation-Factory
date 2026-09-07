@@ -520,12 +520,13 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
 
                 <p className="text-xs text-slate-300 leading-relaxed font-sans">
                   The objective has been executed and verified in the sandbox.
-                  You can interact with the app, examine artifacts and source code, or run commands in the <strong>AgentStation Virtual Computer</strong> on the right panel.
+                  You can interact with the app, examine artifacts and source code, or run commands in the <strong>AgentStation Workstation</strong> (open in the right panel or tap the Workstation tab on mobile).
                 </p>
 
                 {onSelectTab && (
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
                     <button
+                      type="button"
                       onClick={() => onSelectTab('browser')}
                       className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
                     >
@@ -533,16 +534,25 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                       <ArrowRight className="w-3 h-3" />
                     </button>
                     <button
+                      type="button"
                       onClick={() => onSelectTab('code')}
                       className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs transition"
                     >
                       View Source Code
                     </button>
                     <button
+                      type="button"
                       onClick={() => onSelectTab('terminal')}
                       className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs transition"
                     >
                       View Terminal Logs
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSelectTab('video')}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 font-medium text-xs transition"
+                    >
+                      Watch Promo Video
                     </button>
                   </div>
                 )}
