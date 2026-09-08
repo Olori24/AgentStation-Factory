@@ -20,11 +20,19 @@ import {
   Cpu,
   Workflow,
   GitBranch,
+  Table,
+  FileText,
+  Send,
 } from 'lucide-react';
-import { WorkspaceFile, TestExecutionResult, VideoProject, CiStatusInfo } from '../types';
+import { WorkspaceFile, TestExecutionResult, VideoProject, CiStatusInfo, SpreadsheetDataset, DocumentArtifact, OutreachCampaign } from '../types';
 import { CodeWorkspace } from './CodeWorkspace';
 import { VideoStudio } from './VideoStudio';
 import { PipelineStatus } from './PipelineStatus';
+import { SpreadsheetViewer } from './SpreadsheetViewer';
+import { DocumentViewer } from './DocumentViewer';
+import { OutreachCampaignViewer } from './OutreachCampaignViewer';
+
+export type WorkstationTab = 'browser' | 'terminal' | 'code' | 'video' | 'pipeline' | 'data' | 'report' | 'outreach';
 
 interface ManusComputerProps {
   files: WorkspaceFile[];
@@ -41,12 +49,15 @@ interface ManusComputerProps {
   onAddFile?: (newFile: WorkspaceFile) => void;
   onDeleteFile?: (fileIndex: number) => void;
   onPushToGitHub?: () => void;
-  activeTab?: 'browser' | 'terminal' | 'code' | 'video' | 'pipeline';
-  onTabChange?: (tab: 'browser' | 'terminal' | 'code' | 'video' | 'pipeline') => void;
+  activeTab?: WorkstationTab;
+  onTabChange?: (tab: WorkstationTab) => void;
   missionStatus?: 'idle' | 'running' | 'completed' | 'failed';
   ciStatus?: CiStatusInfo | null;
   gitBranch?: string;
   gitCommitMessage?: string;
+  spreadsheet?: SpreadsheetDataset;
+  document?: DocumentArtifact;
+  campaign?: OutreachCampaign;
 }
 
 export const ManusComputer: React.FC<ManusComputerProps> = ({
@@ -70,8 +81,11 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
   ciStatus,
   gitBranch = 'main',
   gitCommitMessage,
+  spreadsheet,
+  document,
+  campaign,
 }) => {
-  const [internalTab, setInternalTab] = useState<'browser' | 'terminal' | 'code' | 'video' | 'pipeline'>(activeTab);
+  const [internalTab, setInternalTab] = useState<WorkstationTab>(activeTab);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isPipelineRibbonOpen, setIsPipelineRibbonOpen] = useState(true);
   const [viewportMode, setViewportMode] = useState<'desktop' | 'mobile'>('desktop');
@@ -79,7 +93,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
   const [browserKey, setBrowserKey] = useState(0);
 
   const currentTab = onTabChange ? activeTab : internalTab;
-  const setTab = (tab: 'browser' | 'terminal' | 'code' | 'video' | 'pipeline') => {
+  const setTab = (tab: WorkstationTab) => {
     if (onTabChange) onTabChange(tab);
     setInternalTab(tab);
   };
@@ -119,10 +133,55 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
         </div>
 
         {/* View Switcher Tabs */}
-        <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs">
+        <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs overflow-x-auto max-w-[65vw] sm:max-w-none scrollbar-none">
+          {spreadsheet && (
+            <button
+              onClick={() => setTab('data')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
+                currentTab === 'data'
+                  ? 'bg-teal-600 text-slate-950 shadow-sm font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Table className="w-3.5 h-3.5" />
+              <span>Spreadsheet</span>
+              <span className="px-1 py-0.2 rounded-full bg-teal-500/20 text-teal-300 text-[10px] font-mono">
+                {spreadsheet.rows?.length || 20}
+              </span>
+            </button>
+          )}
+
+          {document && (
+            <button
+              onClick={() => setTab('report')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
+                currentTab === 'report'
+                  ? 'bg-cyan-600 text-slate-950 shadow-sm font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Dossier</span>
+            </button>
+          )}
+
+          {campaign && (
+            <button
+              onClick={() => setTab('outreach')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
+                currentTab === 'outreach'
+                  ? 'bg-orange-600 text-slate-950 shadow-sm font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Campaign</span>
+            </button>
+          )}
+
           <button
             onClick={() => setTab('browser')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
               currentTab === 'browser'
                 ? 'bg-blue-600 text-white shadow-sm font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -134,7 +193,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
 
           <button
             onClick={() => setTab('terminal')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
               currentTab === 'terminal'
                 ? 'bg-amber-600 text-white shadow-sm font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -146,7 +205,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
 
           <button
             onClick={() => setTab('code')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
               currentTab === 'code'
                 ? 'bg-indigo-600 text-white shadow-sm font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -158,7 +217,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
 
           <button
             onClick={() => setTab('video')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
               currentTab === 'video'
                 ? 'bg-purple-600 text-white shadow-sm font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -170,7 +229,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
 
           <button
             onClick={() => setTab('pipeline')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
               currentTab === 'pipeline'
                 ? 'bg-emerald-600 text-slate-950 shadow-sm font-bold'
                 : 'text-slate-400 hover:text-slate-200'
@@ -226,6 +285,27 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
             />
           </div>
         )}
+        {/* TAB 0A: INTERACTIVE SPREADSHEET DATASET */}
+        {currentTab === 'data' && (
+          <div className="flex-1 flex flex-col min-h-0">
+            <SpreadsheetViewer dataset={spreadsheet} />
+          </div>
+        )}
+
+        {/* TAB 0B: EXECUTIVE RESEARCH DOSSIER */}
+        {currentTab === 'report' && (
+          <div className="flex-1 flex flex-col min-h-0">
+            <DocumentViewer document={document} />
+          </div>
+        )}
+
+        {/* TAB 0C: PERSONALIZED OUTREACH CAMPAIGN */}
+        {currentTab === 'outreach' && (
+          <div className="flex-1 flex flex-col min-h-0">
+            <OutreachCampaignViewer campaign={campaign} />
+          </div>
+        )}
+
         {/* TAB 1: BROWSER OPERATOR */}
         {currentTab === 'browser' && (
           <div className="flex-1 flex flex-col min-h-0">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Code2, ShieldCheck, Megaphone, Film } from 'lucide-react';
+import { Compass, Code2, ShieldCheck, Megaphone, Film, Table, Send, Briefcase } from 'lucide-react';
 import { AgentProfile, AgentRole } from '../types';
 
 interface SquadBarProps {
@@ -15,6 +15,9 @@ const AGENT_ICONS: Record<AgentRole, React.ReactNode> = {
   creative: <Megaphone className="w-4 h-4" />,
   video_producer: <Film className="w-4 h-4" />,
   researcher: <Compass className="w-4 h-4" />,
+  data_analyst: <Table className="w-4 h-4" />,
+  operations: <Send className="w-4 h-4" />,
+  admin: <Briefcase className="w-4 h-4" />,
   system: <Compass className="w-4 h-4" />,
 };
 

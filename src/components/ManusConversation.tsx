@@ -26,8 +26,13 @@ import {
   Wrench,
   Layers,
   CheckCircle,
+  Table,
+  FileText,
+  Target,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { SquadMission, AgentLogEntry, AgentRole, SubtaskRecord, ApprovalRecord } from '../types';
+import { WorkstationTab } from './ManusComputer';
 
 interface ManusConversationProps {
   mission: SquadMission;
@@ -35,7 +40,7 @@ interface ManusConversationProps {
   activeAgentRole?: AgentRole;
   onExecuteFollowUp: (prompt: string) => void;
   onNewTask: () => void;
-  onSelectTab?: (tab: 'browser' | 'terminal' | 'code' | 'video' | 'pipeline') => void;
+  onSelectTab?: (tab: WorkstationTab) => void;
 }
 
 interface PlanStep {
@@ -57,6 +62,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
 }) => {
   const [followUpText, setFollowUpText] = useState('');
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
+  const [isObjectiveExpanded, setIsObjectiveExpanded] = useState(true);
   const [isLogsExpanded, setIsLogsExpanded] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -168,8 +174,9 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
 
   // Build the autonomous stages for the plan (from server subtasks or fallback default)
   const getPlanSteps = (): PlanStep[] => {
-    if (subtasks.length > 0) {
-      return subtasks.map((st) => ({
+    const effectiveSubtasks = (subtasks.length > 0 ? subtasks : mission.subtasks) || [];
+    if (effectiveSubtasks.length > 0) {
+      return effectiveSubtasks.map((st) => ({
         id: st.id,
         title: st.title,
         description: st.description,
@@ -353,6 +360,86 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
               </span>
             </div>
 
+            {/* A0. Professional Objective Understanding & Requirements */}
+            {mission.objectiveBreakdown && (
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                <div
+                  onClick={() => setIsObjectiveExpanded(!isObjectiveExpanded)}
+                  className="px-4 py-3 bg-slate-900 border-b border-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-850 transition"
+                >
+                  <div className="flex items-center gap-2">
+                    <Target className="w-4 h-4 text-blue-400" />
+                    <span className="text-xs font-bold text-slate-200 font-mono uppercase tracking-wider">
+                      Objective Breakdown & Autonomous Scope
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                      Institutional Standard
+                    </span>
+                  </div>
+                  {isObjectiveExpanded ? (
+                    <ChevronUp className="w-4 h-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  )}
+                </div>
+
+                {isObjectiveExpanded && (
+                  <div className="p-4 space-y-3 text-xs font-sans text-slate-300 divide-y divide-slate-800/60">
+                    <div>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1">
+                        Target Outcome
+                      </span>
+                      <p className="text-slate-100 font-medium leading-relaxed">
+                        {mission.objectiveBreakdown.desiredOutcome}
+                      </p>
+                    </div>
+
+                    <div className="pt-2">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1">
+                        Strategic Intent & Context
+                      </span>
+                      <p className="text-slate-300 leading-relaxed">
+                        {mission.objectiveBreakdown.why}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1">
+                          Information Required
+                        </span>
+                        <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px]">
+                          {mission.objectiveBreakdown.informationRequired.map((info, i) => (
+                            <li key={i}>{info}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1">
+                          Assigned Squad Resources & Tools
+                        </span>
+                        <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px]">
+                          {mission.objectiveBreakdown.resourcesRequired.map((res, i) => (
+                            <li key={i}>{res}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1">
+                        Verification & Quality Standard
+                      </span>
+                      <p className="text-emerald-400 font-mono text-[11px] leading-relaxed">
+                        ✓ {mission.objectiveBreakdown.verificationMethod}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* A. AgentStation Plan Checklist Box */}
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
               <div
@@ -525,6 +612,39 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
 
                 {onSelectTab && (
                   <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    {mission.spreadsheet && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectTab('data')}
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Table className="w-3.5 h-3.5" />
+                        <span>Inspect Spreadsheet ({mission.spreadsheet.rows?.length || 20} records)</span>
+                      </button>
+                    )}
+
+                    {mission.document && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectTab('report')}
+                        className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Read Executive Dossier</span>
+                      </button>
+                    )}
+
+                    {mission.campaign && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectTab('outreach')}
+                        className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Review Outreach Campaign</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => onSelectTab('browser')}

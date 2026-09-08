@@ -159,9 +159,13 @@ AgentStation presents a high-density, 3-panel autonomous workspace modeled for m
 
 ### 3. AgentStation Workstation / Sandbox (Panel 3)
 - **Live Workstation Browser**: Direct rendering of full-stack client code in an isolated iframe sandbox with error capture and viewport scaling.
+- **Interactive Spreadsheet Dataset Matrix**: Institutional tabular viewer with real-time column sorting, global text filtering, quick metric statistics, and 1-click CSV export.
+- **Executive Intelligence Dossier & Report Viewer**: Distraction-free markdown research room with typography scaling, estimated read times, table of contents navigation, and copy-to-clipboard actions.
+- **Outreach Campaign & Email Sequence Studio**: High-touch outreach manager with multi-touch cadences (Day 1, Day 4, Day 8), full email preview modal, personalized CTAs, and instant clipboard export.
 - **Multi-File Code IDE**: Full code explorer and editor with dirty state detection, syntax highlighting, and instant file creation.
 - **Sandbox Terminal & Test Runner**: Real-time streaming terminal displaying test outputs, PyTest assertion matrices, and system metrics.
 - **Kinetic Video Studio**: In-browser 60 FPS HTML5 canvas engine that synthesizes animated product storyboards, Web Audio synthesizer rhythms, and Web Speech API narration.
+- **Pipeline CI/CD Hub**: Live status monitor tracking linting, PyTest suites, Docker container builds, and security scans.
 - **Artifact Manager**: Download complete project bundles (.zip) with cryptographic SHA-256 verification hashes.
 
 ---
@@ -178,6 +182,9 @@ AgentStation coordinates an ensemble of purpose-built agents, each possessing sp
 | **Vesper** | Creative & Research Director | Executive documentation, architecture diagrams, narrative synthesis, and market dossiers. | Gemini 2.5 Flash |
 | **Nova** | Motion & Video Producer | Kinetic typography, 60 FPS canvas animation, Web Audio soundtrack sequencing, and pitch decks. | Canvas Engine + Web Audio |
 | **Hermes** | Market & Tech Intelligence | Autonomous web scraping, competitor intelligence, opportunity benchmarking, and financial analysis. | Gemini 2.5 / Web Grounding |
+| **Nexus** | Lead Data Analyst & Spreadsheet Architect | Lead data normalization, financial modeling, interactive CSV/XLSX matrix generation, and summary metrics. | Gemini 2.5 / Data Engine |
+| **Sterling** | Business Operations & Outreach Specialist | Personalized cold outreach, decision-maker profiling, multi-touch email sequence cadences, and partnership angles. | Gemini 2.5 / Strategy Engine |
+| **Aegis** | Executive Assistant & Compliance Specialist | Autonomous workflow orchestration, regulatory title governance audits, and final deliverable packaging. | Gemini 2.5 / Operations Engine |
 
 ---
 
@@ -337,19 +344,29 @@ Paste any of these high-level objectives into the AgentStation omnibox:
 ├── server.ts                 # Main Express application, API routes & Vite middleware
 ├── src/
 │   ├── components/
-│   │   ├── ManusHeroPrompt.tsx     # AgentStation omnibox & objective input hub
-│   │   ├── ManusConversation.tsx   # Subtask checklist, tool badges & approval cards
-│   │   ├── ManusComputer.tsx       # 4-in-1 Workstation (Browser, IDE, Terminal, Video)
-│   │   ├── ManusSidebar.tsx        # Navigation rail, fleet status & history
-│   │   ├── CodeWorkspace.tsx       # Multi-file code editor with live syntax engine
-│   │   ├── VideoStudio.tsx         # 60 FPS HTML5 canvas & Web Audio synth engine
-│   │   ├── GitHubModal.tsx         # Direct GitHub push & branch creation modal
-│   │   └── OllamaModal.tsx         # Local LLM selection & configuration modal
+│   │   ├── ManusHeroPrompt.tsx        # AgentStation omnibox & objective input hub
+│   │   ├── ManusConversation.tsx      # Subtask checklist, objective breakdown & approval cards
+│   │   ├── ManusComputer.tsx          # Workstation sandbox container & tab routing
+│   │   ├── SpreadsheetViewer.tsx      # Interactive tabular spreadsheet & CSV export engine
+│   │   ├── DocumentViewer.tsx         # Executive intelligence dossier & markdown reader
+│   │   ├── OutreachCampaignViewer.tsx # 3-touch personalized email campaign viewer & copy triggers
+│   │   ├── ManusSidebar.tsx           # Navigation rail, fleet status & history
+│   │   ├── CodeWorkspace.tsx          # Multi-file code editor with live syntax engine
+│   │   ├── VideoStudio.tsx            # 60 FPS HTML5 canvas & Web Audio synth engine
+│   │   ├── GitHubModal.tsx            # Direct GitHub push & branch creation modal
+│   │   └── OllamaModal.tsx            # Local LLM selection & configuration modal
+│   ├── services/
+│   │   ├── plannerEngine.ts           # Autonomous objective decomposition & requirement planning
+│   │   ├── workstationArtifacts.ts    # Institutional dataset, dossier & campaign generators
+│   │   ├── softwareFactory.ts         # Deterministic full-stack application blueprints
+│   │   ├── agentRegistry.ts           # Specialist agent persona profiles & model configs
+│   │   ├── toolRegistry.ts            # Client-side deterministic tool mock & execution bus
+│   │   └── autonomousEngine.ts        # Client-side autonomous execution loop
 │   ├── data/
-│   │   ├── defaults.ts             # Default agent squad roster & system definitions
-│   │   └── sampleMissions.ts       # Pre-seeded blueprints with runnable codebases
-│   ├── App.tsx                     # Top-level state engine & layout controller
-│   └── types.ts                    # TypeScript interfaces for agents, tools & tasks
+│   │   ├── defaults.ts                # Default agent squad roster & system definitions
+│   │   └── sampleMissions.ts          # Pre-seeded blueprints (Lagos RE, Full-Stack, Crypto Arbitrage)
+│   ├── App.tsx                        # Top-level state engine & layout controller
+│   └── types.ts                       # TypeScript interfaces for agents, tools, tasks & artifacts
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts

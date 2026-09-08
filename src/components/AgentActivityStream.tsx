@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Terminal, Copy, Check, Filter, Compass, Code2, ShieldCheck, Megaphone, Film } from 'lucide-react';
+import { Terminal, Copy, Check, Filter, Compass, Code2, ShieldCheck, Megaphone, Film, Table, Send, Briefcase } from 'lucide-react';
 import { AgentLogEntry, AgentRole } from '../types';
 
 interface AgentActivityStreamProps {
@@ -37,6 +37,21 @@ const ROLE_COLORS: Record<AgentRole, { bg: string; text: string; icon: React.Rea
     bg: 'bg-cyan-500/10 border-cyan-500/30',
     text: 'text-cyan-400',
     icon: <Compass className="w-3.5 h-3.5" />,
+  },
+  data_analyst: {
+    bg: 'bg-teal-500/10 border-teal-500/30',
+    text: 'text-teal-400',
+    icon: <Table className="w-3.5 h-3.5" />,
+  },
+  operations: {
+    bg: 'bg-orange-500/10 border-orange-500/30',
+    text: 'text-orange-400',
+    icon: <Send className="w-3.5 h-3.5" />,
+  },
+  admin: {
+    bg: 'bg-indigo-500/10 border-indigo-500/30',
+    text: 'text-indigo-400',
+    icon: <Briefcase className="w-3.5 h-3.5" />,
   },
   system: {
     bg: 'bg-slate-800/60 border-slate-700/60',

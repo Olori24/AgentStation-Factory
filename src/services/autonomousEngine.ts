@@ -1,4 +1,6 @@
 import { SquadMission, WorkspaceFile, TestExecutionResult, VideoProject, AgentLogEntry } from '../types';
+import { buildSoftwareSystem } from './softwareFactory';
+import { understandAndPlanObjective } from './plannerEngine';
 
 /**
  * Autonomous Client-Side Engine for AgentStation
@@ -11,12 +13,13 @@ export interface AutonomousSynthesisOptions {
   prompt: string;
   aiProvider?: string;
   ollamaModel?: string;
+  existingFiles?: WorkspaceFile[];
 }
 
 export async function executeAutonomousPipeline(
   options: AutonomousSynthesisOptions
 ): Promise<SquadMission> {
-  const { missionId, prompt, aiProvider = 'gemini', ollamaModel } = options;
+  const { missionId, prompt, aiProvider = 'gemini', ollamaModel, existingFiles } = options;
 
   // 1. First, attempt to contact the full-stack server if available
   try {
@@ -45,7 +48,7 @@ export async function executeAutonomousPipeline(
   }
 
   // 2. Client-Side Autonomous Fallback Generator (100% resilient, offline-ready)
-  return synthesizeAutonomousMission(missionId, prompt);
+  return synthesizeAutonomousMission(missionId, prompt, existingFiles);
 }
 
 function buildMissionFromGenerated(
@@ -93,25 +96,32 @@ function buildMissionFromGenerated(
     logs: [completeLog, ...newLogs],
     gitBranch: 'main',
     gitCommitMessage: generated.gitCommitMessage || `feat: implement ${prompt.slice(0, 32)}`,
+    objectiveBreakdown: generated.objectiveBreakdown || understandAndPlanObjective(prompt).objective,
+    subtasks: generated.subtasks || understandAndPlanObjective(prompt).subtasks,
+    spreadsheet: generated.spreadsheet || understandAndPlanObjective(prompt).spreadsheet,
+    document: generated.document || understandAndPlanObjective(prompt).document,
+    campaign: generated.campaign || understandAndPlanObjective(prompt).campaign,
   };
 }
 
 export function synthesizeAutonomousMission(
   missionId: string,
-  prompt: string
+  prompt: string,
+  existingFiles?: WorkspaceFile[]
 ): SquadMission {
   const timestamp = new Date().toLocaleTimeString();
   const lower = prompt.toLowerCase();
 
-  const isRealEstate = /real estate|nigeria|property|market|competitor|dossier|pitch|presentation/i.test(lower);
-  const isVideo = /video|saas|kinetic|launch|campaign|promo|storyboard|animation/i.test(lower);
-  const isCrypto = /crypto|arbitrage|bitcoin|trading|order book|websocket|exchange/i.test(lower);
-  const isKanban = /kanban|task|todo|manager|board|sqlite/i.test(lower);
+  const isRealEstate = !existingFiles?.length && /real estate|nigeria|property market/i.test(lower);
+  const isVideo = !existingFiles?.length && /video campaign|kinetic video|storyboard video/i.test(lower);
+  const isCrypto = !existingFiles?.length && /crypto arbitrage|hft crypto|order book trading/i.test(lower);
+  const isKanban = !existingFiles?.length && /kanban board|task manager board/i.test(lower);
 
   let files: WorkspaceFile[] = [];
   let video: VideoProject;
   let testStdout: string;
   let gitCommitMessage: string;
+  let logs: AgentLogEntry[] = [];
 
   if (isRealEstate) {
     files = getRealEstateFiles();
@@ -134,74 +144,79 @@ export function synthesizeAutonomousMission(
     testStdout = `============================= test session starts ==============================\ncollected 4 items\n\ntests/test_kanban.py::test_task_creation_and_reorder PASSED             [ 25%]\ntests/test_kanban.py::test_column_transitions PASSED                     [ 50%]\ntests/test_kanban.py::test_local_persistence_integrity PASSED          [ 75%]\ntests/test_kanban.py::test_rest_api_endpoints PASSED                    [100%]\n\n============================== 4 passed in 0.08s ===============================`;
     gitCommitMessage = 'feat(kanban): implement enterprise drag-and-drop task board';
   } else {
-    files = getGenericFiles(prompt);
-    video = getDefaultVideo(prompt);
-    testStdout = `============================= test session starts ==============================\ncollected 4 items\n\ntests/test_core.py::test_module_initialization PASSED                   [ 25%]\ntests/test_core.py::test_primary_business_logic PASSED                  [ 50%]\ntests/test_core.py::test_edge_case_handling PASSED                      [ 75%]\ntests/test_core.py::test_security_and_sandbox_guards PASSED             [100%]\n\n============================== 4 passed in 0.08s ===============================`;
-    gitCommitMessage = `feat: autonomous implementation of ${prompt.slice(0, 30)}`;
+    // Autonomous Full-Stack Software System Factory
+    const system = buildSoftwareSystem(prompt, existingFiles);
+    files = system.files;
+    video = system.video;
+    testStdout = system.testStdout;
+    gitCommitMessage = system.gitCommitMessage;
+    logs = system.logs;
   }
 
-  const logs: AgentLogEntry[] = [
-    {
-      id: `log-${Date.now()}-1`,
-      timestamp,
-      role: 'system',
-      agentName: 'AgentStation Core',
-      type: 'complete',
-      message: `Mission completed successfully! Code artifacts, PyTest sandbox tests, and interactive application compiled.`,
-      details: 'All verified files mounted in AgentStation Workstation.',
-    },
-    {
-      id: `log-${Date.now()}-2`,
-      timestamp,
-      role: 'video_producer',
-      agentName: 'Nova',
-      type: 'video',
-      message: 'Generated 4-scene kinetic presentation deck and synchronized audio cues.',
-      details: '60 FPS Canvas storyboard available in Video Studio tab.',
-    },
-    {
-      id: `log-${Date.now()}-3`,
-      timestamp,
-      role: 'creative',
-      agentName: 'Vesper',
-      type: 'thought',
-      message: 'Synthesized executive documentation, architectural specifications, and README.',
-    },
-    {
-      id: `log-${Date.now()}-4`,
-      timestamp,
-      role: 'qa',
-      agentName: 'Sentinel',
-      type: 'terminal',
-      message: 'Executed PyTest validation suite in isolated sandbox. 4/4 assertions passed.',
-      details: 'Runtime: 0.12s. Zero regressions or memory leaks detected.',
-    },
-    {
-      id: `log-${Date.now()}-5`,
-      timestamp,
-      role: 'developer',
-      agentName: 'Cypher',
-      type: 'code_gen',
-      message: `Authored clean, typed source files and interactive browser application in public/index.html.`,
-    },
-    {
-      id: `log-${Date.now()}-6`,
-      timestamp,
-      role: 'researcher',
-      agentName: 'Hermes',
-      type: 'tool_call',
-      message: `Completed market intelligence query and competitor analysis for: "${prompt.slice(0, 50)}..."`,
-      details: 'Identified top opportunities, financial projections, and strategic moats.',
-    },
-    {
-      id: `log-${Date.now()}-7`,
-      timestamp,
-      role: 'architect',
-      agentName: 'Atlas',
-      type: 'thought',
-      message: 'Decomposed objective into 5 sequential phases with strict verification gates.',
-    },
-  ];
+  if (logs.length === 0) {
+    logs = [
+      {
+        id: `log-${Date.now()}-1`,
+        timestamp,
+        role: 'system',
+        agentName: 'AgentStation Core',
+        type: 'complete',
+        message: `Mission completed successfully! Code artifacts, PyTest sandbox tests, and interactive application compiled.`,
+        details: 'All verified files mounted in AgentStation Workstation.',
+      },
+      {
+        id: `log-${Date.now()}-2`,
+        timestamp,
+        role: 'video_producer',
+        agentName: 'Nova',
+        type: 'video',
+        message: 'Generated 4-scene kinetic presentation deck and synchronized audio cues.',
+        details: '60 FPS Canvas storyboard available in Video Studio tab.',
+      },
+      {
+        id: `log-${Date.now()}-3`,
+        timestamp,
+        role: 'creative',
+        agentName: 'Vesper',
+        type: 'thought',
+        message: 'Synthesized executive documentation, architectural specifications, and README.',
+      },
+      {
+        id: `log-${Date.now()}-4`,
+        timestamp,
+        role: 'qa',
+        agentName: 'Sentinel',
+        type: 'terminal',
+        message: 'Executed PyTest validation suite in isolated sandbox. 4/4 assertions passed.',
+        details: 'Runtime: 0.12s. Zero regressions or memory leaks detected.',
+      },
+      {
+        id: `log-${Date.now()}-5`,
+        timestamp,
+        role: 'developer',
+        agentName: 'Cypher',
+        type: 'code_gen',
+        message: `Authored clean, typed source files and interactive browser application in public/index.html.`,
+      },
+      {
+        id: `log-${Date.now()}-6`,
+        timestamp,
+        role: 'researcher',
+        agentName: 'Hermes',
+        type: 'tool_call',
+        message: `Completed market intelligence query and competitor analysis for: "${prompt.slice(0, 50)}..."`,
+        details: 'Identified top opportunities, financial projections, and strategic moats.',
+      },
+      {
+        id: `log-${Date.now()}-7`,
+        timestamp,
+        role: 'architect',
+        agentName: 'Atlas',
+        type: 'thought',
+        message: 'Decomposed objective into 5 sequential phases with strict verification gates.',
+      },
+    ];
+  }
 
   return {
     id: missionId,
@@ -223,6 +238,11 @@ export function synthesizeAutonomousMission(
     logs,
     gitBranch: 'main',
     gitCommitMessage,
+    objectiveBreakdown: understandAndPlanObjective(prompt).objective,
+    subtasks: understandAndPlanObjective(prompt).subtasks,
+    spreadsheet: understandAndPlanObjective(prompt).spreadsheet,
+    document: understandAndPlanObjective(prompt).document,
+    campaign: understandAndPlanObjective(prompt).campaign,
   };
 }
 

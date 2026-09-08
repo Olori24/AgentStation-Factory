@@ -1333,6 +1333,42 @@ CMD ["python", "src/${slug || "app"}.py"]
 `,
       },
       {
+        name: "schema.sql",
+        path: "src/db/schema.sql",
+        language: "sql",
+        content: `-- Database schema for ${titleWords}
+CREATE TABLE IF NOT EXISTS records (
+    id VARCHAR(64) PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    metadata JSON DEFAULT '{}',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_records_active ON records(is_active);
+`,
+      },
+      {
+        name: "ci.yml",
+        path: ".github/workflows/ci.yml",
+        language: "yaml",
+        content: `name: CI/CD Pipeline
+on: [push, pull_request]
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run Tests
+        run: |
+          pip install -r requirements.txt
+          pytest -v tests/
+`,
+      },
+      {
         name: "README.md",
         path: "README.md",
         language: "markdown",

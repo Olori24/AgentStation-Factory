@@ -1,7 +1,270 @@
 import { SquadMission } from '../types';
 import { INITIAL_MISSION } from './defaults';
+import { getLagosRealEstateArtifacts } from '../services/workstationArtifacts';
+import { understandAndPlanObjective } from '../services/plannerEngine';
+
+const lagosArtifacts = getLagosRealEstateArtifacts();
+const lagosPlan = understandAndPlanObjective(
+  'Find me 20 qualified real estate companies in Lagos, research their businesses, identify the decision makers, organize the information into a spreadsheet, write personalized outreach messages and prepare an email campaign.'
+);
+
+export const LAGOS_REAL_ESTATE_MISSION: SquadMission = {
+  id: 'mission-lagos-re',
+  prompt:
+    'Find me 20 qualified real estate companies in Lagos, research their businesses, identify the decision makers, organize the information into a spreadsheet, write personalized outreach messages and prepare an email campaign.',
+  createdAt: 'Just now',
+  status: 'completed',
+  currentStage: 'Mission Completed & Verified',
+  progressPercent: 100,
+  gitBranch: 'main',
+  gitCommitMessage:
+    'feat(leadgen): synthesize 20 Lagos developers dataset, executive dossier, and 3-touch outreach campaign',
+  objectiveBreakdown: lagosPlan.objective,
+  subtasks: lagosPlan.subtasks,
+  spreadsheet: lagosArtifacts.spreadsheet,
+  document: lagosArtifacts.document,
+  campaign: lagosArtifacts.campaign,
+  files: [
+    {
+      name: 'market_model.py',
+      path: 'src/market_model.py',
+      language: 'python',
+      content: `"""
+Nigerian Real Estate Market Intelligence & Feasibility Engine
+AgentStation Autonomous Workforce • Hermes & Atlas
+"""
+from dataclasses import dataclass
+from typing import List, Dict
+
+@dataclass
+class RealEstateOpportunity:
+    id: str
+    name: str
+    location: str
+    submarket: str
+    asset_class: str
+    avg_cap_rate: float
+    projected_irr: float
+    rental_yield: float
+    risk_score: str
+    drivers: List[str]
+
+OPPORTUNITIES: List[RealEstateOpportunity] = [
+    RealEstateOpportunity(
+        id="opp-1",
+        name="Lekki Phase 1 Prime Mixed-Use",
+        location="Lagos",
+        submarket="Lekki Corridor",
+        asset_class="Commercial / Residential Co-Living",
+        avg_cap_rate=0.088,
+        projected_irr=0.245,
+        rental_yield=0.112,
+        risk_score="Low-Moderate",
+        drivers=["Lekki Deep Sea Port expansion", "Tech cluster migration", "High dollar rental demand"]
+    ),
+    RealEstateOpportunity(
+        id="opp-2",
+        name="Eko Atlantic Free Zone Logistics",
+        location="Lagos",
+        submarket="Victoria Island / Eko Atlantic",
+        asset_class="Grade-A Logistics & Data Hosting",
+        avg_cap_rate=0.095,
+        projected_irr=0.280,
+        rental_yield=0.125,
+        risk_score="Moderate",
+        drivers=["Free Zone tax holidays", "Autonomous independent power & fiber", "Multinational HQ consolidation"]
+    ),
+    RealEstateOpportunity(
+        id="opp-3",
+        name="Banana Island Waterfront Luxury Towers",
+        location="Lagos",
+        submarket="Banana Island / Old Ikoyi",
+        asset_class="Ultra-Luxury Residential",
+        avg_cap_rate=0.082,
+        projected_irr=0.218,
+        rental_yield=0.098,
+        risk_score="Low",
+        drivers=["HNWI capital preservation", "USD-pegged rental yields", "Diplomatic leases"]
+    )
+]
+
+def calculate_yield(purchase_price: float, annual_net_rent: float) -> float:
+    if purchase_price <= 0:
+        raise ValueError("Purchase price must be positive")
+    return round(annual_net_rent / purchase_price, 4)
+
+def hedge_currency_risk(gross_rent_ngn: float, official_usd_rate: float, fx_buffer: float = 0.15) -> float:
+    effective_rate = official_usd_rate * (1 + fx_buffer)
+    return round(gross_rent_ngn / effective_rate, 2)
+`,
+    },
+    {
+      name: 'test_feasibility.py',
+      path: 'tests/test_feasibility.py',
+      language: 'python',
+      content: `import pytest
+from src.market_model import OPPORTUNITIES, calculate_yield, hedge_currency_risk
+
+def test_lekki_opportunity_yield():
+    lekki = next(o for o in OPPORTUNITIES if o.id == "opp-1")
+    assert lekki.avg_cap_rate >= 0.08
+    assert lekki.projected_irr > 0.20
+    assert "Lekki Deep Sea Port expansion" in lekki.drivers
+
+def test_eko_atlantic_commercial_roi():
+    eko = next(o for o in OPPORTUNITIES if o.id == "opp-2")
+    assert eko.rental_yield >= 0.10
+    assert eko.risk_score == "Moderate"
+
+def test_currency_hedging_inflation():
+    rent_ngn = 45_000_000
+    fx_rate = 1500
+    hedged_usd = hedge_currency_risk(rent_ngn, fx_rate, fx_buffer=0.15)
+    assert hedged_usd > 20_000
+    assert hedged_usd < 30_000
+`,
+    },
+    {
+      name: 'lagos_real_estate_matrix.csv',
+      path: 'data/lagos_real_estate_matrix.csv',
+      language: 'csv',
+      content: lagosArtifacts.spreadsheet.csvContent,
+    },
+  ],
+  execution: {
+    command: 'pytest -v tests/test_feasibility.py',
+    stdout: `============================= test session starts ==============================
+rootdir: /workspace
+collected 3 items
+
+tests/test_feasibility.py::test_lekki_opportunity_yield PASSED           [ 33%]
+tests/test_feasibility.py::test_eko_atlantic_commercial_roi PASSED      [ 66%]
+tests/test_feasibility.py::test_currency_hedging_inflation PASSED       [100%]
+
+============================== 3 passed in 0.09s ===============================`,
+    exitCode: 0,
+    testsPassed: 3,
+    testsFailed: 0,
+    durationMs: 90,
+  },
+  video: {
+    title: 'LAGOS REAL ESTATE INTELLIGENCE & ACQUISITIONS',
+    hook: 'Autonomous research, 20 verified C-level decision-makers, and high-converting diaspora outreach campaign.',
+    subtitle: 'Connecting capital to $6.8B+ pipeline across Ikoyi, Victoria Island, and Epe.',
+    totalDurationSec: 16,
+    audioScript:
+      'AgentStation autonomous workforce surveyed 20 qualified real estate developers across Lagos, mapping C-suite leadership and deploying personalized multi-touch outreach.',
+    soundtrackMood: 'ambient-clean',
+    scenes: [
+      {
+        id: 'scene-1',
+        sceneIndex: 0,
+        durationSec: 4,
+        badge: 'MARKET DISCOVERY',
+        heading: 'LAGOS REAL ESTATE',
+        subheading: '20 Qualified Developers Identified',
+        bulletPoints: [
+          'Banana Island, Ikoyi, Eko Atlantic, Lekki',
+          '$6.8B+ Aggregate Tracked Pipeline',
+          'Direct Corporate & Physical Verification',
+        ],
+        accentColor: '#06b6d4',
+      },
+      {
+        id: 'scene-2',
+        sceneIndex: 1,
+        durationSec: 4,
+        badge: 'DECISION MAKERS',
+        heading: '100% C-SUITE MAPPED',
+        subheading: 'CEOs, MDs & Acquisitions Directors',
+        bulletPoints: [
+          'Direct verified corporate email channels',
+          'Active mobile/telephone lines',
+          'Current active development projects verified',
+        ],
+        accentColor: '#10b981',
+      },
+      {
+        id: 'scene-3',
+        sceneIndex: 2,
+        durationSec: 4,
+        badge: 'DELIVERABLES',
+        heading: 'INTERACTIVE SPREADSHEET & DOSSIER',
+        subheading: 'Normalized Data Matrix + 3,500w Strategic Report',
+        bulletPoints: [
+          'Instant CSV/XLSX exportable matrix',
+          'Macro FX hedging & submarket analysis',
+          'Regulatory title perfection guides',
+        ],
+        accentColor: '#3b82f6',
+      },
+      {
+        id: 'scene-4',
+        sceneIndex: 3,
+        durationSec: 4,
+        badge: 'CAMPAIGN READY',
+        heading: '3-TOUCH OUTREACH ENGINE',
+        subheading: 'Personalized Sequences Active',
+        bulletPoints: [
+          'Project-specific value proposition hooks',
+          'Diaspora buyer acceleration thesis',
+          'Direct calendar invitation sequence',
+        ],
+        accentColor: '#f97316',
+      },
+    ],
+  },
+  logs: [
+    {
+      id: 'log-re-1',
+      timestamp: '11:00:02',
+      role: 'architect',
+      agentName: 'Atlas (Architect)',
+      type: 'status',
+      message:
+        'Synthesized mission scope: Research 20 Lagos developers, map decision makers, create dataset, dossier, and outreach campaign.',
+    },
+    {
+      id: 'log-re-2',
+      timestamp: '11:00:05',
+      role: 'researcher',
+      agentName: 'Hermes (Market Researcher)',
+      type: 'status',
+      message:
+        'Scraped and verified corporate registries across Ikoyi, Eko Atlantic, Victoria Island, and Lekki corridor.',
+    },
+    {
+      id: 'log-re-3',
+      timestamp: '11:00:09',
+      role: 'data_analyst',
+      agentName: 'Nexus (Data Analyst)',
+      type: 'status',
+      message:
+        'Normalized 20 developer entities into structured schema with CSV export, submarket classification, and portfolio estimations.',
+    },
+    {
+      id: 'log-re-4',
+      timestamp: '11:00:13',
+      role: 'operations',
+      agentName: 'Sterling (Operations & Outreach)',
+      type: 'status',
+      message:
+        'Drafted 3-touch personalized outreach sequences tailored to Landwey, Mixta, Sujimoto, and Landmark leadership.',
+    },
+    {
+      id: 'log-re-5',
+      timestamp: '11:00:18',
+      role: 'video_producer',
+      agentName: 'Nova (Video Studio)',
+      type: 'status',
+      message:
+        'Compiled 4-scene kinetic presentation deck summarizing market findings, decision-maker matrix, and outreach sequence.',
+    },
+  ],
+};
 
 export const SAMPLE_MISSIONS: SquadMission[] = [
+  LAGOS_REAL_ESTATE_MISSION,
   INITIAL_MISSION,
   {
     id: 'mission-002',

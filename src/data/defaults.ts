@@ -61,6 +61,36 @@ export const DEFAULT_AGENTS: AgentProfile[] = [
     status: 'completed',
     color: '#06b6d4', // cyan
   },
+  {
+    id: 'data_analyst',
+    name: 'Nexus',
+    roleTitle: 'Lead Data Analyst & Spreadsheet Architect',
+    badge: 'Spreadsheets & Data Tables',
+    specialty: 'Lead Data Normalization, Financial Modeling, CSV/XLSX Structures',
+    model: 'Gemini 2.5 Flash / Data Engine',
+    status: 'completed',
+    color: '#14b8a6', // teal
+  },
+  {
+    id: 'operations',
+    name: 'Sterling',
+    roleTitle: 'Business Operations & Outreach Specialist',
+    badge: 'Campaigns & Partnerships',
+    specialty: 'Personalized Cold Outreach, Decision Maker Targeting, Cadence Sequencing',
+    model: 'Gemini 2.5 Flash / Strategy Engine',
+    status: 'completed',
+    color: '#f97316', // orange
+  },
+  {
+    id: 'admin',
+    name: 'Aegis',
+    roleTitle: 'Executive Assistant & Compliance Specialist',
+    badge: 'Governance & Execution',
+    specialty: 'Workflow Orchestration, Regulatory Audits, Deliverable Packaging',
+    model: 'Gemini 2.5 Flash / Operations Engine',
+    status: 'completed',
+    color: '#6366f1', // indigo
+  },
 ];
 
 export const GITHUB_REPO_INFO: GitHubRepoMeta = {

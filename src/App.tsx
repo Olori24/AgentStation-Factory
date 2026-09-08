@@ -28,7 +28,7 @@ import { ManusHeroPrompt } from './components/ManusHeroPrompt';
 import { ManusWorkspace } from './components/ManusWorkspace';
 import { ManusSidebar } from './components/ManusSidebar';
 import { ManusConversation } from './components/ManusConversation';
-import { ManusComputer } from './components/ManusComputer';
+import { ManusComputer, WorkstationTab } from './components/ManusComputer';
 import { DEFAULT_AGENTS, INITIAL_MISSION, GITHUB_REPO_INFO } from './data/defaults';
 import { SAMPLE_MISSIONS } from './data/sampleMissions';
 import { SquadMission, AgentProfile, AgentRole, AgentLogEntry, WorkspaceFile, VideoProject, CiStatusInfo, TerminalStreamMessage } from './types';
@@ -51,7 +51,7 @@ export default function App() {
   });
   const [isHomePromptMode, setIsHomePromptMode] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
-  const [computerTab, setComputerTab] = useState<'browser' | 'terminal' | 'code' | 'video' | 'pipeline'>('browser');
+  const [computerTab, setComputerTab] = useState<WorkstationTab>('browser');
   const [mobileActiveView, setMobileActiveView] = useState<'chat' | 'workstation'>('chat');
   const [agents, setAgents] = useState<AgentProfile[]>(DEFAULT_AGENTS);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -407,6 +407,7 @@ export default function App() {
         prompt: promptText,
         aiProvider,
         ollamaModel,
+        existingFiles: mission?.files,
       });
 
       // Retain context from previous logs
@@ -414,7 +415,11 @@ export default function App() {
 
       setMission(finalMission);
       updateHistoryWithMission(finalMission);
-      setComputerTab('browser');
+      if (finalMission.spreadsheet) {
+        setComputerTab('data');
+      } else {
+        setComputerTab('browser');
+      }
       setMobileActiveView('workstation'); // Auto-switch on mobile so user sees the live result!
 
       setAgents((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
@@ -710,6 +715,9 @@ export default function App() {
                   files={mission.files}
                   execution={mission.execution}
                   video={mission.video}
+                  spreadsheet={mission.spreadsheet}
+                  document={mission.document}
+                  campaign={mission.campaign}
                   onUpdateVideo={handleUpdateVideo}
                   activeTab={computerTab}
                   onTabChange={setComputerTab}

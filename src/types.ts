@@ -1,4 +1,14 @@
-export type AgentRole = 'architect' | 'developer' | 'qa' | 'creative' | 'video_producer' | 'researcher' | 'system';
+export type AgentRole =
+  | 'architect'
+  | 'developer'
+  | 'qa'
+  | 'creative'
+  | 'video_producer'
+  | 'researcher'
+  | 'data_analyst'
+  | 'operations'
+  | 'admin'
+  | 'system';
 
 export interface AgentProfile {
   id: AgentRole;
@@ -76,6 +86,70 @@ export interface TerminalStreamMessage {
   activeClients?: number;
 }
 
+export interface SpreadsheetColumn {
+  key: string;
+  label: string;
+  type?: 'text' | 'number' | 'link' | 'email' | 'badge';
+  width?: string;
+}
+
+export interface SpreadsheetDataset {
+  id: string;
+  title: string;
+  description?: string;
+  columns: SpreadsheetColumn[];
+  rows: Record<string, any>[];
+  csvContent: string;
+  totalCount: number;
+  summaryMetrics?: { label: string; value: string }[];
+}
+
+export interface DocumentArtifact {
+  id: string;
+  title: string;
+  category: 'research_dossier' | 'executive_brief' | 'technical_spec' | 'market_report' | 'legal_contract';
+  markdownContent: string;
+  author: string;
+  createdAt: string;
+  readTimeMin?: number;
+  tags?: string[];
+}
+
+export interface OutreachEmail {
+  id: string;
+  recipientName: string;
+  recipientRole: string;
+  company: string;
+  email: string;
+  subject: string;
+  body: string;
+  callToAction: string;
+  stepIndex: number;
+  status: 'draft' | 'ready' | 'approved';
+  followUpCadence?: string;
+}
+
+export interface OutreachCampaign {
+  id: string;
+  campaignName: string;
+  targetAudience: string;
+  strategy: string;
+  emails: OutreachEmail[];
+  totalContacts: number;
+  cadenceSteps: { day: number; title: string; purpose: string }[];
+}
+
+export interface TaskPlanObjective {
+  desiredOutcome: string;
+  why: string;
+  informationRequired: string[];
+  resourcesRequired: string[];
+  dependencies: string[];
+  potentialFailures: string[];
+  verificationMethod: string;
+  finalDeliverableSummary: string;
+}
+
 export interface SquadMission {
   id: string;
   prompt: string;
@@ -89,6 +163,12 @@ export interface SquadMission {
   logs: AgentLogEntry[];
   gitBranch: string;
   gitCommitMessage: string;
+  spreadsheet?: SpreadsheetDataset;
+  document?: DocumentArtifact;
+  campaign?: OutreachCampaign;
+  objectiveBreakdown?: TaskPlanObjective;
+  subtasks?: SubtaskRecord[];
+  approvals?: ApprovalRecord[];
 }
 
 export interface GitHubRepoMeta {
@@ -158,6 +238,8 @@ export interface SubtaskRecord {
   toolInput?: Record<string, any>;
   toolResult?: any;
   error?: string;
+  dependsOn?: string[];
+  estimatedTimeSec?: number;
   startedAt?: string;
   completedAt?: string;
 }
