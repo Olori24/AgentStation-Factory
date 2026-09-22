@@ -11,10 +11,6 @@
       }
     },
     {
-      "src": "api/health.cjs",
-      "use": "@vercel/node"
-    },
-    {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -23,10 +19,6 @@
     }
   ],
   "routes": [
-    {
-      "src": "/api/health",
-      "dest": "/api/health.cjs"
-    },
     {
       "src": "/api/(.*)",
       "dest": "/api/index.ts"
