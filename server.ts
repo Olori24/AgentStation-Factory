@@ -2287,4 +2287,10 @@ async function startServer() {
   });
 }
 
-export { app };\n\n// Local development runs the HTTP/WebSocket server directly.\n// Vercel imports the Express app through api/index.ts as a serverless function.\nif (process.env.VERCEL !== "1") {\n  startServer();\n}
+export { app };
+
+// Local development runs the HTTP/WebSocket server directly.
+// Vercel imports the Express app through api/index.ts as a serverless function.
+if (process.env.VERCEL !== "1") {
+  startServer();
+}
