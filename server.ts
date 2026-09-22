@@ -66,7 +66,7 @@ app.get("/api/github/meta", (_req, res) => {
   res.json({
     owner: "Olori24",
     repo: "AgentStation",
-    cloneUrl: "https://github.com/Olori24/AgentStation.git",
+    cloneUrl: "https://github.com/Olori24/AgentStation-Factory.git",
     webUrl: "https://github.com/Olori24/AgentStation",
     defaultBranch: "main",
   });
@@ -81,7 +81,7 @@ app.get("/api/github/status", async (_req, res) => {
     let commitMessage = "";
     let commitAuthor = "";
     let commitDate = "";
-    let remoteUrl = "https://github.com/Olori24/AgentStation.git";
+    let remoteUrl = "https://github.com/Olori24/AgentStation-Factory.git";
     let statusOutput = "";
     let uncommittedFiles = 0;
 
@@ -160,7 +160,7 @@ app.get("/api/github/status", async (_req, res) => {
 
       if (token) {
         try {
-          const ghRes = await fetch("https://api.github.com/repos/Olori24/AgentStation/branches", {
+          const ghRes = await fetch("https://api.github.com/repos/Olori24/AgentStation-Factory/branches", {
             headers: { Authorization: `Bearer ${token}`, "User-Agent": "AgentStation" },
           });
           if (ghRes.ok) {
@@ -251,7 +251,7 @@ async function fetchLatestCiStatus(): Promise<any> {
     headers["Authorization"] = `token ${token}`;
   }
   try {
-    const res = await fetch("https://api.github.com/repos/Olori24/AgentStation/actions/runs?per_page=5", {
+    const res = await fetch("https://api.github.com/repos/Olori24/AgentStation-Factory/actions/runs?per_page=5", {
       headers,
     });
     if (res.ok) {
@@ -599,7 +599,7 @@ app.post("/api/github/push", async (req, res) => {
     if (token) {
       const repos = [
         "https://" + token + "@github.com/Olori24/AgentStation-Factory.git",
-        "https://" + token + "@github.com/Olori24/AgentStation.git"
+        "https://" + token + "@github.com/Olori24/AgentStation-Factory.git"
       ];
       let outputs: string[] = [];
       for (const repoUrl of repos) {
@@ -925,7 +925,7 @@ Return a valid JSON object matching EXACTLY this schema:
       "name": "README.md",
       "path": "README.md",
       "language": "markdown",
-      "content": "Markdown README with repo link https://github.com/Olori24/AgentStation.git"
+      "content": "Markdown README with repo link https://github.com/Olori24/AgentStation-Factory.git"
     }
   ],
   "execution": {
@@ -981,7 +981,7 @@ Return a valid JSON object matching EXACTLY this schema:
         "badge": "DEPLOY NOW",
         "heading": "PUSH TO GITHUB",
         "subheading": "Synchronize directly with github.com/Olori24/AgentStation",
-        "bulletPoints": ["git remote add origin https://github.com/Olori24/AgentStation.git", "GitHub Actions CI pipeline included", "Ready for production deployment"],
+        "bulletPoints": ["git remote add origin https://github.com/Olori24/AgentStation-Factory.git", "GitHub Actions CI pipeline included", "Ready for production deployment"],
         "accentColor": "#8b5cf6",
         "callToAction": "github.com/Olori24/AgentStation"
       }
@@ -1189,7 +1189,7 @@ class CoreEngine:
             "success": True,
             "count": len(processed_items),
             "results": processed_items,
-            "target_repo": "https://github.com/Olori24/AgentStation.git"
+            "target_repo": "https://github.com/Olori24/AgentStation-Factory.git"
         }
 
 if __name__ == "__main__":
@@ -1376,7 +1376,7 @@ jobs:
 
 > Autonomously built by **AgentStation** Multi-Agent Platform.
 
-- **Repository:** \`https://github.com/Olori24/AgentStation.git\`
+- **Repository:** \`https://github.com/Olori24/AgentStation-Factory.git\`
 - **Branch:** \`main\`
 
 ## Usage
@@ -1452,7 +1452,7 @@ tests/test_${slug || "app"}.py::test_empty_payload_raises PASSED        [100%]
           heading: "SYNC TO GITHUB NOW",
           subheading: "Code, tests, and promotional video ready at github.com/Olori24/AgentStation",
           bulletPoints: [
-            "git remote add origin https://github.com/Olori24/AgentStation.git",
+            "git remote add origin https://github.com/Olori24/AgentStation-Factory.git",
             "Continuous Integration pipeline included",
             "One-click clone and run",
           ],
@@ -2287,4 +2287,4 @@ async function startServer() {
   });
 }
 
-startServer();
+export { app };\n\n// Local development runs the HTTP/WebSocket server directly.\n// Vercel imports the Express app through api/index.ts as a serverless function.\nif (process.env.VERCEL !== "1") {\n  startServer();\n}
