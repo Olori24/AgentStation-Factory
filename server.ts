@@ -24,7 +24,7 @@ const execAsync = promisify(exec);
 const app = express();
 const PORT = 3000;
 const httpServer = http.createServer(app);
-terminalWs.init(httpServer);
+if (process.env.VERCEL !== "1") {\n  terminalWs.init(httpServer);\n}
 
 app.use(express.json({ limit: "10mb" }));
 
