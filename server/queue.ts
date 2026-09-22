@@ -38,8 +38,11 @@ class BackgroundJobQueue extends EventEmitter {
 
   constructor() {
     super();
-    // Process queue tick every second
-    setInterval(() => this.tick(), 1000);
+    // Vercel functions are request-scoped; do not keep a perpetual event-loop
+    // worker alive there. Hosted jobs are triggered explicitly by the API.
+    if (process.env.VERCEL !== "1") {
+      setInterval(() => this.tick(), 1000);
+    }
   }
 
   public registerWorker<T, R>(type: JobType, handler: JobWorkerHandler<T, R>) {
