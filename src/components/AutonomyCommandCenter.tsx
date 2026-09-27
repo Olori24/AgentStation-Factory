@@ -7,7 +7,7 @@ type Goal = {
   lastMissionId?: string; consecutiveFailures: number;
 };
 
-type Runtime = { enabled: boolean; running: boolean; goals: number; activeMissions: number; maxConcurrency: number; tickMs: number };
+type Runtime = { enabled: boolean; running: boolean; activeGoals: number; runningJobs: number; maxConcurrency: number; heartbeatAt: string };
 
 export function AutonomyCommandCenter({ isOpen, onClose, onToast }: { isOpen: boolean; onClose: () => void; onToast?: (msg:string)=>void }) {
   const [goals,setGoals]=useState<Goal[]>([]);
@@ -30,10 +30,10 @@ export function AutonomyCommandCenter({ isOpen, onClose, onToast }: { isOpen: bo
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 p-3 lg:p-5 border-b border-slate-800">
         {[
           ['Runtime',runtime?.running?'ONLINE':'OFFLINE',runtime?.running?'emerald':'amber',Activity],
-          ['Active goals',String(active),'blue',Bot],
-          ['Running missions',String(runtime?.activeMissions??0),'cyan',Zap],
-          ['Capacity',runtime?runtime.activeMissions+'/'+runtime.maxConcurrency:'—','violet',ShieldCheck]
-        ].map(([label,value,tone,Icon]:any)=><div key={label} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3"><div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-500"><Icon className="w-3.5 h-3.5"/>{label}</div><div className={'mt-1 text-sm font-bold text-'+tone+'-400'}>{value}</div></div>)}
+          ['Active goals',String(runtime?.activeGoals ?? active),'blue',Bot],
+          ['Running missions',String(runtime?.runningJobs ?? 0),'cyan',Zap],
+          ['Capacity',runtime?runtime.runningJobs+'/'+runtime.maxConcurrency:'—','violet',ShieldCheck]
+        ].map(([label,value,tone,Icon]:any)=><div key={label} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3"><div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-500"><Icon className="w-3.5 h-3.5"/>{label}</div><div className={'mt-1 text-sm font-bold '+({emerald:'text-emerald-400',amber:'text-amber-400',blue:'text-blue-400',cyan:'text-cyan-400',violet:'text-violet-400'} as Record<string,string>)[tone]}>{value}</div></div>)}
       </div>
       <div className="flex-1 overflow-y-auto p-3 lg:p-5 space-y-5">
         <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
