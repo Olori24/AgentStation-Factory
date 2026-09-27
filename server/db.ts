@@ -180,7 +180,7 @@ export interface DatabaseSchema {
   };
 }
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_DIR = process.env.AGENTSTATION_DATA_DIR || path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'agentstation_relational_db.json');
 
 const DEFAULT_ORG: OrganizationRecord = {
