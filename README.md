@@ -4,7 +4,7 @@
 
 # ⚡ AgentStation
 ### Autonomous Multi-Agent AI Workforce Platform
-**Manus-Class Autonomous Execution • AgentStation Identity • Production-Grade Artifact Synthesis**
+**Mission planning • specialist agents • sandboxed execution • verification • artifact delivery**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black)](https://react.dev/)
@@ -13,6 +13,8 @@
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-8E24AA?logo=google&logoColor=white)](https://ai.google.dev/)
 [![Ollama](https://img.shields.io/badge/Local_LLM-Ollama-black?logo=ollama&logoColor=white)](https://ollama.ai/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
+
+> **Repository status:** Active development. Implemented capabilities, verification evidence, environment-dependent features and roadmap items are kept explicitly separate.
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 [Overview](#-overview) •
