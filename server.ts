@@ -17,19 +17,21 @@ import { terminalWs } from "./server/terminalWs";
 import { AgentOrchestrator } from "./server/orchestrator";
 import { ToolExecutionEngine, TOOL_DEFINITIONS } from "./server/tools";
 import { growthRouter } from "./server/growthFactory";
+import { autonomy } from "./server/autonomy";
 
 dotenv.config();
 
 const execAsync = promisify(exec);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 const httpServer = http.createServer(app);
 if (process.env.VERCEL !== "1") {
   terminalWs.init(httpServer);
 }
 
 app.use(express.json({ limit: "10mb" }));
+app.use((req, _res, next) => { authMiddleware(req as any, _res, next); });
 app.use("/api/growth", growthRouter);
 
 // Lazy initialization for Google Gen AI client
@@ -40,6 +42,13 @@ function getGenAI(): GoogleGenAI | null {
   }
   return aiClient;
 }
+
+// 24/7 Autonomous Runtime
+app.get("/api/autonomy/status", (_req, res) => res.json({ success: true, ...autonomy.status() }));
+app.get("/api/autonomy/goals", (_req, res) => res.json({ success: true, goals: autonomy.list() }));
+app.post("/api/autonomy/goals", (req, res) => { try { res.status(201).json({ success: true, goal: autonomy.create(req.body || {}) }); } catch (err: any) { res.status(400).json({ success: false, error: err.message }); } });
+app.patch("/api/autonomy/goals/:id", (req, res) => { try { res.json({ success: true, goal: autonomy.update(req.params.id, req.body || {}) }); } catch (err: any) { res.status(400).json({ success: false, error: err.message }); } });
+app.delete("/api/autonomy/goals/:id", (req, res) => res.json({ success: true, removed: autonomy.remove(req.params.id) }));
 
 // Health check endpoint
 app.get("/api/health", (_req, res) => {
@@ -2286,7 +2295,9 @@ async function startServer() {
     });
   }
 
-  httpServer.listen(PORT, "0.0.0.0", () => {
+  autonomy.start();
+
+httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`AgentStation fullstack server running on http://0.0.0.0:${PORT}`);
   });
 }
