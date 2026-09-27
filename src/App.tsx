@@ -29,6 +29,7 @@ import { ManusWorkspace } from './components/ManusWorkspace';
 import { ManusSidebar } from './components/ManusSidebar';
 import { ManusConversation } from './components/ManusConversation';
 import { ManusComputer, WorkstationTab } from './components/ManusComputer';
+import { GrowthFactoryModal } from './components/GrowthFactoryModal';
 import { DEFAULT_AGENTS, INITIAL_MISSION, GITHUB_REPO_INFO } from './data/defaults';
 import { SAMPLE_MISSIONS } from './data/sampleMissions';
 import { SquadMission, AgentProfile, AgentRole, AgentLogEntry, WorkspaceFile, VideoProject, CiStatusInfo, TerminalStreamMessage } from './types';
@@ -79,6 +80,7 @@ export default function App() {
   });
   const [ciStatus, setCiStatus] = useState<CiStatusInfo | null>(null);
   const [isFullStackModalOpen, setIsFullStackModalOpen] = useState(false);
+  const [isGrowthFactoryOpen, setIsGrowthFactoryOpen] = useState(false);
 
   // Real-time WebSocket terminal streamer state
   const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
@@ -623,6 +625,7 @@ export default function App() {
           onOpenOllama={() => setIsOllamaModalOpen(true)}
           onOpenFullStack={() => setIsFullStackModalOpen(true)}
           onOpenOnboarding={() => setIsOnboardingOpen(true)}
+          onOpenGrowthFactory={() => setIsGrowthFactoryOpen(true)}
           aiProvider={aiProvider}
         />
 

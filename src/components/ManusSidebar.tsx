@@ -13,6 +13,7 @@ import {
   HelpCircle,
   ExternalLink,
   Bot,
+  Film,
 } from 'lucide-react';
 import { SquadMission } from '../types';
 
@@ -29,6 +30,7 @@ interface ManusSidebarProps {
   onOpenOllama?: () => void;
   onOpenFullStack?: () => void;
   onOpenOnboarding?: () => void;
+  onOpenGrowthFactory?: () => void;
   aiProvider: 'gemini' | 'ollama';
 }
 
@@ -45,6 +47,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   onOpenOllama,
   onOpenFullStack,
   onOpenOnboarding,
+  onOpenGrowthFactory,
   aiProvider,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -242,6 +245,14 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
           </div>
           <ExternalLink className="w-3 h-3 text-slate-500" />
         </button>
+
+        {/* Growth Factory */}
+        {onOpenGrowthFactory && (
+          <button onClick={onOpenGrowthFactory} className="w-full py-2 px-2 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-[11px] text-cyan-300 border border-cyan-900/60 transition flex items-center justify-center gap-2">
+            <Film className="w-3.5 h-3.5" />
+            <span>Growth Factory</span>
+          </button>
+        )}
 
         {/* Full-Stack Ops & Guide */}
         <div className="flex items-center gap-2 pt-1">
