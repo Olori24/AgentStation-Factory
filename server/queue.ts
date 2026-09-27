@@ -145,6 +145,12 @@ class BackgroundJobQueue extends EventEmitter {
       streaming.streamJobProgress(nextJob.id, nextJob.progress, 'active', msg);
     };
 
+    const leaseHeartbeat = setInterval(() => {
+      if (nextJob.status !== 'active' || !nextJob.leaseId) return;
+      nextJob.leaseExpiresAt = new Date(Date.now() + this.leaseMs).toISOString();
+      this.syncDb(nextJob);
+    }, Math.max(5000, Math.floor(this.leaseMs / 3)));
+
     try {
       const result = await worker(nextJob, updateProgress);
       nextJob.status = 'completed';
@@ -173,6 +179,7 @@ class BackgroundJobQueue extends EventEmitter {
       this.syncDb(nextJob);
       this.emit('failed', nextJob);
     } finally {
+      clearInterval(leaseHeartbeat);
       this.activeCount--;
       setImmediate(() => this.tick());
     }
