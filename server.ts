@@ -2249,7 +2249,7 @@ app.get("/api/files/download", async (req, res) => {
   try {
     const relPath = req.query.path as string;
     if (!relPath) return res.status(400).send("Path required");
-    const workspaceDir = path.resolve(process.cwd(), "workspace");
+    const workspaceDir = path.resolve(process.env.AGENTSTATION_WORKSPACE_DIR || path.join(process.cwd(), "workspace"));
     const target = path.join(workspaceDir, relPath);
     if (!target.startsWith(workspaceDir) || !fs.existsSync(target)) {
       return res.status(404).send("File not found");
@@ -2266,7 +2266,7 @@ app.post("/api/files/save", async (req, res) => {
     if (!relPath || typeof content !== "string") {
       return res.status(400).json({ success: false, error: "path and content required" });
     }
-    const workspaceDir = path.resolve(process.cwd(), "workspace");
+    const workspaceDir = path.resolve(process.env.AGENTSTATION_WORKSPACE_DIR || path.join(process.cwd(), "workspace"));
     const target = path.join(workspaceDir, relPath);
     if (!target.startsWith(workspaceDir)) {
       return res.status(403).json({ success: false, error: "Access denied" });
