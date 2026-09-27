@@ -639,6 +639,15 @@ export default function App() {
           </div>
         )}
 
+        {isSidebarOpen && !isHomePromptMode && (
+          <button
+            type="button"
+            aria-label="Close navigation"
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden fixed inset-0 z-[80] bg-black/60 backdrop-blur-[1px]"
+          />
+        )}
+
         {/* Panel 1: Left Navigation Rail / Sidebar */}
         <ManusSidebar
           missions={missionHistory}
