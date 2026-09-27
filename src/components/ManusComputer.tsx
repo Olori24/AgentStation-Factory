@@ -104,24 +104,24 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
 
   return (
     <div
-      className={`flex flex-col bg-slate-950 border border-slate-800/90 rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ${
+      className={`flex flex-col bg-slate-950 border border-slate-800/90 rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ${
         isMaximized
           ? 'fixed inset-4 z-50 rounded-2xl'
           : 'h-full min-h-0'
       }`}
     >
       {/* 1. AgentStation Computer Titlebar */}
-      <div className="h-11 px-4 bg-slate-900/95 border-b border-slate-800/90 flex items-center justify-between shrink-0 select-none">
+      <div className="min-h-11 px-2.5 sm:px-4 py-1.5 bg-slate-900/95 border-b border-slate-800/90 flex items-center justify-between gap-2 shrink-0 select-none">
         {/* Window controls & Name */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="hidden sm:flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-red-500/80 border border-red-600/40" />
             <span className="w-3 h-3 rounded-full bg-amber-500/80 border border-amber-600/40" />
             <span className="w-3 h-3 rounded-full bg-emerald-500/80 border border-emerald-600/40" />
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold font-mono tracking-tight text-white flex items-center gap-1.5">
+            <span className="text-[11px] sm:text-xs font-bold font-mono tracking-tight text-white flex items-center gap-1.5 truncate">
               <Cpu className="w-3.5 h-3.5 text-blue-400" />
               AgentStation Workstation
             </span>
@@ -133,7 +133,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
         </div>
 
         {/* View Switcher Tabs */}
-        <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs overflow-x-auto max-w-[65vw] sm:max-w-none scrollbar-none">
+        <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs overflow-x-auto max-w-[58vw] sm:max-w-none scrollbar-none">
           {spreadsheet && (
             <button
               onClick={() => setTab('data')}
@@ -144,7 +144,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
               }`}
             >
               <Table className="w-3.5 h-3.5" />
-              <span>Spreadsheet</span>
+              <span className="hidden sm:inline">Spreadsheet</span>
               <span className="px-1 py-0.2 rounded-full bg-teal-500/20 text-teal-300 text-[10px] font-mono">
                 {spreadsheet.rows?.length || 20}
               </span>
@@ -161,7 +161,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Dossier</span>
+              <span className="hidden sm:inline">Dossier</span>
             </button>
           )}
 
@@ -175,7 +175,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
               }`}
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Campaign</span>
+              <span className="hidden sm:inline">Campaign</span>
             </button>
           )}
 
@@ -188,7 +188,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
             }`}
           >
             <Globe className="w-3.5 h-3.5" />
-            <span>Browser</span>
+            <span className="hidden sm:inline">Browser</span>
           </button>
 
           <button
@@ -200,7 +200,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
             }`}
           >
             <Terminal className="w-3.5 h-3.5" />
-            <span>Terminal</span>
+            <span className="hidden sm:inline">Terminal</span>
           </button>
 
           <button
@@ -212,7 +212,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
             }`}
           >
             <Code2 className="w-3.5 h-3.5" />
-            <span>Code</span>
+            <span className="hidden sm:inline">Code</span>
           </button>
 
           <button
@@ -224,7 +224,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
             }`}
           >
             <Film className="w-3.5 h-3.5" />
-            <span>Video</span>
+            <span className="hidden sm:inline">Video</span>
           </button>
 
           <button
@@ -236,7 +236,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
             }`}
           >
             <Workflow className="w-3.5 h-3.5" />
-            <span>CI/CD</span>
+            <span className="hidden sm:inline">CI/CD</span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           </button>
         </div>
@@ -272,7 +272,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
       <div className="flex-1 flex flex-col min-h-0 bg-slate-950 overflow-hidden relative">
         {/* Interactive CI/CD Timeline Ribbon across tabs */}
         {isPipelineRibbonOpen && currentTab !== 'pipeline' && (
-          <div className="px-3 pt-2 pb-1 bg-slate-950 border-b border-slate-800/70 shrink-0">
+          <div className="px-2 sm:px-3 pt-1.5 pb-1 bg-slate-950 border-b border-slate-800/70 shrink-0">
             <PipelineStatus
               missionStatus={missionStatus}
               execution={execution}
@@ -310,7 +310,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
         {currentTab === 'browser' && (
           <div className="flex-1 flex flex-col min-h-0">
             {/* Virtual Browser Chrome / Address Bar */}
-            <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-3 text-xs shrink-0">
+            <div className="px-2 py-1.5 sm:px-3 sm:py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-2 text-xs shrink-0">
               <div className="flex items-center gap-1 text-slate-400">
                 <button
                   onClick={handleRefresh}
