@@ -12,6 +12,7 @@ import {
   Bot,
   Cpu,
   ArrowLeft,
+  Zap,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { SquadBar } from './components/SquadBar';
