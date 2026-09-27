@@ -17,13 +17,14 @@ import { terminalWs } from "./server/terminalWs";
 import { AgentOrchestrator } from "./server/orchestrator";
 import { ToolExecutionEngine, TOOL_DEFINITIONS } from "./server/tools";
 import { growthRouter } from "./server/growthFactory";
+import { autonomy } from "./server/autonomy";
 
 dotenv.config();
 
 const execAsync = promisify(exec);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 const httpServer = http.createServer(app);
 if (process.env.VERCEL !== "1") {
   terminalWs.init(httpServer);
@@ -1969,6 +1970,21 @@ app.post("/api/jobs/enqueue", (req, res) => {
   });
 });
 
+jobQueue.registerWorker("autonomous_mission", async (job, updateProgress) => {
+  const payload = (job.payload || {}) as any;
+  const missionId = "autonomous-" + job.id;
+  const objective = String(payload.objective || "").trim();
+  if (!objective) throw new Error("Autonomous objective is empty");
+  updateProgress(10, "Autonomy: creating durable mission plan...");
+  db.upsertMission({ id: missionId, prompt: objective, status: "running", currentStage: "Autonomous Scheduler", progressPercent: 10, files: [], logs: [], createdAt: new Date().toISOString(), gitBranch: "main", gitCommitMessage: "autonomous: " + objective.slice(0, 60) });
+  updateProgress(30, "Atlas: planning autonomous mission...");
+  await AgentOrchestrator.planMission(missionId, objective);
+  updateProgress(50, "Squad: executing mission...");
+  await AgentOrchestrator.executeMission(missionId, { autoApproveSafeTools: payload.autoApproveSafeTools !== false, provider: payload.provider || "gemini", model: payload.model });
+  updateProgress(100, "Autonomous mission completed.");
+  return { missionId, goalId: payload.goalId };
+});
+
 // ==========================================
 // Phase 4: Isolated Sandbox Execution API
 // ==========================================
@@ -2013,6 +2029,22 @@ app.get("/api/artifacts/download/:id", (req, res) => {
   res.setHeader("Content-Disposition", `attachment; filename="${artifact.meta.name}"`);
   res.send(artifact.buffer);
 });
+
+// ==========================================
+// Persistent 24/7 Autonomy Control Plane
+// ==========================================
+app.get("/api/autonomy/status", (_req, res) => res.json({ success: true, status: autonomy.status() }));
+app.get("/api/autonomy/goals", (_req, res) => res.json({ success: true, goals: autonomy.list() }));
+app.post("/api/autonomy/goals", (req, res) => {
+  try { res.status(201).json({ success: true, goal: autonomy.create(req.body || {}) }); }
+  catch (err:any) { res.status(400).json({ success:false, error:err.message }); }
+});
+app.patch("/api/autonomy/goals/:id", (req, res) => {
+  const goal = autonomy.update(req.params.id, req.body || {});
+  if (!goal) return res.status(404).json({ success:false, error:"Goal not found" });
+  res.json({ success:true, goal });
+});
+app.delete("/api/autonomy/goals/:id", (req, res) => res.json({ success:true, removed:autonomy.remove(req.params.id) }));
 
 // ==========================================
 // Phase 6: Autonomous Agent Orchestration & Tool Execution API
@@ -2286,6 +2318,7 @@ async function startServer() {
     });
   }
 
+  if (process.env.AUTONOMY_ENABLED === "true") autonomy.start();
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`AgentStation fullstack server running on http://0.0.0.0:${PORT}`);
   });
