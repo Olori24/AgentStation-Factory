@@ -103,9 +103,9 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-8 sm:py-14 flex flex-col items-center justify-center min-h-[80vh]">
+    <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-14 flex flex-col items-center justify-start sm:justify-center min-h-[calc(100dvh-4rem)]">
       {/* Top AgentStation Brand Header */}
-      <div className="flex flex-col items-center text-center space-y-3 mb-8">
+      <div className="flex flex-col items-center text-center space-y-3 mb-6 sm:mb-8">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-700/80 text-xs font-mono text-slate-300 shadow-lg">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="font-semibold text-white tracking-wide">AGENTSTATION</span>
@@ -113,7 +113,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
           <span className="text-blue-400 font-medium">Autonomous Digital Workforce</span>
         </div>
 
-        <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
+        <h1 className="text-2xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
           What objective shall AgentStation execute today?
         </h1>
 
@@ -123,7 +123,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
       </div>
 
       {/* Center AgentStation Omnibox */}
-      <div className="w-full relative mb-10">
+      <div className="w-full relative mb-7 sm:mb-10">
         <form onSubmit={handleSubmit} className="relative group">
           <div className="relative rounded-2xl bg-slate-900/95 border border-slate-700/80 hover:border-slate-600 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/20 shadow-2xl transition-all duration-200">
             <div className="p-4 sm:p-5">
@@ -132,7 +132,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
                 onChange={(e) => setPromptText(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Assign an objective... (e.g. Research the Nigerian real estate market and prepare a pitch deck, or build an enterprise task manager with SQLite & PyTest)"
-                rows={3}
+                rows={4}
                 disabled={isExecuting}
                 className="w-full bg-transparent text-slate-100 placeholder-slate-500 text-base sm:text-lg focus:outline-none resize-none leading-relaxed font-sans"
                 autoFocus
@@ -140,9 +140,9 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
             </div>
 
             {/* Bottom Bar inside Omnibox */}
-            <div className="px-4 py-3 bg-slate-950/60 rounded-b-2xl border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+            <div className="px-3 sm:px-4 py-3 bg-slate-950/60 rounded-b-2xl border-t border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
               {/* Feature Chips */}
-              <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs overflow-x-auto pb-0.5 scrollbar-thin">
                 <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/80 text-slate-300 font-mono text-[11px] border border-slate-700/50">
                   <Code2 className="w-3 h-3 text-blue-400" />
                   Full-Stack App
@@ -165,7 +165,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
               <button
                 type="submit"
                 disabled={!promptText.trim() || isExecuting}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto justify-center flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isExecuting ? (
                   <>
@@ -202,7 +202,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div className="flex sm:grid sm:grid-cols-2 gap-3.5 overflow-x-auto sm:overflow-visible snap-x snap-mandatory pb-1">
           {INSPIRATION_CARDS.map((card) => (
             <button
               key={card.id}
@@ -210,7 +210,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
                 setPromptText(card.prompt);
                 onExecutePrompt(card.prompt);
               }}
-              className="text-left p-4 rounded-xl bg-slate-900/70 hover:bg-slate-800/90 border border-slate-800/80 hover:border-slate-700 transition group flex flex-col justify-between shadow-sm"
+              className="text-left p-4 rounded-xl bg-slate-900/70 min-w-[84vw] sm:min-w-0 snap-start hover:bg-slate-800/90 border border-slate-800/80 hover:border-slate-700 transition group flex flex-col justify-between shadow-sm"
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -253,12 +253,12 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="flex sm:grid sm:grid-cols-2 gap-2.5 overflow-x-auto sm:overflow-visible snap-x snap-mandatory pb-1">
             {recentMissions.slice(0, 4).map((m) => (
               <div
                 key={m.id}
                 onClick={() => onSelectMission(m)}
-                className="p-3 rounded-lg bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800/70 hover:border-slate-700 transition cursor-pointer flex items-center justify-between gap-3 group"
+                className="p-3 rounded-lg bg-slate-900/50 min-w-[84vw] sm:min-w-0 snap-start hover:bg-slate-800/80 border border-slate-800/70 hover:border-slate-700 transition cursor-pointer flex items-center justify-between gap-3 group"
               >
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-medium text-slate-200 truncate group-hover:text-white transition">
