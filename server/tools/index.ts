@@ -423,7 +423,7 @@ export class ToolExecutionEngine {
           const targetContent = input.targetContent;
           const replacementContent = input.replacementContent;
 
-          const workspaceDir = path.resolve(process.cwd(), 'workspace');
+          const workspaceDir = path.resolve(process.env.AGENTSTATION_WORKSPACE_DIR || path.join(process.cwd(), 'workspace'));
           const targetPath = path.join(workspaceDir, relPath);
 
           if (!fs.existsSync(targetPath)) {
@@ -529,7 +529,7 @@ export class ToolExecutionEngine {
           const title = input.title;
           const content = input.content;
           const outputPath = input.outputPath || 'docs/REPORT.md';
-          const workspaceDir = path.resolve(process.cwd(), 'workspace');
+          const workspaceDir = path.resolve(process.env.AGENTSTATION_WORKSPACE_DIR || path.join(process.cwd(), 'workspace'));
           const fullPath = path.join(workspaceDir, outputPath);
 
           await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
