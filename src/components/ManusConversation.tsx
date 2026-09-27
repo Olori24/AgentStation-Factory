@@ -223,18 +223,18 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 bg-slate-950 text-slate-200 font-sans">
       {/* Top Header of the Conversation */}
-      <div className="h-14 px-5 border-b border-slate-800/80 bg-slate-950/90 flex items-center justify-between shrink-0">
+      <div className="h-12 px-3 sm:px-5 border-b border-slate-800/80 bg-slate-950/95 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={onNewTask}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition shrink-0"
           >
             <Plus className="w-3.5 h-3.5 text-blue-400" />
-            <span>New Task</span>
+            <span className="hidden sm:inline">New Task</span>
           </button>
 
           <div className="min-w-0">
-            <h2 className="text-xs sm:text-sm font-bold text-white truncate max-w-sm sm:max-w-md">
+            <h2 className="text-xs sm:text-sm font-bold text-white truncate max-w-[38vw] sm:max-w-md">
               {mission.prompt}
             </h2>
           </div>
@@ -260,7 +260,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
               </button>
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
                 <div className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-amber-400 animate-ping'}`} />
-                <span>{isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
+                <span className="hidden sm:inline">{isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
               </div>
             </div>
           ) : (
