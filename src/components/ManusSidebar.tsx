@@ -59,6 +59,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   );
 
   if (!isOpen) {
+    if (isMobile) return null;
     return (
       <div className="w-14 bg-slate-950 border-r border-slate-800/80 flex flex-col items-center py-3 justify-between shrink-0 select-none">
         <div className="flex flex-col items-center gap-3">
