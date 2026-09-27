@@ -368,7 +368,7 @@ export class ToolExecutionEngine {
 
         case 'file_read': {
           const relPath = input.path;
-          const workspacePath = path.resolve(process.cwd(), 'workspace', relPath);
+          const workspacePath = path.resolve(process.env.AGENTSTATION_WORKSPACE_DIR || path.join(process.cwd(), 'workspace'), relPath);
           const projectPath = path.resolve(process.cwd(), relPath);
 
           let filePath = workspacePath;
@@ -388,7 +388,7 @@ export class ToolExecutionEngine {
         case 'file_write': {
           const relPath = input.path;
           const content = input.content ?? '';
-          const workspaceDir = path.resolve(process.cwd(), 'workspace');
+          const workspaceDir = path.resolve(process.env.AGENTSTATION_WORKSPACE_DIR || path.join(process.cwd(), 'workspace'));
           const targetPath = path.join(workspaceDir, relPath);
 
           // Prevent directory traversal
@@ -443,7 +443,7 @@ export class ToolExecutionEngine {
         }
 
         case 'file_list': {
-          const baseDir = path.resolve(process.cwd(), input.directory || 'workspace');
+          const baseDir = path.resolve(process.env.AGENTSTATION_WORKSPACE_DIR || path.join(process.cwd(), 'workspace'), input.directory || '.');
           if (!fs.existsSync(baseDir)) {
             data = { directory: input.directory || 'workspace', files: [] };
             break;
