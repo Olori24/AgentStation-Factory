@@ -75,6 +75,9 @@ export interface JobRecord {
   missionId?: string;
   status: 'waiting' | 'active' | 'completed' | 'failed';
   progress: number; // 0 - 100
+  payload?: any;
+  leaseId?: string;
+  leaseExpiresAt?: string;
   attempt: number;
   maxAttempts: number;
   result?: any;
