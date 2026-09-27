@@ -12,6 +12,7 @@ import {
   Bot,
   Cpu,
   ArrowLeft,
+  Zap,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { SquadBar } from './components/SquadBar';
@@ -30,6 +31,7 @@ import { ManusSidebar } from './components/ManusSidebar';
 import { ManusConversation } from './components/ManusConversation';
 import { ManusComputer, WorkstationTab } from './components/ManusComputer';
 import { GrowthFactoryModal } from './components/GrowthFactoryModal';
+import { AutonomyCommandCenter } from './components/AutonomyCommandCenter';
 import { DEFAULT_AGENTS, INITIAL_MISSION, GITHUB_REPO_INFO } from './data/defaults';
 import { SAMPLE_MISSIONS } from './data/sampleMissions';
 import { SquadMission, AgentProfile, AgentRole, AgentLogEntry, WorkspaceFile, VideoProject, CiStatusInfo, TerminalStreamMessage } from './types';
@@ -81,6 +83,7 @@ export default function App() {
   const [ciStatus, setCiStatus] = useState<CiStatusInfo | null>(null);
   const [isFullStackModalOpen, setIsFullStackModalOpen] = useState(false);
   const [isGrowthFactoryOpen, setIsGrowthFactoryOpen] = useState(false);
+  const [isAutonomyOpen, setIsAutonomyOpen] = useState(false);
 
   // Real-time WebSocket terminal streamer state
   const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
@@ -628,14 +631,24 @@ export default function App() {
               </div>
               <span className="text-sm font-bold text-white">AgentStation</span>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsGrowthFactoryOpen(true)}
-              aria-label="Open Growth Factory"
-              className="w-10 h-10 rounded-xl border border-cyan-900/60 bg-cyan-950/40 flex items-center justify-center text-cyan-300"
-            >
-              <Film className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsAutonomyOpen(true)}
+                aria-label="Open Autonomy Command Center"
+                className="w-10 h-10 rounded-xl border border-emerald-900/60 bg-emerald-950/40 flex items-center justify-center text-emerald-300"
+              >
+                <Zap className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsGrowthFactoryOpen(true)}
+                aria-label="Open Growth Factory"
+                className="w-10 h-10 rounded-xl border border-cyan-900/60 bg-cyan-950/40 flex items-center justify-center text-cyan-300"
+              >
+                <Film className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
@@ -782,6 +795,12 @@ export default function App() {
           </div>
         )}
       </div>
+
+      <AutonomyCommandCenter
+        isOpen={isAutonomyOpen}
+        onClose={() => setIsAutonomyOpen(false)}
+        onToast={showToast}
+      />
 
       {/* GitHub Repository Modal */}
       <GitHubModal
