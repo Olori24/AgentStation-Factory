@@ -16,6 +16,7 @@ import { generateMissionBundle, getArtifact, listArtifacts } from "./server/arti
 import { terminalWs } from "./server/terminalWs";
 import { AgentOrchestrator } from "./server/orchestrator";
 import { ToolExecutionEngine, TOOL_DEFINITIONS } from "./server/tools";
+import { growthRouter } from "./server/growthFactory";
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ if (process.env.VERCEL !== "1") {
 }
 
 app.use(express.json({ limit: "10mb" }));
+app.use("/api/growth", growthRouter);
 
 // Lazy initialization for Google Gen AI client
 let aiClient: GoogleGenAI | null = null;
