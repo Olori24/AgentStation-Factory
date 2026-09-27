@@ -15,6 +15,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
 
 > **Repository status:** Active development. Implemented capabilities, verification evidence, environment-dependent features and roadmap items are kept explicitly separate.
+
+## Engineering focus
+
+Multi-agent workforce for planning, execution, verification and artifacts.
+
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 [Overview](#-overview) •
