@@ -71,10 +71,13 @@ export interface AgentLogRecord {
 
 export interface JobRecord {
   id: string;
-  type: 'mission_synthesis' | 'sandbox_test' | 'video_render' | 'github_sync';
+  type: 'mission_synthesis' | 'sandbox_test' | 'video_render' | 'github_sync' | 'autonomous_mission';
   missionId?: string;
   status: 'waiting' | 'active' | 'completed' | 'failed';
   progress: number; // 0 - 100
+  payload?: any;
+  leaseId?: string;
+  leaseExpiresAt?: string;
   attempt: number;
   maxAttempts: number;
   result?: any;

@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import { db, JobRecord } from './db';
 import { streaming } from './streaming';
 
-export type JobType = 'mission_synthesis' | 'sandbox_test' | 'video_render' | 'github_sync';
+export type JobType = 'mission_synthesis' | 'sandbox_test' | 'video_render' | 'github_sync' | 'autonomous_mission';
 
 export interface JobOptions {
   maxAttempts?: number;
@@ -24,6 +24,8 @@ export interface EnqueuedJob<T = any> {
   startedAt?: string;
   finishedAt?: string;
   result?: any;
+  leaseId?: string;
+  leaseExpiresAt?: string;
   error?: string;
 }
 
@@ -35,9 +37,11 @@ class BackgroundJobQueue extends EventEmitter {
   private isProcessing = false;
   private concurrency = 2;
   private activeCount = 0;
+  private readonly leaseMs = Number(process.env.JOB_LEASE_MS || 120000);
 
   constructor() {
     super();
+    this.recoverPersistedJobs();
     // Vercel functions are request-scoped; do not keep a perpetual event-loop
     // worker alive there. Hosted jobs are triggered explicitly by the API.
     if (process.env.VERCEL !== "1") {
@@ -69,6 +73,24 @@ class BackgroundJobQueue extends EventEmitter {
     // Trigger tick immediately
     setImmediate(() => this.tick());
     return job;
+  }
+
+  private recoverPersistedJobs() {
+    const persisted = db.getJobs(500);
+    for (const record of persisted) {
+      if (record.status !== 'waiting' && record.status !== 'active') continue;
+      const payload = record.payload || {};
+      const stale = record.status === 'active' && record.leaseExpiresAt && Date.parse(record.leaseExpiresAt) < Date.now();
+      const job: EnqueuedJob = {
+        id: record.id, type: record.type, missionId: record.missionId, payload,
+        status: stale ? 'waiting' : record.status, progress: record.progress,
+        attempt: record.attempt, maxAttempts: record.maxAttempts, createdAt: record.createdAt,
+        startedAt: stale ? undefined : record.startedAt, result: record.result, error: stale ? 'Recovered after worker lease expiry' : record.error,
+        finishedAt: record.finishedAt, leaseId: stale ? undefined : record.leaseId, leaseExpiresAt: stale ? undefined : record.leaseExpiresAt,
+      };
+      this.queue.push(job);
+    }
+    if (this.queue.length) setImmediate(() => this.tick());
   }
 
   public getJob(id: string): EnqueuedJob | undefined {
@@ -111,6 +133,8 @@ class BackgroundJobQueue extends EventEmitter {
     this.activeCount++;
     nextJob.status = 'active';
     nextJob.attempt++;
+    nextJob.leaseId = crypto.randomUUID();
+    nextJob.leaseExpiresAt = new Date(Date.now() + this.leaseMs).toISOString();
     nextJob.startedAt = new Date().toISOString();
     this.syncDb(nextJob);
     streaming.streamJobProgress(nextJob.id, 5, 'active', `Job processing started (attempt ${nextJob.attempt})`);
@@ -125,6 +149,7 @@ class BackgroundJobQueue extends EventEmitter {
       const result = await worker(nextJob, updateProgress);
       nextJob.status = 'completed';
       nextJob.progress = 100;
+      nextJob.leaseExpiresAt = undefined;
       nextJob.result = result;
       nextJob.finishedAt = new Date().toISOString();
       this.syncDb(nextJob);
@@ -133,10 +158,14 @@ class BackgroundJobQueue extends EventEmitter {
     } catch (err: any) {
       if (nextJob.attempt < nextJob.maxAttempts) {
         nextJob.status = 'waiting';
+        nextJob.leaseId = undefined;
+        nextJob.leaseExpiresAt = undefined;
         nextJob.error = `Attempt ${nextJob.attempt} failed: ${err.message}. Retrying...`;
         streaming.streamJobProgress(nextJob.id, nextJob.progress, 'waiting', nextJob.error);
       } else {
         nextJob.status = 'failed';
+        nextJob.leaseId = undefined;
+        nextJob.leaseExpiresAt = undefined;
         nextJob.error = err.message || 'Unknown error occurred during job execution';
         nextJob.finishedAt = new Date().toISOString();
         streaming.streamJobProgress(nextJob.id, nextJob.progress, 'failed', nextJob.error);
@@ -158,6 +187,9 @@ class BackgroundJobQueue extends EventEmitter {
       progress: job.progress,
       attempt: job.attempt,
       maxAttempts: job.maxAttempts,
+      payload: job.payload,
+      leaseId: job.leaseId,
+      leaseExpiresAt: job.leaseExpiresAt,
       result: job.result,
       error: job.error,
       createdAt: job.createdAt,

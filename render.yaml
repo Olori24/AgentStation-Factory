@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: agentstation-autonomous
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    autoDeployTrigger: checksPass
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTONOMY_ENABLED
+        value: "true"
+      - key: AUTONOMY_TICK_MS
+        value: "15000"
+      - key: AUTONOMY_MAX_CONCURRENCY
+        value: "2"
+      - key: JOB_LEASE_MS
+        value: "120000"
+      - key: AGENTSTATION_DATA_DIR
+        value: /var/data
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        generateValue: true
+    disk:
+      name: agentstation-data
+      mountPath: /var
+      sizeGB: 10
