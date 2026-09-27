@@ -11,7 +11,6 @@ import {
   History,
   Bot,
   Cpu,
-  ArrowLeft,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { SquadBar } from './components/SquadBar';
@@ -737,21 +736,6 @@ export default function App() {
                   mobileActiveView === 'workstation' ? 'flex' : 'hidden lg:flex'
                 }`}
               >
-                {/* On mobile, show a top bar to quickly toggle back to chat */}
-                <div className="lg:hidden mb-2 flex items-center justify-between px-3 py-1.5 bg-slate-900/90 rounded-xl border border-slate-800 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setMobileActiveView('chat')}
-                    className="text-xs text-blue-400 font-semibold flex items-center gap-1 hover:text-blue-300 transition"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    <span>Back to Squad Chat</span>
-                  </button>
-                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-                    {computerTab.toUpperCase()} ACTIVE
-                  </span>
-                </div>
-
                 <ManusComputer
                   files={mission.files}
                   execution={mission.execution}
