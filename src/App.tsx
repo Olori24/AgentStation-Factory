@@ -681,8 +681,8 @@ export default function App() {
         ) : (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden pt-14 lg:pt-0">
             {/* Mobile View Switcher (Visible on mobile screens < 1024px) */}
-            <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-slate-900/80 border-b border-slate-800 shrink-0">
-              <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 w-full">
+            <div className="lg:hidden fixed bottom-3 left-3 right-3 z-[70] px-1 py-1.5 bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-700/80 shadow-2xl shadow-black/50">
+              <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 w-full max-w-md mx-auto">
                 <button
                   type="button"
                   onClick={() => setMobileActiveView('chat')}
