@@ -115,8 +115,8 @@ export const ManusWorkspace: React.FC<ManusWorkspaceProps> = ({
   return (
     <div className="w-full flex-1 flex flex-col min-h-0">
       {/* Workspace Subheader / Stage Stepper */}
-      <div className="bg-slate-950/80 border-b border-slate-800/80 px-4 lg:px-8 py-2.5">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-slate-950/95 border-b border-slate-800/80 px-3 sm:px-4 lg:px-8 py-2.5 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
           {/* Mission Title & Status */}
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -157,7 +157,7 @@ export const ManusWorkspace: React.FC<ManusWorkspaceProps> = ({
         </div>
 
         {/* 5-Step Autonomous Pipeline Bar */}
-        <div className="max-w-7xl mx-auto mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between gap-2 overflow-x-auto pb-1 scrollbar-thin">
+        <div className="max-w-7xl mx-auto mt-2 pt-2 border-t border-slate-800/60 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
           {STAGES.map((stage, idx) => {
             const status = getStageStatus(stage.id, idx);
             return (
@@ -188,10 +188,10 @@ export const ManusWorkspace: React.FC<ManusWorkspaceProps> = ({
       </div>
 
       {/* Main Dual-Pane AgentStation Layout */}
-      <div className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-3 min-h-0">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[760px]">
+      <div className="flex-1 max-w-7xl w-full mx-auto px-2.5 sm:px-4 lg:px-8 py-2 sm:py-3 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 h-auto lg:h-[760px] min-h-0">
           {/* Left Column: Autonomous Squad Activity & Follow-up Chat (4 cols) */}
-          <div className="lg:col-span-4 h-full flex flex-col gap-3 min-h-0">
+          <div className="lg:col-span-4 min-h-0 flex flex-col gap-3 order-2 lg:order-1">
             {/* Real-time Activity Stream */}
             <div className="flex-1 min-h-0">
               <AgentActivityStream logs={mission.logs} isExecuting={isExecuting} />
@@ -247,7 +247,7 @@ export const ManusWorkspace: React.FC<ManusWorkspaceProps> = ({
           </div>
 
           {/* Right Column: Unified Deliverable Canvas (8 cols) */}
-          <div className="lg:col-span-8 h-full flex flex-col min-h-0">
+          <div className="lg:col-span-8 min-h-[520px] lg:h-full flex flex-col min-h-0 order-1 lg:order-2">
             <CodeWorkspace
               files={mission.files}
               execution={mission.execution}

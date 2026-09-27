@@ -610,7 +610,44 @@ export default function App() {
       )}
 
       {/* Main 3-Panel AgentStation Application */}
-      <div className="flex-1 flex min-h-0 w-full overflow-hidden">
+      <div className="flex-1 flex min-h-0 w-full overflow-hidden relative">
+        {/* Mobile top bar — keeps the primary navigation compact instead of competing with the workspace */}
+        {!isHomePromptMode && (
+          <div className="lg:hidden absolute top-0 left-0 right-0 z-40 h-14 px-3 flex items-center justify-between bg-slate-950/95 backdrop-blur border-b border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              aria-label="Open navigation"
+              className="w-10 h-10 rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-center text-slate-200"
+            >
+              <Bot className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                <Bot className="w-3.5 h-3.5 text-white" />
+              </div>
+              <span className="text-sm font-bold text-white">AgentStation</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsGrowthFactoryOpen(true)}
+              aria-label="Open Growth Factory"
+              className="w-10 h-10 rounded-xl border border-cyan-900/60 bg-cyan-950/40 flex items-center justify-center text-cyan-300"
+            >
+              <Film className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {isSidebarOpen && !isHomePromptMode && (
+          <button
+            type="button"
+            aria-label="Close navigation"
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden fixed inset-0 z-[80] bg-black/60 backdrop-blur-[1px]"
+          />
+        )}
+
         {/* Panel 1: Left Navigation Rail / Sidebar */}
         <ManusSidebar
           missions={missionHistory}
@@ -621,6 +658,7 @@ export default function App() {
           isExecuting={isExecuting}
           isOpen={isSidebarOpen}
           onToggleOpen={() => setIsSidebarOpen(!isSidebarOpen)}
+          isMobile={true}
           onOpenGitHub={() => setIsGitHubModalOpen(true)}
           onOpenOllama={() => setIsOllamaModalOpen(true)}
           onOpenFullStack={() => setIsFullStackModalOpen(true)}
@@ -641,9 +679,9 @@ export default function App() {
             />
           </div>
         ) : (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden pt-14 lg:pt-0">
             {/* Mobile View Switcher (Visible on mobile screens < 1024px) */}
-            <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-slate-900 border-b border-slate-800 shrink-0">
+            <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-slate-900/80 border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 w-full">
                 <button
                   type="button"

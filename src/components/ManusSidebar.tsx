@@ -32,6 +32,7 @@ interface ManusSidebarProps {
   onOpenOnboarding?: () => void;
   onOpenGrowthFactory?: () => void;
   aiProvider: 'gemini' | 'ollama';
+  isMobile?: boolean;
 }
 
 export const ManusSidebar: React.FC<ManusSidebarProps> = ({
@@ -49,6 +50,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   onOpenOnboarding,
   onOpenGrowthFactory,
   aiProvider,
+  isMobile = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -57,6 +59,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   );
 
   if (!isOpen) {
+    if (isMobile) return null;
     return (
       <div className="w-14 bg-slate-950 border-r border-slate-800/80 flex flex-col items-center py-3 justify-between shrink-0 select-none">
         <div className="flex flex-col items-center gap-3">
@@ -99,7 +102,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   }
 
   return (
-    <aside className="w-64 bg-slate-950 border-r border-slate-800/80 flex flex-col justify-between shrink-0 select-none h-full min-h-0 text-slate-200 font-sans">
+    <aside className={`w-64 bg-slate-950 border-r border-slate-800/80 flex flex-col justify-between shrink-0 select-none h-full min-h-0 text-slate-200 font-sans transition-transform duration-200 ${isMobile ? 'fixed inset-y-0 left-0 z-[90] lg:static lg:z-auto shadow-2xl lg:shadow-none' : ''} ${isMobile && !isOpen ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}`}>
       {/* Top Header & New Task Button */}
       <div className="p-3.5 pb-2 border-b border-slate-800/70">
         {/* Brand Bar */}
