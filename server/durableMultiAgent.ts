@@ -68,7 +68,7 @@ export async function enqueueDurableAgents(input: {
     ? instantiateObjectiveTemplate(String(input.templateId), input.variables || {})
     : null;
   const tasks = expanded?.tasks || input.tasks || [];
-  if (!Array.isArray(tasks) || input.tasks.length === 0) throw new Error("tasks must contain at least one agent task");
+  if (!Array.isArray(tasks) || tasks.length === 0) throw new Error("tasks must contain at least one agent task");
   if (tasks.length > MAX_TASKS) throw new Error("maximum 8 parallel agents per dispatch");
 
   const db = await getSql();
@@ -82,7 +82,7 @@ export async function enqueueDurableAgents(input: {
   }
 
   const created: AgentTask[] = [];
-  for (const task of input.tasks) {
+  for (const task of tasks) {
     const id = "agent-task-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
     const rows = await db.query(
       "INSERT INTO agent_tasks (id,mission_id,agent_id,objective,status,created_at) VALUES ($1,$2,$3,$4,'queued',now()) RETURNING *",
