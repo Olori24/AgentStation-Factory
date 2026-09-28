@@ -45,8 +45,7 @@ function taskFromRow(row: any): AgentTask {
 export async function listDurableAgents() {
   const db = await getSql();
   if (!db) return null;
-  const rows = await db.query("SELECT * FROM agent_registry WHERE enabled=true ORDER BY id");
-  return rows;
+  return db.query("SELECT * FROM agent_registry WHERE enabled=true ORDER BY id");
 }
 
 export async function listDurableTasks(missionId?: string) {
@@ -74,40 +73,92 @@ export async function enqueueDurableAgents(input: {
   const db = await getSql();
   if (!db) return null;
 
-  const agents = await db.query("SELECT id, enabled FROM agent_registry WHERE id = ANY($1::text[])", [tasks.map(t => t.agentId)]);
-  const available = new Set(agents.filter((a:any) => a.enabled).map((a:any) => String(a.id)));
+  const agents = await db.query(
+    "SELECT id, enabled FROM agent_registry WHERE id = ANY($1::text[])",
+    [tasks.map(t => t.agentId)],
+  );
+  const available = new Set(agents.filter((a: any) => a.enabled).map((a: any) => String(a.id)));
   for (const task of tasks) {
     if (!available.has(task.agentId)) throw new Error("Agent unavailable: " + task.agentId);
     if (!String(task.objective || "").trim()) throw new Error("Objective required for " + task.agentId);
   }
 
+  const objectiveRunId = "objective-run-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+  const outcome = expanded?.outcome || "Execute the supplied agent task set and record evidence.";
+  await db.query(
+    "INSERT INTO objective_runs (id,template_id,mission_id,status,input,outcome) VALUES ($1,$2,$3,'queued',$4::jsonb,$5)",
+    [objectiveRunId, expanded?.templateId || "custom-dispatch", input.missionId || null, JSON.stringify(input.variables || {}), outcome],
+  );
+
   const created: AgentTask[] = [];
-  for (const task of tasks) {
-    const id = "agent-task-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
-    const rows = await db.query(
-      "INSERT INTO agent_tasks (id,mission_id,agent_id,objective,status,created_at) VALUES ($1,$2,$3,$4,'queued',now()) RETURNING *",
-      [id, input.missionId || null, task.agentId, String(task.objective).trim()],
+  try {
+    for (const task of tasks) {
+      const id = "agent-task-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+      const rows = await db.query(
+        "INSERT INTO agent_tasks (id,mission_id,objective_run_id,agent_id,objective,status,created_at) VALUES ($1,$2,$3,$4,$5,'queued',now()) RETURNING *",
+        [id, input.missionId || null, objectiveRunId, task.agentId, String(task.objective).trim()],
+      );
+      created.push(taskFromRow(rows[0]));
+    }
+    await db.query("UPDATE objective_runs SET status='running',updated_at=now() WHERE id=$1", [objectiveRunId]);
+  } catch (error) {
+    await db.query(
+      "UPDATE objective_runs SET status='failed',outcome=$2,updated_at=now(),completed_at=now() WHERE id=$1",
+      [objectiveRunId, error instanceof Error ? error.message : String(error)],
     );
-    created.push(taskFromRow(rows[0]));
+    throw error;
   }
-  return { count: created.length, queued: created.length, completed: 0, failed: 0, tasks: created, objective: expanded ? { templateId: expanded.templateId, name: expanded.name, outcome: expanded.outcome } : undefined };
+
+  return {
+    objectiveRunId,
+    count: created.length,
+    queued: created.length,
+    completed: 0,
+    failed: 0,
+    tasks: created,
+    objective: expanded
+      ? { templateId: expanded.templateId, name: expanded.name, outcome: expanded.outcome }
+      : { templateId: "custom-dispatch", name: "Custom Agent Dispatch", outcome },
+  };
 }
 
-async function execute(agent:any, task:AgentTask) {
+async function execute(agent: any, task: AgentTask) {
   try {
     const result = await Promise.race([
       agentRouterChat({ model: agent.model || undefined, system: agent.system_prompt, user: task.objective }),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Multi-agent execution timeout")), TIMEOUT_MS)),
     ]);
-    return { status:"completed", result:{text:result.text,provider:result.provider,model:result.model,requestId:result.requestId} };
+    return {
+      status: "completed" as const,
+      result: { text: result.text, provider: result.provider, model: result.model, requestId: result.requestId },
+    };
   } catch (error) {
-    return { status:"failed", error:error instanceof Error ? error.message : String(error) };
+    return { status: "failed" as const, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-export async function processDurableAgents(maxWorkers=MAX_WORKERS) {
+async function refreshObjectiveRun(db: Sql, objectiveRunId: string) {
+  const rows = await db.query(
+    "SELECT status, COUNT(*)::int AS count FROM agent_tasks WHERE objective_run_id=$1 GROUP BY status",
+    [objectiveRunId],
+  );
+  const counts = new Map(rows.map((r: any) => [String(r.status), Number(r.count)]));
+  const total = [...counts.values()].reduce((a, b) => a + b, 0);
+  const completed = counts.get("completed") || 0;
+  const failed = counts.get("failed") || 0;
+  const running = counts.get("running") || 0;
+  const queued = counts.get("queued") || 0;
+  const status = total > 0 && completed + failed === total ? (failed > 0 ? "failed" : "completed") : "running";
+  await db.query(
+    "UPDATE objective_runs SET status=$2,updated_at=now(),completed_at=CASE WHEN $2 IN ('completed','failed') THEN now() ELSE completed_at END WHERE id=$1",
+    [objectiveRunId, status],
+  );
+  return { status, total, queued, running, completed, failed };
+}
+
+export async function processDurableAgents(maxWorkers = MAX_WORKERS) {
   const db = await getSql();
-  if (!db) return { durable:false, claimed:0, completed:0, failed:0 };
+  if (!db) return { durable: false, claimed: 0, completed: 0, failed: 0 };
 
   const limit = Math.max(1, Math.min(8, Number(maxWorkers || 4)));
   await db.query(
@@ -115,26 +166,34 @@ export async function processDurableAgents(maxWorkers=MAX_WORKERS) {
     [Math.ceil(STALE_MS / 1000)],
   );
 
-  const claimed:AgentTask[]=[];
-  for(let i=0;i<limit;i++){
-    const rows=await db.query(
-      "UPDATE agent_tasks t SET status='running',started_at=now(),error=NULL WHERE t.id=(SELECT c.id FROM agent_tasks c JOIN agent_registry r ON r.id=c.agent_id WHERE c.status='queued' AND r.enabled=true AND NOT EXISTS (SELECT 1 FROM agent_tasks a WHERE a.agent_id=c.agent_id AND a.status='running' GROUP BY a.agent_id HAVING COUNT(*)>=r.max_concurrency) ORDER BY c.created_at LIMIT 1) RETURNING t.*"
+  const claimed: AgentTask[] = [];
+  for (let i = 0; i < limit; i++) {
+    const rows = await db.query(
+      "UPDATE agent_tasks t SET status='running',started_at=now(),error=NULL WHERE t.id=(SELECT c.id FROM agent_tasks c JOIN agent_registry r ON r.id=c.agent_id WHERE c.status='queued' AND r.enabled=true AND NOT EXISTS (SELECT 1 FROM agent_tasks a WHERE a.agent_id=c.agent_id AND a.status='running' GROUP BY a.agent_id HAVING COUNT(*)>=r.max_concurrency) ORDER BY c.created_at LIMIT 1) RETURNING t.*",
     );
-    if(!rows.length)break;
+    if (!rows.length) break;
     claimed.push(taskFromRow(rows[0]));
   }
 
-  let completed=0, failed=0;
-  await Promise.all(claimed.map(async task=>{
-    const rows=await db.query("SELECT * FROM agent_registry WHERE id=$1 AND enabled=true",[task.agentId]);
-    if(!rows.length){
+  let completed = 0;
+  let failed = 0;
+  await Promise.all(claimed.map(async task => {
+    const rows = await db.query("SELECT * FROM agent_registry WHERE id=$1 AND enabled=true", [task.agentId]);
+    if (!rows.length) {
       failed++;
-      await db.query("UPDATE agent_tasks SET status='failed',error='Agent definition unavailable',finished_at=now() WHERE id=$1 AND status='running'",[task.id]);
+      await db.query("UPDATE agent_tasks SET status='failed',error='Agent definition unavailable',finished_at=now() WHERE id=$1 AND status='running'", [task.id]);
       return;
     }
-    const out=await execute(rows[0],task);
-    if(out.status==="completed")completed++; else failed++;
-    await db.query("UPDATE agent_tasks SET status=$1,result=$2::jsonb,error=$3,finished_at=now() WHERE id=$4 AND status='running'",[out.status,out.result?JSON.stringify(out.result):null,out.error||null,task.id]);
+    const out = await execute(rows[0], task);
+    if (out.status === "completed") completed++; else failed++;
+    await db.query(
+      "UPDATE agent_tasks SET status=$1,result=$2::jsonb,error=$3,finished_at=now() WHERE id=$4 AND status='running'",
+      [out.status, out.result ? JSON.stringify(out.result) : null, out.error || null, task.id],
+    );
+    const runRows = await db.query("SELECT objective_run_id FROM agent_tasks WHERE id=$1", [task.id]);
+    const objectiveRunId = runRows[0]?.objective_run_id;
+    if (objectiveRunId) await refreshObjectiveRun(db, String(objectiveRunId));
   }));
-  return { durable:true, claimed:claimed.length, completed, failed };
+
+  return { durable: true, claimed: claimed.length, completed, failed };
 }
