@@ -2075,18 +2075,18 @@ app.get("/api/autonomy/heartbeat", async (req, res) => {
   }
 });
 
-app.get("/api/autonomy/status", (_req, res) => res.json({ success: true, status: autonomy.status() }));
-app.get("/api/autonomy/goals", (_req, res) => res.json({ success: true, goals: autonomy.list() }));
-app.post("/api/autonomy/goals", (req, res) => {
-  try { res.status(201).json({ success: true, goal: autonomy.create(req.body || {}) }); }
+app.get("/api/autonomy/status", async (_req, res) => res.json({ success: true, status: await autonomy.status() }));
+app.get("/api/autonomy/goals", async (_req, res) => res.json({ success: true, goals: await autonomy.list() }));
+app.post("/api/autonomy/goals", async (req, res) => {
+  try { res.status(201).json({ success: true, goal: await autonomy.create(req.body || {}) }); }
   catch (err:any) { res.status(400).json({ success:false, error:err.message }); }
 });
 app.patch("/api/autonomy/goals/:id", (req, res) => {
-  const goal = autonomy.update(req.params.id, req.body || {});
+  const goal = await autonomy.update(req.params.id, req.body || {});
   if (!goal) return res.status(404).json({ success:false, error:"Goal not found" });
   res.json({ success:true, goal });
 });
-app.delete("/api/autonomy/goals/:id", (req, res) => res.json({ success:true, removed:autonomy.remove(req.params.id) }));
+app.delete("/api/autonomy/goals/:id", async (req, res) => res.json({ success:true, removed:await autonomy.remove(req.params.id) }));
 
 // ==========================================
 // Phase 6: Autonomous Agent Orchestration & Tool Execution API

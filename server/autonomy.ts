@@ -1,51 +1,31 @@
-import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import { jobQueue } from './queue';
-
-export type GoalStatus = 'active' | 'paused' | 'completed' | 'failed';
-export interface AutonomousGoal { id:string; name:string; objective:string; intervalMinutes:number; status:GoalStatus; autoApproveSafeTools:boolean; provider?:'gemini'|'ollama'|'agentrouter'; model?:string; nextRunAt:string; lastRunAt?:string; lastJobId?:string; consecutiveFailures:number; createdAt:string; updatedAt:string; }
-
-const DATA_DIR = process.env.AGENTSTATION_DATA_DIR || path.join(process.cwd(), 'data');
-const FILE = path.join(DATA_DIR, 'autonomy_goals.json');
-const TICK_MS = Number(process.env.AUTONOMY_TICK_MS || 15000);
-const MAX_CONCURRENCY = Number(process.env.AUTONOMY_MAX_CONCURRENCY || 2);
-
-class AutonomyScheduler {
- private goals: AutonomousGoal[]=[]; private timer?:NodeJS.Timeout;
- constructor(){
-  this.load();
-  jobQueue.on('completed', (job:any) => {
-    if (job.type !== 'autonomous_mission') return;
-    const goalId = job.payload?.goalId;
-    const goal = this.goals.find(g => g.id === goalId);
-    if (!goal) return;
-    goal.consecutiveFailures = 0;
-    goal.updatedAt = new Date().toISOString();
-    this.save();
-  });
-  jobQueue.on('failed', (job:any) => {
-    if (job.type !== 'autonomous_mission') return;
-    const goalId = job.payload?.goalId;
-    const goal = this.goals.find(g => g.id === goalId);
-    if (!goal) return;
-    goal.consecutiveFailures += 1;
-    if (goal.consecutiveFailures >= 3) goal.status = 'failed';
-    goal.updatedAt = new Date().toISOString();
-    this.save();
-  });
-}
- private load(){try{fs.mkdirSync(DATA_DIR,{recursive:true});if(fs.existsSync(FILE))this.goals=JSON.parse(fs.readFileSync(FILE,'utf8'));}catch(e){console.warn('[AUTONOMY] load failed:',(e as Error).message);this.goals=[];}}
- private save(){fs.mkdirSync(DATA_DIR,{recursive:true});const tmp=FILE+'.tmp';fs.writeFileSync(tmp,JSON.stringify(this.goals,null,2));fs.renameSync(tmp,FILE);}
- start(){if(process.env.AUTONOMY_ENABLED!=='true'||process.env.VERCEL==='1'||this.timer)return;this.tick();this.timer=setInterval(()=>this.tick(),TICK_MS);console.log('[AUTONOMY] scheduler started');}
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import { agentRouterChat } from "./agentRouter";
+export type GoalStatus="active"|"paused"|"completed"|"failed";
+export interface AutonomousGoal{id:string;name:string;objective:string;intervalMinutes:number;status:GoalStatus;autoApproveSafeTools:boolean;provider?:"gemini"|"ollama"|"agentrouter";model?:string;nextRunAt:string;lastRunAt?:string;lastJobId?:string;consecutiveFailures:number;createdAt:string;updatedAt:string;}
+type Sql=(strings:TemplateStringsArray,...values:any[])=>Promise<any[]>;
+let sql:Sql|null=null, init=false;
+async function getSql():Promise<Sql|null>{if(init)return sql;init=true;const url=(process.env.DATABASE_URL||process.env.POSTGRES_URL||process.env.NEON_DATABASE_URL||"").trim();if(!url)return null;try{const m=await import("@neondatabase/serverless");sql=m.neon(url) as Sql;return sql;}catch(e){console.warn("[AUTONOMY] Neon unavailable:",(e as Error).message);return null;}}
+const DATA_DIR=process.env.AGENTSTATION_DATA_DIR||path.join(process.cwd(),"data"),FILE=path.join(DATA_DIR,"autonomy_goals.json");
+const MAX_CONCURRENCY=Number(process.env.AUTONOMY_MAX_CONCURRENCY||2),TIMEOUT_MS=Number(process.env.AUTONOMY_EXECUTION_TIMEOUT_MS||45000);
+class AutonomyScheduler{
+ private goals:AutonomousGoal[]=[];private timer?:NodeJS.Timeout;
+ constructor(){this.load();}
+ private load(){try{fs.mkdirSync(DATA_DIR,{recursive:true});if(fs.existsSync(FILE))this.goals=JSON.parse(fs.readFileSync(FILE,"utf8"));}catch{this.goals=[];}}
+ private save(){fs.mkdirSync(DATA_DIR,{recursive:true});const t=FILE+".tmp";fs.writeFileSync(t,JSON.stringify(this.goals,null,2));fs.renameSync(t,FILE);}
+ private row(r:any):AutonomousGoal{return{id:r.id,name:r.name,objective:r.objective,intervalMinutes:Number(r.interval_minutes),status:r.status,autoApproveSafeTools:Boolean(r.auto_approve_safe_tools),provider:r.provider||undefined,model:r.model||undefined,nextRunAt:new Date(r.next_run_at).toISOString(),lastRunAt:r.last_run_at?new Date(r.last_run_at).toISOString():undefined,lastJobId:r.last_job_id||undefined,consecutiveFailures:Number(r.consecutive_failures||0),createdAt:new Date(r.created_at).toISOString(),updatedAt:new Date(r.updated_at).toISOString()};}
+ async start(){if(process.env.AUTONOMY_ENABLED!=="true"||process.env.VERCEL==="1"||this.timer)return;await this.tick();this.timer=setInterval(()=>void this.tick(),Number(process.env.AUTONOMY_TICK_MS||15000));}
  stop(){if(this.timer)clearInterval(this.timer);this.timer=undefined;}
- status(){return {enabled:process.env.AUTONOMY_ENABLED==='true'&&process.env.VERCEL!=='1',running:Boolean(this.timer),activeGoals:this.goals.filter(g=>g.status==='active').length,runningJobs:jobQueue.getStats().active,maxConcurrency:MAX_CONCURRENCY,heartbeatAt:new Date().toISOString()};}
- list(){return this.goals;}
- create(input:Partial<AutonomousGoal>){const now=new Date();const objective=(input.objective||'').trim();if(!objective)throw new Error('objective is required');const goal:AutonomousGoal={id:input.id||('goal-'+Date.now()+'-'+crypto.randomBytes(3).toString('hex')),name:input.name||'Autonomous Objective',objective,intervalMinutes:Math.max(1,Number(input.intervalMinutes||60)),status:'active',autoApproveSafeTools:input.autoApproveSafeTools!==false,provider:input.provider||'agentrouter',model:input.model,nextRunAt:new Date(now.getTime()+1000).toISOString(),consecutiveFailures:0,createdAt:now.toISOString(),updatedAt:now.toISOString()};this.goals.push(goal);this.save();return goal;}
- update(id:string,patch:Partial<AutonomousGoal>){const goal=this.goals.find(g=>g.id===id);if(!goal)return undefined;Object.assign(goal,patch,{updatedAt:new Date().toISOString()});this.save();return goal;}
- remove(id:string){const n=this.goals.length;this.goals=this.goals.filter(g=>g.id!==id);this.save();return this.goals.length<n;}
- public async tickOnce(){ await this.tick(); return this.status(); }
- private async tick(){const due=this.goals.filter(g=>g.status==='active'&&Date.parse(g.nextRunAt)<=Date.now());for(const goal of due){if(jobQueue.getStats().active>=MAX_CONCURRENCY)break;this.dispatch(goal);}}
- private dispatch(goal:AutonomousGoal){const job=jobQueue.enqueue('autonomous_mission',{goalId:goal.id,objective:goal.objective,autoApproveSafeTools:goal.autoApproveSafeTools,provider:goal.provider,model:goal.model},{maxAttempts:3});goal.lastJobId=job.id;goal.lastRunAt=new Date().toISOString();goal.nextRunAt=new Date(Date.now()+goal.intervalMinutes*60000).toISOString();goal.updatedAt=new Date().toISOString();this.save();}
+ async status(){const d=Boolean(await getSql()),gs=d?await this.list():this.goals;return{enabled:process.env.AUTONOMY_ENABLED==="true",durableStore:d,running:Boolean(this.timer),activeGoals:gs.filter(g=>g.status==="active").length,maxConcurrency:MAX_CONCURRENCY,heartbeatAt:new Date().toISOString()};}
+ async list(){const db=await getSql();if(db){const rows=await db`SELECT * FROM autonomy_goals ORDER BY created_at`;return rows.map((r:any)=>this.row(r));}return this.goals;}
+ async create(input:Partial<AutonomousGoal>){const objective=(input.objective||"").trim();if(!objective)throw new Error("objective is required");const now=new Date(),g:AutonomousGoal={id:input.id||"goal-"+Date.now()+"-"+crypto.randomBytes(3).toString("hex"),name:input.name||"Autonomous Objective",objective,intervalMinutes:Math.max(1,Number(input.intervalMinutes||60)),status:"active",autoApproveSafeTools:input.autoApproveSafeTools!==false,provider:input.provider||"agentrouter",model:input.model,nextRunAt:new Date(now.getTime()+1000).toISOString(),consecutiveFailures:0,createdAt:now.toISOString(),updatedAt:now.toISOString()};const db=await getSql();if(db){const rows=await db`INSERT INTO autonomy_goals(id,name,objective,interval_minutes,status,auto_approve_safe_tools,provider,model,next_run_at,created_at,updated_at) VALUES (${g.id},${g.name},${g.objective},${g.intervalMinutes},${g.status},${g.autoApproveSafeTools},${g.provider||null},${g.model||null},${g.nextRunAt},${g.createdAt},${g.updatedAt}) RETURNING *`;return this.row(rows[0]);}this.goals.push(g);this.save();return g;}
+ async update(id:string,patch:Partial<AutonomousGoal>){const db=await getSql();if(db){const old=(await db`SELECT * FROM autonomy_goals WHERE id=${id}`)[0];if(!old)return undefined;const g=this.row(old);Object.assign(g,patch,{updatedAt:new Date().toISOString()});const rows=await db`UPDATE autonomy_goals SET name=${g.name},objective=${g.objective},interval_minutes=${g.intervalMinutes},status=${g.status},auto_approve_safe_tools=${g.autoApproveSafeTools},provider=${g.provider||null},model=${g.model||null},next_run_at=${g.nextRunAt},updated_at=${g.updatedAt} WHERE id=${id} RETURNING *`;return this.row(rows[0]);}const g=this.goals.find(x=>x.id===id);if(!g)return undefined;Object.assign(g,patch,{updatedAt:new Date().toISOString()});this.save();return g;}
+ async remove(id:string){const db=await getSql();if(db)return(await db`DELETE FROM autonomy_goals WHERE id=${id} RETURNING id`).length>0;const n=this.goals.length;this.goals=this.goals.filter(g=>g.id!==id);this.save();return this.goals.length<n;}
+ async tickOnce(){await this.tick();return this.status();}
+ private async tick(){const db=await getSql();if(!db){for(const g of this.goals.filter(x=>x.status==="active"&&Date.parse(x.nextRunAt)<=Date.now()).slice(0,MAX_CONCURRENCY))await this.local(g);return;}const due=await db`SELECT * FROM autonomy_goals WHERE status='active' AND next_run_at<=now() ORDER BY next_run_at LIMIT ${MAX_CONCURRENCY}`;for(const r of due)await this.dispatch(this.row(r));}
+ private async dispatch(g:AutonomousGoal){const db=await getSql();if(!db)return;const jobId="job-"+Date.now()+"-"+crypto.randomBytes(4).toString("hex"),key=g.id+":"+g.nextRunAt;const ins=await db`INSERT INTO autonomy_jobs(id,goal_id,status,payload,max_attempts,idempotency_key) VALUES(${jobId},${g.id},'waiting',${JSON.stringify({goalId:g.id,objective:g.objective,provider:g.provider,model:g.model})}::jsonb,3,${key}) ON CONFLICT(idempotency_key) DO NOTHING RETURNING id`;if(!ins.length)return;const next=new Date(Date.now()+g.intervalMinutes*60000).toISOString();await db`UPDATE autonomy_goals SET last_job_id=${jobId},last_run_at=now(),next_run_at=${next},updated_at=now() WHERE id=${g.id} AND status='active'`;await this.run(jobId);}
+ private async run(jobId:string){const db=await getSql();if(!db)return;const lease=crypto.randomUUID();const claimed=await db`UPDATE autonomy_jobs SET status='active',attempt=attempt+1,lease_id=${lease},lease_expires_at=now()+(${Math.ceil(TIMEOUT_MS/1000)} || ' seconds')::interval,started_at=now() WHERE id=${jobId} AND status='waiting' RETURNING *`;if(!claimed.length)return;const j=claimed[0];try{const result=await Promise.race([agentRouterChat({model:j.payload?.model,user:j.payload?.objective,system:"You are AgentStation's bounded execution worker. Perform the objective safely and report only work actually completed."}),new Promise<never>((_,rej)=>setTimeout(()=>rej(new Error("Autonomy execution timeout")),TIMEOUT_MS))]);await db`UPDATE autonomy_jobs SET status='completed',progress=100,result=${JSON.stringify(result)}::jsonb,lease_id=NULL,lease_expires_at=NULL,finished_at=now() WHERE id=${jobId} AND lease_id=${lease}`;await db`UPDATE autonomy_goals SET consecutive_failures=0,updated_at=now() WHERE id=${j.goal_id}`;await db`INSERT INTO autonomy_usage(job_id,provider,route,metadata) VALUES(${jobId},${result.provider||"agentrouter"},${result.model||null},${JSON.stringify({requestId:result.requestId})}::jsonb)`;}catch(e){const msg=(e as Error).message,retry=Number(j.attempt)<Number(j.max_attempts);await db`UPDATE autonomy_jobs SET status=${retry?"waiting":"failed"},error=${msg},lease_id=NULL,lease_expires_at=NULL,finished_at=${retry?null:new Date().toISOString()} WHERE id=${jobId} AND lease_id=${lease}`;await db`UPDATE autonomy_goals SET consecutive_failures=consecutive_failures+1,status=CASE WHEN consecutive_failures+1>=3 THEN 'failed' ELSE status END,updated_at=now() WHERE id=${j.goal_id}`;}}
+ private async local(g:AutonomousGoal){try{await agentRouterChat({model:g.model,user:g.objective,system:"You are AgentStation's bounded execution worker. Perform the objective safely and report only work actually completed."});g.lastJobId="local-"+Date.now();g.lastRunAt=new Date().toISOString();g.nextRunAt=new Date(Date.now()+g.intervalMinutes*60000).toISOString();g.consecutiveFailures=0;g.updatedAt=new Date().toISOString();this.save();}catch(e){g.consecutiveFailures++;if(g.consecutiveFailures>=3)g.status="failed";g.updatedAt=new Date().toISOString();this.save();throw e;}}
 }
 export const autonomy=new AutonomyScheduler();
