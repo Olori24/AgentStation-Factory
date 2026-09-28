@@ -2059,8 +2059,11 @@ app.get("/api/agentrouter/usage", async (req, res) => {
 
 app.get("/api/autonomy/heartbeat", async (req, res) => {
   const configuredSecret = process.env.CRON_SECRET?.trim();
-  const supplied = String(req.headers["x-cron-secret"] || "").trim();
-  if (!configuredSecret || supplied !== configuredSecret) {
+  const authorization = String(req.headers.authorization || "").trim();
+  const suppliedSecret = authorization.startsWith("Bearer ")
+    ? authorization.slice(7).trim()
+    : "";
+  if (!configuredSecret || suppliedSecret !== configuredSecret) {
     return res.status(401).json({ success: false, error: "Unauthorized heartbeat" });
   }
   try {
