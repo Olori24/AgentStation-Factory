@@ -11,3 +11,9 @@ create table if not exists objective_runs (
 );
 create index if not exists objective_runs_template_idx on objective_runs (template_id, created_at);
 create index if not exists objective_runs_mission_idx on objective_runs (mission_id, created_at);
+create index if not exists objective_runs_status_idx on objective_runs (status, updated_at);
+
+alter table if exists agent_tasks
+  add column if not exists objective_run_id text;
+create index if not exists agent_tasks_objective_run_idx
+  on agent_tasks (objective_run_id, created_at);
