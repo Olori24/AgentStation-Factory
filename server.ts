@@ -2088,6 +2088,24 @@ app.patch("/api/autonomy/goals/:id", async (req, res) => {
   res.json({ success:true, goal });
 });
 app.delete("/api/autonomy/goals/:id", async (req, res) => res.json({ success:true, removed:await autonomy.remove(req.params.id) }));
+app.get("/api/agents", (_req, res) => {
+  res.json({ success: true, agents: listAgents() });
+});
+
+app.get("/api/agents/tasks", (req, res) => {
+  const missionId = typeof req.query.missionId === "string" ? req.query.missionId : undefined;
+  res.json({ success: true, tasks: listTasks(missionId) });
+});
+
+app.post("/api/agents/dispatch", async (req, res) => {
+  try {
+    const result = await dispatchAgents(req.body || {});
+    res.status(202).json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 
 // ==========================================
 // Phase 6: Autonomous Agent Orchestration & Tool Execution API
