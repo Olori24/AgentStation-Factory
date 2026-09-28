@@ -19,6 +19,7 @@ import { ToolExecutionEngine, TOOL_DEFINITIONS } from "./server/tools";
 import { growthRouter } from "./server/growthFactory";
 import { autonomy } from "./server/autonomy";
 import { listAgents, listTasks, dispatchAgents } from "./server/multiAgent";
+import { listDurableAgents, listDurableTasks, enqueueDurableAgents } from "./server/durableMultiAgent";
 import { getAgentRouterConfigStatus, agentRouterWallet, agentRouterUsage } from "./server/agentRouter";
 
 dotenv.config();
@@ -2088,19 +2089,22 @@ app.patch("/api/autonomy/goals/:id", async (req, res) => {
   res.json({ success:true, goal });
 });
 app.delete("/api/autonomy/goals/:id", async (req, res) => res.json({ success:true, removed:await autonomy.remove(req.params.id) }));
-app.get("/api/agents", (_req, res) => {
-  res.json({ success: true, agents: listAgents() });
+app.get("/api/agents", async (_req, res) => {
+  const durable = await listDurableAgents();
+  res.json({ success: true, agents: durable || await listAgents() });
 });
 
-app.get("/api/agents/tasks", (req, res) => {
+app.get("/api/agents/tasks", async (req, res) => {
   const missionId = typeof req.query.missionId === "string" ? req.query.missionId : undefined;
-  res.json({ success: true, tasks: listTasks(missionId) });
+  const durable = await listDurableTasks(missionId);
+  res.json({ success: true, tasks: durable || await listTasks(missionId) });
 });
 
 app.post("/api/agents/dispatch", async (req, res) => {
   try {
-    const result = await dispatchAgents(req.body || {});
-    res.status(202).json({ success: true, ...result });
+    const durable = await enqueueDurableAgents(req.body || {});
+    const result = durable || await dispatchAgents(req.body || {});
+    res.status(202).json({ success: true, durable: Boolean(durable), ...result });
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message });
   }
