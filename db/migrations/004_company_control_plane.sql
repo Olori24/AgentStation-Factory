@@ -1,0 +1,7 @@
+create table if not exists companies(id text primary key,name text not null,description text not null default '',mission text not null default '',monthly_budget numeric not null default 0,spent_budget numeric not null default 0,governance jsonb not null default '{}'::jsonb,created_at timestamptz not null default now(),updated_at timestamptz not null default now());
+create table if not exists missions(id text primary key,company_id text not null references companies(id) on delete cascade,name text not null,objective text not null,status text not null default 'queued' check(status in ('queued','running','paused','completed','failed','cancelled')),success_criteria text not null default '',budget numeric not null default 0,metadata jsonb not null default '{}'::jsonb,created_at timestamptz not null default now(),started_at timestamptz,completed_at timestamptz,updated_at timestamptz not null default now());
+create index if not exists missions_company_idx on missions(company_id,created_at);
+alter table if exists objective_runs add column if not exists evidence jsonb not null default '[]'::jsonb;
+alter table if exists objective_runs add column if not exists metrics jsonb not null default '{}'::jsonb;
+alter table if exists objective_runs add column if not exists next_action text;
+alter table if exists agent_tasks add column if not exists skill_ids jsonb not null default '[]'::jsonb;

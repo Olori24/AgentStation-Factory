@@ -21,6 +21,8 @@ import { autonomy } from "./server/autonomy";
 import { listAgents, listTasks, dispatchAgents } from "./server/multiAgent";
 import { listDurableAgents, listDurableTasks, enqueueDurableAgents } from "./server/durableMultiAgent";
 import { getAgentRouterConfigStatus, agentRouterWallet, agentRouterUsage } from "./server/agentRouter";
+import { listSkills, getSkill, resolveSkills } from "./server/skillRegistry";
+import { listCompanies, createCompany, listMissions, createMission, getMission, startMission } from "./server/companyControlPlane";
 
 dotenv.config();
 
@@ -2089,6 +2091,17 @@ app.patch("/api/autonomy/goals/:id", async (req, res) => {
   res.json({ success:true, goal });
 });
 app.delete("/api/autonomy/goals/:id", async (req, res) => res.json({ success:true, removed:await autonomy.remove(req.params.id) }));
+
+app.get("/api/skills", (_req,res)=>res.json({success:true,skills:listSkills()}));
+app.get("/api/skills/:id", (req,res)=>{const skill=getSkill(req.params.id);if(!skill)return res.status(404).json({success:false,error:"Skill not found"});res.json({success:true,skill});});
+app.post("/api/skills/resolve", (req,res)=>{const ids=Array.isArray(req.body?.skillIds)?req.body.skillIds:[];const x=resolveSkills(ids);res.status(x.missing.length?400:200).json({success:x.missing.length===0,...x});});
+app.get("/api/companies", async (_req,res)=>{const x=await listCompanies();if(!x)return res.status(503).json({success:false,error:"Durable database unavailable"});res.json({success:true,companies:x});});
+app.post("/api/companies", async (req,res)=>{try{const x=await createCompany(req.body||{});if(!x)return res.status(503).json({success:false,error:"Durable database unavailable"});res.status(201).json({success:true,company:x});}catch(e:any){res.status(400).json({success:false,error:e.message});}});
+app.get("/api/missions", async (req,res)=>{const x=await listMissions(typeof req.query.companyId==="string"?req.query.companyId:undefined);if(!x)return res.status(503).json({success:false,error:"Durable database unavailable"});res.json({success:true,missions:x});});
+app.post("/api/missions", async (req,res)=>{try{const x=await createMission(req.body||{});if(!x)return res.status(503).json({success:false,error:"Durable database unavailable"});res.status(201).json({success:true,mission:x});}catch(e:any){res.status(400).json({success:false,error:e.message});}});
+app.get("/api/missions/:id", async (req,res)=>{const x=await getMission(req.params.id);if(!x)return res.status(404).json({success:false,error:"Mission not found"});res.json({success:true,mission:x});});
+app.post("/api/missions/:id/start", async (req,res)=>{const x=await startMission(req.params.id);if(!x)return res.status(404).json({success:false,error:"Mission not found"});res.json({success:true,mission:x});});
+
 app.get("/api/agents", async (_req, res) => {
   const durable = await listDurableAgents();
   res.json({ success: true, agents: durable || await listAgents() });

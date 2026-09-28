@@ -5,7 +5,7 @@ export interface ObjectiveTemplate {
   description: string;
   outcome: string;
   inputs: string[];
-  tasks: Array<{ agentId: string; objective: string }>;
+  tasks: Array<{ agentId: string; objective: string; skillIds?: string[] }>;
 }
 
 const templates: ObjectiveTemplate[] = [
@@ -17,9 +17,9 @@ const templates: ObjectiveTemplate[] = [
     outcome: "A verified prospect list with evidence of fit, outreach angles and next actions.",
     inputs: ["offer", "idealCustomer", "market", "leadCount"],
     tasks: [
-      { agentId: "researcher", objective: "Research {{leadCount}} potential {{idealCustomer}} prospects in {{market}} for this offer: {{offer}}. Capture public evidence of fit and exclude weak matches." },
-      { agentId: "architect", objective: "Define a qualification rubric for {{idealCustomer}} prospects buying {{offer}}. Score prospects using explicit evidence and identify the strongest segments." },
-      { agentId: "documenter", objective: "Turn verified prospect findings into an actionable sales brief for {{offer}}, including evidence, personalization angles and next steps. Do not invent facts." }
+      { agentId: "researcher", skillIds: ["research"], objective: "Research {{leadCount}} potential {{idealCustomer}} prospects in {{market}} for this offer: {{offer}}. Capture public evidence of fit and exclude weak matches." },
+      { agentId: "architect", skillIds: ["software-delivery"], objective: "Define a qualification rubric for {{idealCustomer}} prospects buying {{offer}}. Score prospects using explicit evidence and identify the strongest segments." },
+      { agentId: "documenter", skillIds: ["research"], objective: "Turn verified prospect findings into an actionable sales brief for {{offer}}, including evidence, personalization angles and next steps. Do not invent facts." }
     ]
   },
   {
@@ -30,9 +30,9 @@ const templates: ObjectiveTemplate[] = [
     outcome: "Qualification rules, outreach sequence, booking workflow and handoff criteria.",
     inputs: ["offer", "targetMarket", "meetingType", "capacity"],
     tasks: [
-      { agentId: "researcher", objective: "Identify high-fit prospect characteristics for {{offer}} in {{targetMarket}} and produce a qualification checklist." },
-      { agentId: "architect", objective: "Design an appointment-setting workflow for {{offer}} with qualification, routing, follow-up, booking and no-response states. Meeting type: {{meetingType}}. Capacity: {{capacity}}." },
-      { agentId: "documenter", objective: "Create factual outreach and follow-up templates for the appointment workflow, with clear stop conditions." }
+      { agentId: "researcher", skillIds: ["research"], objective: "Identify high-fit prospect characteristics for {{offer}} in {{targetMarket}} and produce a qualification checklist." },
+      { agentId: "architect", skillIds: ["software-delivery"], objective: "Design an appointment-setting workflow for {{offer}} with qualification, routing, follow-up, booking and no-response states. Meeting type: {{meetingType}}. Capacity: {{capacity}}." },
+      { agentId: "documenter", skillIds: ["research"], objective: "Create factual outreach and follow-up templates for the appointment workflow, with clear stop conditions." }
     ]
   },
   {
@@ -43,10 +43,10 @@ const templates: ObjectiveTemplate[] = [
     outcome: "Prioritized automation opportunities with impact, dependencies, risks and implementation plan.",
     inputs: ["businessType", "workflowDescription", "tools"],
     tasks: [
-      { agentId: "researcher", objective: "Analyze this {{businessType}} workflow: {{workflowDescription}}. Identify repetitive steps, bottlenecks, manual handoffs, failure points and duplicated data." },
-      { agentId: "architect", objective: "Design provider-neutral automation architectures for the highest-impact opportunities using {{tools}}. Include triggers, actions, retries, human approvals and rollback paths." },
-      { agentId: "qa", objective: "Threat-model the proposed automation for {{businessType}}. Identify data, permission, reliability and operational risks and define acceptance tests." },
-      { agentId: "documenter", objective: "Produce an implementation-ready automation audit with prioritized opportunities, assumptions, dependencies, acceptance criteria and next actions." }
+      { agentId: "researcher", skillIds: ["research"], objective: "Analyze this {{businessType}} workflow: {{workflowDescription}}. Identify repetitive steps, bottlenecks, manual handoffs, failure points and duplicated data." },
+      { agentId: "architect", skillIds: ["software-delivery"], objective: "Design provider-neutral automation architectures for the highest-impact opportunities using {{tools}}. Include triggers, actions, retries, human approvals and rollback paths." },
+      { agentId: "qa", skillIds: ["quality-gate"], objective: "Threat-model the proposed automation for {{businessType}}. Identify data, permission, reliability and operational risks and define acceptance tests." },
+      { agentId: "documenter", skillIds: ["research"], objective: "Produce an implementation-ready automation audit with prioritized opportunities, assumptions, dependencies, acceptance criteria and next actions." }
     ]
   },
   {
@@ -57,9 +57,9 @@ const templates: ObjectiveTemplate[] = [
     outcome: "Competitor matrix, evidence, uncertainties, positioning hypotheses and experiments.",
     inputs: ["company", "market", "competitors"],
     tasks: [
-      { agentId: "researcher", objective: "Research {{competitors}} for {{company}} in {{market}}. Compare publicly documented offers, positioning, pricing signals, channels and customer-facing claims. Separate evidence from inference." },
-      { agentId: "architect", objective: "Turn competitor evidence into a positioning test plan for {{company}}. Define hypotheses, evidence needed and measurable experiments." },
-      { agentId: "documenter", objective: "Create an executive competitor brief for {{company}} with source-backed findings, uncertainties and concrete experiments." }
+      { agentId: "researcher", skillIds: ["research"], objective: "Research {{competitors}} for {{company}} in {{market}}. Compare publicly documented offers, positioning, pricing signals, channels and customer-facing claims. Separate evidence from inference." },
+      { agentId: "architect", skillIds: ["software-delivery"], objective: "Turn competitor evidence into a positioning test plan for {{company}}. Define hypotheses, evidence needed and measurable experiments." },
+      { agentId: "documenter", skillIds: ["research"], objective: "Create an executive competitor brief for {{company}} with source-backed findings, uncertainties and concrete experiments." }
     ]
   },
   {
@@ -70,9 +70,9 @@ const templates: ObjectiveTemplate[] = [
     outcome: "Campaign strategy, content queue, CTA variants and measurement plan.",
     inputs: ["offer", "audience", "platforms", "campaignGoal"],
     tasks: [
-      { agentId: "researcher", objective: "Research audience pain points and content opportunities for {{offer}} targeting {{audience}} on {{platforms}}. Distinguish evidence from assumptions." },
-      { agentId: "architect", objective: "Design a campaign around {{campaignGoal}} with content pillars, funnel stages, cadence, CTA strategy and measurable KPIs." },
-      { agentId: "documenter", objective: "Produce a production-ready content queue for {{offer}}, including hooks, formats, CTA variants and measurement fields." }
+      { agentId: "researcher", skillIds: ["research"], objective: "Research audience pain points and content opportunities for {{offer}} targeting {{audience}} on {{platforms}}. Distinguish evidence from assumptions." },
+      { agentId: "architect", skillIds: ["software-delivery"], objective: "Design a campaign around {{campaignGoal}} with content pillars, funnel stages, cadence, CTA strategy and measurable KPIs." },
+      { agentId: "documenter", skillIds: ["research"], objective: "Produce a production-ready content queue for {{offer}}, including hooks, formats, CTA variants and measurement fields." }
     ]
   },
   {
@@ -83,10 +83,10 @@ const templates: ObjectiveTemplate[] = [
     outcome: "Architecture, implementation breakdown, risk-based tests and release checklist.",
     inputs: ["feature", "stack", "constraints"],
     tasks: [
-      { agentId: "architect", objective: "Decompose this feature into a production-ready architecture and implementation plan. Feature: {{feature}}. Stack: {{stack}}. Constraints: {{constraints}}." },
-      { agentId: "engineer", objective: "Create the code-level work breakdown for {{feature}} using {{stack}}. Include interfaces, migrations, failure handling and verification steps." },
-      { agentId: "qa", objective: "Create a risk-based test plan for {{feature}}, covering unit, integration, API, security, regression and production-readiness checks." },
-      { agentId: "documenter", objective: "Create the release checklist and technical handoff for {{feature}}. Mark pending verification explicitly." }
+      { agentId: "architect", skillIds: ["software-delivery"], objective: "Decompose this feature into a production-ready architecture and implementation plan. Feature: {{feature}}. Stack: {{stack}}. Constraints: {{constraints}}." },
+      { agentId: "engineer", skillIds: ["software-delivery"], objective: "Create the code-level work breakdown for {{feature}} using {{stack}}. Include interfaces, migrations, failure handling and verification steps." },
+      { agentId: "qa", skillIds: ["quality-gate"], objective: "Create a risk-based test plan for {{feature}}, covering unit, integration, API, security, regression and production-readiness checks." },
+      { agentId: "documenter", skillIds: ["research"], objective: "Create the release checklist and technical handoff for {{feature}}. Mark pending verification explicitly." }
     ]
   },
   {
@@ -97,10 +97,10 @@ const templates: ObjectiveTemplate[] = [
     outcome: "Evidence-backed hypotheses, containment plan, remediation plan and verification criteria.",
     inputs: ["incident", "environment", "recentChanges"],
     tasks: [
-      { agentId: "researcher", objective: "Investigate {{incident}} in {{environment}} using recent changes {{recentChanges}}. Produce evidence-based hypotheses and label uncertainty." },
-      { agentId: "architect", objective: "Design a safe remediation plan for {{incident}}, including containment, diagnosis, rollback options, recovery and prevention." },
-      { agentId: "qa", objective: "Define reproducible verification tests proving whether the remediation resolves {{incident}} without regressions." },
-      { agentId: "documenter", objective: "Prepare an incident report structure covering timeline, evidence, confirmed cause, remediation, verification and follow-up actions." }
+      { agentId: "researcher", skillIds: ["research"], objective: "Investigate {{incident}} in {{environment}} using recent changes {{recentChanges}}. Produce evidence-based hypotheses and label uncertainty." },
+      { agentId: "architect", skillIds: ["software-delivery"], objective: "Design a safe remediation plan for {{incident}}, including containment, diagnosis, rollback options, recovery and prevention." },
+      { agentId: "qa", skillIds: ["quality-gate"], objective: "Define reproducible verification tests proving whether the remediation resolves {{incident}} without regressions." },
+      { agentId: "documenter", skillIds: ["research"], objective: "Prepare an incident report structure covering timeline, evidence, confirmed cause, remediation, verification and follow-up actions." }
     ]
   }
 ];
