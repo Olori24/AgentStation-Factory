@@ -2081,7 +2081,7 @@ app.post("/api/autonomy/goals", async (req, res) => {
   try { res.status(201).json({ success: true, goal: await autonomy.create(req.body || {}) }); }
   catch (err:any) { res.status(400).json({ success:false, error:err.message }); }
 });
-app.patch("/api/autonomy/goals/:id", (req, res) => {
+app.patch("/api/autonomy/goals/:id", async (req, res) => {
   const goal = await autonomy.update(req.params.id, req.body || {});
   if (!goal) return res.status(404).json({ success:false, error:"Goal not found" });
   res.json({ success:true, goal });
