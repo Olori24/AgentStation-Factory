@@ -1,0 +1,23 @@
+name: AgentStation Autonomy Heartbeat
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: autonomy-heartbeat
+  cancel-in-progress: true
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger autonomy worker
+        env:
+          AGENTSTATION_URL: ${{ secrets.AGENTSTATION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$AGENTSTATION_URL" || { echo "AGENTSTATION_URL secret is required"; exit 1; }
+          test -n "$CRON_SECRET" || { echo "CRON_SECRET secret is required"; exit 1; }
+          curl --fail-with-body --silent --show-error             -H "Authorization: Bearer $CRON_SECRET"             "$AGENTSTATION_URL/api/autonomy/heartbeat"
