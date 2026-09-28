@@ -401,3 +401,6 @@ Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information
 <div align="center">
 <sub>Engineered with precision for autonomous AI workflows. AgentStation © 2026.</sub>
 </div>
+
+
+<!-- deployment trigger: 2026-09-28 durable-autonomy runtime -->
