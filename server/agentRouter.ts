@@ -67,17 +67,40 @@ export function getAgentRouterConfigStatus() {
 
 export async function agentRouterChat(options: AgentRouterChatOptions): Promise<AgentRouterChatResult> {
   const requestId = crypto.randomUUID();
-  const body = await request("/domains/models/capabilities/chat/execute", {
+  const model = options.model || process.env.AGENTIC_MODEL;
+  const input = {
+    ...(model ? { model } : {}),
+    messages: [
+      ...(options.system ? [{ role: "system", content: options.system }] : []),
+      { role: "user", content: options.user },
+    ],
+    temperature: options.temperature ?? 0.2,
+    max_tokens: options.maxTokens ?? 4000,
+    requestId,
+  };
+
+  const recommendation = await request("/domains/models/capabilities/chat-complete/recommend", {
     method: "POST",
     body: JSON.stringify({
-      model: options.model || process.env.AGENTIC_MODEL || "gpt-5-mini",
-      messages: [
-        ...(options.system ? [{ role: "system", content: options.system }] : []),
-        { role: "user", content: options.user },
-      ],
-      temperature: options.temperature ?? 0.2,
-      max_tokens: options.maxTokens ?? 4000,
-      requestId,
+      agentName: "AgentStation",
+      optimizationPreferences: ["cost", "quality"],
+      tracking: true,
+      input,
+    }),
+  });
+
+  if (recommendation?.canExecuteNow === false) {
+    throw new Error(
+      `AgentRouter route unavailable: ${(recommendation?.blockingRequirements || []).join(", ") || "no executable route"}`
+    );
+  }
+
+  const body = await request("/domains/models/capabilities/chat-complete/execute", {
+    method: "POST",
+    body: JSON.stringify({
+      ...input,
+      routeKey: recommendation?.recommendedRouteKey,
+      provider: recommendation?.recommendedProvider,
       allowFallback: true,
     }),
   });
@@ -90,16 +113,14 @@ export async function agentRouterChat(options: AgentRouterChatOptions): Promise<
     body?.result?.output_text ??
     "";
 
-  if (!String(text).trim()) {
-    throw new Error("AgentRouter returned no text content");
-  }
+  if (!String(text).trim()) throw new Error("AgentRouter returned no text content");
 
   return {
     text: String(text),
     raw: body,
     requestId,
-    provider: body?.provider || body?.route?.provider,
-    model: body?.model || options.model,
+    provider: body?.provider || body?.route?.provider || recommendation?.recommendedProvider,
+    model: body?.model || model,
   };
 }
 
