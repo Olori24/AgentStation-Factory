@@ -66,7 +66,7 @@ export async function enqueueDurableAgents(input: {
   const expanded = input.templateId
     ? instantiateObjectiveTemplate(String(input.templateId), input.variables || {})
     : null;
-  const tasks = expanded?.tasks || input.tasks || [];
+  const tasks: Array<{ agentId: string; objective: string; skillIds?: string[] }> = expanded?.tasks || input.tasks || [];
   if (!Array.isArray(tasks) || tasks.length === 0) throw new Error("tasks must contain at least one agent task");
   if (tasks.length > MAX_TASKS) throw new Error("maximum 8 parallel agents per dispatch");
 
