@@ -18,6 +18,7 @@ import { AgentOrchestrator } from "./server/orchestrator";
 import { ToolExecutionEngine, TOOL_DEFINITIONS } from "./server/tools";
 import { growthRouter } from "./server/growthFactory";
 import { autonomy } from "./server/autonomy";
+import { getAgentRouterConfigStatus, agentRouterWallet, agentRouterUsage } from "./server/agentRouter";
 
 dotenv.config();
 
@@ -2033,6 +2034,29 @@ app.get("/api/artifacts/download/:id", (req, res) => {
 // ==========================================
 // Persistent 24/7 Autonomy Control Plane
 // ==========================================
+app.get("/api/agentrouter/status", (_req, res) => {
+  res.json({ success: true, provider: "agentrouter", ...getAgentRouterConfigStatus() });
+});
+
+app.get("/api/agentrouter/wallet", async (_req, res) => {
+  try {
+    const wallet = await agentRouterWallet();
+    res.json({ success: true, wallet });
+  } catch (err: any) {
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/agentrouter/usage", async (req, res) => {
+  try {
+    const limit = Number(req.query.limit || 20);
+    const usage = await agentRouterUsage(Number.isFinite(limit) ? limit : 20);
+    res.json({ success: true, usage });
+  } catch (err: any) {
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
 app.get("/api/autonomy/status", (_req, res) => res.json({ success: true, status: autonomy.status() }));
 app.get("/api/autonomy/goals", (_req, res) => res.json({ success: true, goals: autonomy.list() }));
 app.post("/api/autonomy/goals", (req, res) => {
