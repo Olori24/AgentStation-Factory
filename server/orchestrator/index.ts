@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { db, SubtaskRecord, DbMissionRecord } from '../db';
 import { ToolExecutionEngine, TOOL_DEFINITIONS } from '../tools';
 import { streaming } from '../streaming';
+import { agentRouterChat, isAgentRouterConfigured } from '../agentRouter';
 
 export interface PlanResult {
   missionId: string;
@@ -13,7 +14,7 @@ export interface PlanResult {
 
 export interface ExecutionOptions {
   autoApproveSafeTools?: boolean;
-  provider?: 'gemini' | 'ollama';
+  provider?: 'gemini' | 'ollama' | 'agentrouter';
   model?: string;
 }
 
@@ -43,8 +44,39 @@ export class AgentOrchestrator {
     const now = new Date().toISOString();
     let subtasks: SubtaskRecord[] = [];
 
+    if (isAgentRouterConfigured()) {
+      try {
+        const planningPrompt = `You are Atlas, Lead AI Systems Architect for AgentStation.
+A user submitted this task: "${prompt}"
+
+Decompose this objective into 4 to 5 concrete subtasks. Each subtask must have an order, title, description, agentRole, toolName, and requiresApproval boolean. Available roles: architect, researcher, developer, qa, creative, video_producer, system. Available tools: web_search, web_fetch, file_write, file_read, file_patch, code_execute, test_runner, document_generate, artifact_bundle.
+
+Return ONLY valid JSON: {"summary":"...","subtasks":[{"order":1,"title":"...","description":"...","agentRole":"developer","toolName":"file_write","requiresApproval":false}]}`;
+        const routed = await agentRouterChat({
+          system: "Return strict JSON only. Do not use markdown fences.",
+          user: planningPrompt,
+          model: process.env.AGENTIC_MODEL,
+          temperature: 0.1,
+          maxTokens: 3000,
+        });
+        const cleanJson = routed.text.replace(/^\\s*```(?:json)?\\s*/i, "").replace(/\\s*```\\s*$/i, "").trim();
+        const parsed = JSON.parse(cleanJson);
+        if (Array.isArray(parsed.subtasks) && parsed.subtasks.length > 0) {
+          subtasks = parsed.subtasks.slice(0, 5).map((st: any, idx: number) => ({
+            id: `subtask-${missionId}-${idx + 1}`, missionId, order: idx + 1,
+            title: st.title || `Task step ${idx + 1}`, description: st.description || "",
+            agentRole: st.agentRole || "developer", toolName: st.toolName,
+            status: "pending" as const, requiresApproval: Boolean(st.requiresApproval), retries: 0, maxRetries: 2,
+            createdAt: now, updatedAt: now,
+          }));
+        }
+      } catch (err: any) {
+        console.warn("[Orchestrator] AgentRouter planning failed; falling back:", err.message);
+      }
+    }
+
     const ai = this.getGeminiClient();
-    if (ai) {
+    if (subtasks.length === 0 && ai) {
       try {
         const planningPrompt = `You are Atlas, Lead AI Systems Architect for an autonomous multi-agent engineering platform.
 A user submitted this task: "${prompt}"
