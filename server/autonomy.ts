@@ -2,6 +2,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { agentRouterChat } from "./agentRouter";
+import { processDurableAgents } from "./durableMultiAgent";
 
 export type GoalStatus = "active" | "paused" | "completed" | "failed";
 export interface AutonomousGoal {
@@ -184,6 +185,8 @@ class AutonomyScheduler {
 
     const due = await db`SELECT * FROM autonomy_goals WHERE status='active' AND next_run_at <= now() ORDER BY next_run_at LIMIT ${MAX_CONCURRENCY}`;
     for (const r of due) await this.dispatch(this.row(r));
+
+    await processDurableAgents();
   }
 
   private async dispatch(g: AutonomousGoal) {
