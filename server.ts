@@ -2057,6 +2057,21 @@ app.get("/api/agentrouter/usage", async (req, res) => {
   }
 });
 
+app.get("/api/autonomy/heartbeat", async (req, res) => {
+  const configuredSecret = process.env.CRON_SECRET?.trim();
+  const supplied = String(req.headers["x-cron-secret"] || "").trim();
+  if (!configuredSecret || supplied !== configuredSecret) {
+    return res.status(401).json({ success: false, error: "Unauthorized heartbeat" });
+  }
+  try {
+    const status = await autonomy.tickOnce();
+    res.json({ success: true, status, timestamp: new Date().toISOString() });
+  } catch (err: any) {
+    console.error("[AUTONOMY] heartbeat failed:", err);
+    res.status(500).json({ success: false, error: err.message || "Heartbeat failed" });
+  }
+});
+
 app.get("/api/autonomy/status", (_req, res) => res.json({ success: true, status: autonomy.status() }));
 app.get("/api/autonomy/goals", (_req, res) => res.json({ success: true, goals: autonomy.list() }));
 app.post("/api/autonomy/goals", (req, res) => {
