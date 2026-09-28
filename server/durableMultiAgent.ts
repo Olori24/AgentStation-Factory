@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { agentRouterChat } from "./agentRouter";
 import type { AgentTask } from "./multiAgent";
+import { instantiateObjectiveTemplate } from "./objectiveTemplates";
 
 type Sql = { query: <T = any>(text: string, params?: any[]) => Promise<T[]> };
 let sql: Sql | null = null;
@@ -59,17 +60,23 @@ export async function listDurableTasks(missionId?: string) {
 
 export async function enqueueDurableAgents(input: {
   missionId?: string;
-  tasks: Array<{ agentId: string; objective: string }>;
+  tasks?: Array<{ agentId: string; objective: string }>;
+  templateId?: string;
+  variables?: Record<string, unknown>;
 }) {
-  if (!Array.isArray(input.tasks) || input.tasks.length === 0) throw new Error("tasks must contain at least one agent task");
-  if (input.tasks.length > MAX_TASKS) throw new Error("maximum 8 parallel agents per dispatch");
+  const expanded = input.templateId
+    ? instantiateObjectiveTemplate(String(input.templateId), input.variables || {})
+    : null;
+  const tasks = expanded?.tasks || input.tasks || [];
+  if (!Array.isArray(tasks) || input.tasks.length === 0) throw new Error("tasks must contain at least one agent task");
+  if (tasks.length > MAX_TASKS) throw new Error("maximum 8 parallel agents per dispatch");
 
   const db = await getSql();
   if (!db) return null;
 
-  const agents = await db.query("SELECT id, enabled FROM agent_registry WHERE id = ANY($1::text[])", [input.tasks.map(t => t.agentId)]);
+  const agents = await db.query("SELECT id, enabled FROM agent_registry WHERE id = ANY($1::text[])", [tasks.map(t => t.agentId)]);
   const available = new Set(agents.filter((a:any) => a.enabled).map((a:any) => String(a.id)));
-  for (const task of input.tasks) {
+  for (const task of tasks) {
     if (!available.has(task.agentId)) throw new Error("Agent unavailable: " + task.agentId);
     if (!String(task.objective || "").trim()) throw new Error("Objective required for " + task.agentId);
   }
@@ -83,7 +90,7 @@ export async function enqueueDurableAgents(input: {
     );
     created.push(taskFromRow(rows[0]));
   }
-  return { count: created.length, queued: created.length, completed: 0, failed: 0, tasks: created };
+  return { count: created.length, queued: created.length, completed: 0, failed: 0, tasks: created, objective: expanded ? { templateId: expanded.templateId, name: expanded.name, outcome: expanded.outcome } : undefined };
 }
 
 async function execute(agent:any, task:AgentTask) {
