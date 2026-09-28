@@ -1,0 +1,11 @@
+create table if not exists agent_registry (id text primary key,name text not null,role text not null,provider text not null default 'agentrouter',model text,capabilities jsonb not null default '[]'::jsonb,system_prompt text not null default '',max_concurrency integer not null default 1 check (max_concurrency >= 1),enabled boolean not null default true,created_at timestamptz not null default now(),updated_at timestamptz not null default now());
+create table if not exists agent_tasks (id text primary key,mission_id text,agent_id text not null references agent_registry(id) on delete cascade,objective text not null,status text not null check (status in ('queued','running','completed','failed')),result jsonb,error text,started_at timestamptz,finished_at timestamptz,created_at timestamptz not null default now());
+create index if not exists agent_tasks_mission_idx on agent_tasks (mission_id,created_at);
+create index if not exists agent_tasks_agent_idx on agent_tasks (agent_id,status,created_at);
+insert into agent_registry (id,name,role,provider,capabilities,system_prompt,max_concurrency) values
+('researcher','Researcher','researcher','agentrouter','["web_research","synthesis"]','You are AgentStation Researcher. Investigate the assigned objective and return actionable findings.',1),
+('architect','Architect','architect','agentrouter','["architecture","planning","decomposition"]','You are AgentStation Architect. Turn the objective into a concrete implementation plan and identify risks.',1),
+('engineer','Engineer','developer','agentrouter','["coding","debugging","refactoring"]','You are AgentStation Engineer. Solve the assigned engineering objective and report verification steps.',2),
+('qa','Sentinel QA','qa','agentrouter','["testing","security_review","verification"]','You are AgentStation QA. Find defects, regressions and security issues and return reproducible findings.',1),
+('documenter','Documenter','documenter','agentrouter','["documentation","release_notes"]','You are AgentStation Documenter. Convert verified work into precise documentation. Never invent implementation details.',1)
+on conflict (id) do nothing;
