@@ -18,6 +18,7 @@ import { AgentOrchestrator } from "./server/orchestrator";
 import { ToolExecutionEngine, TOOL_DEFINITIONS } from "./server/tools";
 import { growthRouter } from "./server/growthFactory";
 import { autonomy } from "./server/autonomy";
+import { listAgents, listTasks, dispatchAgents } from "./server/multiAgent";
 import { getAgentRouterConfigStatus, agentRouterWallet, agentRouterUsage } from "./server/agentRouter";
 
 dotenv.config();
