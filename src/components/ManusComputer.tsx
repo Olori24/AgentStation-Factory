@@ -132,9 +132,17 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
               <Cpu className="w-3.5 h-3.5 text-blue-400" />
               AgentStation Workstation
             </span>
-            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Sandbox Active • 1080p
+            <span
+              role="status"
+              aria-live="polite"
+              className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono ${
+                isWsConnected
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : 'bg-slate-800 text-slate-400 border-slate-700'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isWsConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+              {isWsConnected ? 'Sandbox Connected' : 'Sandbox Offline'}
             </span>
           </div>
         </div>
@@ -254,6 +262,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
               <div className="flex items-center gap-1 text-slate-400">
                 <button
                   onClick={handleRefresh}
+                  aria-label="Reload application preview"
                   title="Reload Application"
                   className="p-1 rounded hover:bg-slate-800 hover:text-white transition"
                 >
