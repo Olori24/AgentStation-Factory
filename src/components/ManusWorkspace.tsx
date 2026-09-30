@@ -104,9 +104,14 @@ export const ManusWorkspace: React.FC<ManusWorkspaceProps> = ({
   };
 
   const getStageStatus = (stageId: string, index: number) => {
-    if (!isExecuting) return 'completed';
+    // Never infer success from an inactive worker. Only the persisted mission
+    // outcome can mark the pipeline complete.
+    if (mission.status === 'completed') return 'completed';
     const roleOrder = ['architect', 'developer', 'qa', 'video_producer', 'delivery'];
-    const currentIdx = activeAgentRole ? roleOrder.indexOf(activeAgentRole) : 1;
+    const currentIdx = activeAgentRole ? roleOrder.indexOf(activeAgentRole) : -1;
+    if (mission.status === 'failed') return index === currentIdx ? 'failed' : 'pending';
+    if (mission.status !== 'running' || !isExecuting) return 'pending';
+    if (currentIdx < 0) return 'pending';
     if (index < currentIdx) return 'completed';
     if (index === currentIdx) return 'active';
     return 'pending';
@@ -142,15 +147,24 @@ export const ManusWorkspace: React.FC<ManusWorkspaceProps> = ({
 
           {/* Status Badge */}
           <div className="flex items-center gap-3">
-            {isExecuting ? (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
+            {mission.status === 'running' && isExecuting ? (
+              <div role="status" aria-live="polite" className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
                 <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                 <span>Squad Working ({elapsedSeconds}s)</span>
               </div>
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-mono">
+            ) : mission.status === 'completed' ? (
+              <div role="status" className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-mono">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Mission Completed & Ready</span>
+                <span>Mission Completed</span>
+              </div>
+            ) : mission.status === 'failed' ? (
+              <div role="status" className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-mono">
+                <span>Mission Failed</span>
+              </div>
+            ) : (
+              <div role="status" className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Not Started</span>
               </div>
             )}
           </div>
