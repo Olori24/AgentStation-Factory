@@ -58,6 +58,8 @@ export default function App() {
   const [mobileActiveView, setMobileActiveView] = useState<'chat' | 'workstation'>('chat');
   const [agents, setAgents] = useState<AgentProfile[]>(DEFAULT_AGENTS);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+  const [executionControl, setExecutionControl] = useState<'running' | 'paused' | 'cancelling' | 'cancelled'>('running');
+  const executionControlRef = useRef<'running' | 'paused' | 'cancelling' | 'cancelled'>('running');
   const [activeAgentRole, setActiveAgentRole] = useState<AgentRole | undefined>(undefined);
   const [isRunningCommand, setIsRunningCommand] = useState<boolean>(false);
   const [isGitHubModalOpen, setIsGitHubModalOpen] = useState<boolean>(false);
@@ -312,6 +314,8 @@ export default function App() {
   // Run autonomous multi-agent squad
   const handleExecutePrompt = async (promptText: string) => {
     setIsHomePromptMode(false);
+    executionControlRef.current = 'running';
+    setExecutionControl('running');
     setIsExecuting(true);
     const newMissionId = `mission-${Date.now()}`;
     const nowTime = new Date().toLocaleTimeString();
@@ -415,6 +419,31 @@ export default function App() {
         existingFiles: mission?.files,
       });
 
+      // A cancelled mission must never be overwritten by a late pipeline result.
+      if (executionControlRef.current === 'cancelled') {
+        const cancelledMission: SquadMission = {
+          ...mission,
+          id: newMissionId,
+          prompt: promptText,
+          status: 'cancelled',
+          currentStage: 'Mission Cancelled by Operator',
+          progressPercent: 0,
+          logs: [{
+            id: `cancel-log-${Date.now()}`,
+            timestamp: new Date().toLocaleTimeString(),
+            role: 'system',
+            agentName: 'AgentStation Core',
+            type: 'status',
+            message: 'Mission cancelled by operator. Late execution results were discarded.',
+          }, ...mission.logs],
+        };
+        setMission(cancelledMission);
+        updateHistoryWithMission(cancelledMission);
+        setAgents((prev) => prev.map((a) => ({ ...a, status: 'idle' })));
+        setActiveAgentRole(undefined);
+        return;
+      }
+
       // Retain context from previous logs
       finalMission.logs = [...finalMission.logs, ...mission.logs];
 
@@ -453,7 +482,25 @@ export default function App() {
       setActiveAgentRole(undefined);
     } finally {
       setIsExecuting(false);
+      if (executionControlRef.current !== 'cancelled') {
+        executionControlRef.current = 'running';
+        setExecutionControl('running');
+      }
     }
+  };
+
+  const handleMissionControl = (action: 'pause' | 'resume' | 'cancel') => {
+    if (action === 'cancel') {
+      executionControlRef.current = 'cancelled';
+      setExecutionControl('cancelled');
+      setIsExecuting(false);
+      setActiveAgentRole(undefined);
+      setAgents((prev) => prev.map((a) => ({ ...a, status: 'idle' })));
+      return;
+    }
+    const next = action === 'pause' ? 'paused' : 'running';
+    executionControlRef.current = next;
+    setExecutionControl(next);
   };
 
   // Run a sandbox terminal command with real-time streaming
@@ -737,6 +784,8 @@ export default function App() {
                 <ManusConversation
                   mission={mission}
                   isExecuting={isExecuting}
+                  executionControl={executionControl}
+                  onMissionControl={handleMissionControl}
                   activeAgentRole={activeAgentRole}
                   onExecuteFollowUp={handleExecutePrompt}
                   onNewTask={() => {
