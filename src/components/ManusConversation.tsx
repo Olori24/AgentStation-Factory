@@ -647,8 +647,8 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
               )}
             </div>
 
-            {/* C. Completion Deliverable Summary */}
-            {!isExecuting && (
+            {/* C. Mission outcome summary — only completed missions can claim completion. */}
+            {!isExecuting && mission.status === 'completed' && (
               <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/30 to-slate-900 border border-emerald-500/30 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
@@ -740,6 +740,16 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                 )}
               </div>
             )}
+
+            {!isExecuting && mission.status === 'failed' && (
+              <div role="alert" className="p-4 rounded-2xl bg-red-950/20 border border-red-500/30 space-y-2">
+                <div className="flex items-center gap-2 text-red-400 font-bold text-xs">
+                  <XCircle className="w-4 h-4" />
+                  <span>Mission failed</span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">The mission did not complete successfully. Review the execution steps and error details before retrying.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -747,7 +757,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
       </div>
 
       {/* Sticky Bottom Follow-Up Chat Box */}
-      <div className="p-4 border-t border-slate-800/80 bg-slate-950 shrink-0">
+      <div className="p-3 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-slate-800/80 bg-slate-950 shrink-0">
         <form onSubmit={handleSubmit} className="relative">
           <input
             type="text"
@@ -756,7 +766,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
             onKeyDown={handleKeyDown}
             placeholder="Direct AgentStation squad or refine objective... (e.g. Add dark mode, run tests)"
             disabled={isExecuting}
-            className="w-full bg-slate-900 text-slate-100 text-sm rounded-xl pl-4 pr-12 py-3 border border-slate-700/80 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-sans disabled:opacity-50 transition"
+            className="w-full bg-slate-900 text-slate-100 text-sm rounded-xl pl-4 pr-12 py-3 min-h-11 border border-slate-700/80 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-sans disabled:opacity-50 transition"
           />
           <button
             type="submit"
