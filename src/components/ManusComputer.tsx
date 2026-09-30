@@ -95,13 +95,11 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
   const [isToolsOpen, setIsToolsOpen] = useState(false);
 
   const secondaryTabs: WorkstationTab[] = ['video', 'pipeline', 'data', 'report', 'outreach'];
-
+  const currentTab = onTabChange ? activeTab : internalTab;
 
   useEffect(() => {
     if (secondaryTabs.includes(currentTab)) setIsToolsOpen(true);
   }, [currentTab]);
-
-  const currentTab = onTabChange ? activeTab : internalTab;
   const setTab = (tab: WorkstationTab) => {
     if (onTabChange) onTabChange(tab);
     setInternalTab(tab);
