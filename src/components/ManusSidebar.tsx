@@ -102,7 +102,10 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   }
 
   return (
-    <aside className={`w-64 bg-slate-950 border-r border-slate-800/80 flex flex-col justify-between shrink-0 select-none h-full min-h-0 text-slate-200 font-sans transition-transform duration-200 ${isMobile ? 'fixed inset-y-0 left-0 z-[90] lg:static lg:z-auto shadow-2xl lg:shadow-none' : ''} ${isMobile && !isOpen ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}`}>
+    <aside
+      aria-label="AgentStation navigation"
+      className={`w-[min(20rem,88vw)] lg:w-64 bg-slate-950 border-r border-slate-800/80 flex flex-col justify-between shrink-0 select-none h-full min-h-0 text-slate-200 font-sans transition-transform duration-200 ${isMobile ? 'fixed inset-y-0 left-0 z-[90] lg:static lg:z-auto shadow-2xl lg:shadow-none' : ''} ${isMobile && !isOpen ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}`}
+    >
       {/* Top Header & New Task Button */}
       <div className="p-3.5 pb-2 border-b border-slate-800/70">
         {/* Brand Bar */}
@@ -153,7 +156,8 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search tasks..."
-            className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-900/90 text-slate-200 placeholder-slate-500 rounded-lg border border-slate-800/80 focus:outline-none focus:border-blue-500 transition"
+            aria-label="Search recent tasks"
+            className="w-full min-h-11 pl-8 pr-2.5 text-xs bg-slate-900/90 text-slate-200 placeholder-slate-500 rounded-lg border border-slate-800/80 focus:outline-none focus:border-blue-500 transition"
           />
         </div>
       </div>
