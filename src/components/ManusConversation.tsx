@@ -41,6 +41,8 @@ interface ManusConversationProps {
   onExecuteFollowUp: (prompt: string) => void;
   onNewTask: () => void;
   onSelectTab?: (tab: WorkstationTab) => void;
+  executionControl?: 'running' | 'paused' | 'cancelling' | 'cancelled';
+  onMissionControl?: (action: 'pause' | 'resume' | 'cancel') => void;
 }
 
 interface PlanStep {
@@ -59,6 +61,8 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
   onExecuteFollowUp,
   onNewTask,
   onSelectTab,
+  executionControl = 'running',
+  onMissionControl,
 }) => {
   const [followUpText, setFollowUpText] = useState('');
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
@@ -124,7 +128,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!followUpText.trim() || isExecuting) return;
+    if (!followUpText.trim() || isExecuting || executionControl !== 'running') return;
     onExecuteFollowUp(followUpText.trim());
     setFollowUpText('');
   };
@@ -147,7 +151,9 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
         throw new Error(data?.message || data?.error || `Unable to ${action} this mission.`);
       }
       if (action === 'pause') setIsPaused(true);
-      if (action === 'resume' || action === 'cancel') setIsPaused(false);
+      if (action === 'resume') setIsPaused(false);
+      if (action === 'cancel') setIsPaused(false);
+      onMissionControl?.(action);
       setControlFeedback({
         type: 'success',
         message: data.message || (action === 'cancel' ? 'Cancellation requested.' : action === 'pause' ? 'Mission paused.' : 'Mission resumed.'),
@@ -226,8 +232,8 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
       if (mission.status === 'completed') {
         return { ...step, status: 'completed' as const };
       }
-      if (mission.status === 'failed') {
-        return { ...step, status: idx === currentIdx ? 'failed' as const : 'pending' as const };
+      if (mission.status === 'failed' || executionControl === 'cancelled') {
+        return { ...step, status: executionControl === 'cancelled' ? 'pending' as const : idx === currentIdx ? 'failed' as const : 'pending' as const };
       }
       if (mission.status !== 'running' || !isExecuting || currentIdx < 0) {
         return { ...step, status: 'pending' as const };
@@ -273,11 +279,16 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
 
         {/* Status indicator & Execution Controls */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {isExecuting ? (
+          {executionControl === 'cancelled' || mission.status === 'cancelled' ? (
+            <div role="status" className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono">
+              <XCircle className="w-3.5 h-3.5 text-slate-400" />
+              <span>Cancelled</span>
+            </div>
+          ) : isExecuting ? (
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePauseResume}
-                disabled={pendingControl !== null}
+                disabled={pendingControl !== null || executionControl === 'cancelling' || executionControl === 'cancelled'}
                 title={isPaused ? "Resume execution" : "Pause execution"}
                 aria-label={isPaused ? "Resume execution" : "Pause execution"}
                 className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition disabled:opacity-50 disabled:cursor-wait"
@@ -293,9 +304,9 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
               >
                 <XCircle className="w-3.5 h-3.5" />
               </button>
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono" aria-live="polite">
                 <div className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-amber-400 animate-ping'}`} />
-                <span className="hidden sm:inline">{pendingControl === 'pause' ? 'Pausing…' : pendingControl === 'resume' ? 'Resuming…' : pendingControl === 'cancel' ? 'Cancelling…' : isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
+                <span className="hidden sm:inline">{pendingControl === 'pause' ? 'Pausing…' : pendingControl === 'resume' ? 'Resuming…' : pendingControl === 'cancel' || executionControl === 'cancelling' ? 'Cancelling…' : executionControl === 'paused' || isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
               </div>
             </div>
           ) : mission.status === 'completed' ? (
@@ -380,7 +391,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                 <div className="flex items-center gap-3 pt-1">
                   <button
                     onClick={() => handleRespondApproval(approval.id, true)}
-                    disabled={isResolvingApproval}
+                    disabled={isResolvingApproval || executionControl !== 'running'}
                     className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                   >
                     <Check className="w-3.5 h-3.5 stroke-[3]" />
