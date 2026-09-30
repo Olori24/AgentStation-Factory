@@ -697,12 +697,12 @@ export default function App() {
         ) : (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden pt-14 lg:pt-0">
             {/* Mobile View Switcher (Visible on mobile screens < 1024px) */}
-            <div className="lg:hidden fixed bottom-3 left-3 right-3 z-[70] px-1 py-1.5 bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-700/80 shadow-2xl shadow-black/50">
+            <div className="lg:hidden fixed bottom-2 left-2 right-2 z-[70] px-1 py-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-700/80 shadow-2xl shadow-black/50">
               <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 w-full max-w-md mx-auto">
                 <button
                   type="button"
                   onClick={() => setMobileActiveView('chat')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition ${
+                  className={`flex-1 min-h-11 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition ${
                     mobileActiveView === 'chat'
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
@@ -722,7 +722,7 @@ export default function App() {
                 >
                   <Cpu className="w-3.5 h-3.5" />
                   <span>Workstation ({mission.files?.length || 0})</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span aria-label={isWsConnected ? "workstation connected" : "workstation offline"} className={`w-1.5 h-1.5 rounded-full ${isWsConnected ? "bg-emerald-400 animate-pulse" : "bg-slate-600"}`} />
                 </button>
               </div>
             </div>
