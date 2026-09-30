@@ -76,7 +76,7 @@ export const PipelineStatus: React.FC<PipelineStatusProps> = ({
       label: 'Lint',
       description: 'Static code analysis, TypeScript syntax checks & ESLint rules',
       command: 'npm run lint',
-      status: missionStatus === 'completed' ? 'success' : 'pending',
+      status: 'pending',
       durationMs: 420,
       stdout: '> tsc --noEmit && eslint src/ --max-warnings=0\n✔ 0 errors, 0 warnings found\n✔ All TypeScript types validated successfully.',
       exitCode: 0,
@@ -88,7 +88,7 @@ export const PipelineStatus: React.FC<PipelineStatusProps> = ({
       label: 'Build',
       description: 'Production bundling with Vite, esbuild tree-shaking & asset minification',
       command: 'vite build',
-      status: missionStatus === 'completed' ? 'success' : 'pending',
+      status: 'pending',
       durationMs: 780,
       stdout: 'vite v5.4.15 building for production...\n✓ 148 modules transformed.\ndist/index.html                   1.42 kB │ gzip: 0.65 kB\ndist/assets/index.js            482.10 kB │ gzip: 142.18 kB\n✓ built in 780ms',
       exitCode: 0,
@@ -100,7 +100,7 @@ export const PipelineStatus: React.FC<PipelineStatusProps> = ({
       label: 'Test',
       description: 'Automated test suite, business logic assertions & sandbox memory validation',
       command: execution?.command || 'pytest -v tests/',
-      status: execution?.exitCode === 0 || missionStatus === 'completed' ? 'success' : execution?.exitCode ? 'failed' : 'pending',
+      status: execution ? (execution.exitCode === 0 ? 'success' : 'failed') : 'pending',
       durationMs: execution?.durationMs || 110,
       stdout: execution?.stdout || 'tests/test_core.py::test_initialization PASSED [ 25%]\ntests/test_core.py::test_business_logic PASSED [ 50%]\ntests/test_core.py::test_edge_cases PASSED [ 75%]\ntests/test_core.py::test_sandbox_safety PASSED [100%]\n\n4 passed in 0.11s',
       exitCode: execution?.exitCode ?? 0,
@@ -112,7 +112,14 @@ export const PipelineStatus: React.FC<PipelineStatusProps> = ({
       label: 'Deploy',
       description: 'Vercel edge deployment, GitHub Actions artifact upload & live sandbox preview',
       command: 'git push origin ' + gitBranch,
-      status: ciStatus?.conclusion === 'failure' ? 'failed' : missionStatus === 'completed' ? 'success' : 'pending',
+      status:
+        ciStatus?.conclusion === 'success'
+          ? 'success'
+          : ciStatus?.conclusion === 'failure'
+          ? 'failed'
+          : ciStatus?.status === 'in_progress' || ciStatus?.status === 'queued'
+          ? 'running'
+          : 'pending',
       durationMs: 1250,
       stdout: `To https://github.com/Olori24/AgentStation-Factory.git\n   main -> ${gitBranch}\nBranch up to date.\nDeploy preview live at: https://agentstation-factory.vercel.app`,
       exitCode: 0,
@@ -148,11 +155,9 @@ export const PipelineStatus: React.FC<PipelineStatusProps> = ({
           };
         }
         if (missionStatus === 'running' && !isSimulatingPipeline) {
-          // Dynamic progression based on mission running
-          if (stage.id === 'lint') return { ...stage, status: 'success' };
-          if (stage.id === 'build') return { ...stage, status: 'running' };
-          if (stage.id === 'test') return { ...stage, status: 'pending' };
-          if (stage.id === 'deploy') return { ...stage, status: 'pending' };
+          // A running mission is not evidence that CI stages passed.
+          // Keep unverified stages queued until a real result is available.
+          return stage;
         }
         return stage;
       })
@@ -186,21 +191,11 @@ export const PipelineStatus: React.FC<PipelineStatusProps> = ({
       }
     }
 
-    // Ensure status settles as success after run
-    setTimeout(() => {
-      setStages((prev) =>
-        prev.map((s) =>
-          s.id === stageId
-            ? {
-                ...s,
-                status: 'success',
-                durationMs: Math.floor(Math.random() * 200) + 90,
-                timestamp: new Date().toLocaleTimeString(),
-              }
-            : s
-        )
-      );
-    }, 600);
+    // A command callback only proves the invocation returned; the stage is not
+    // marked passed unless the authoritative execution result reports success.
+    if (stageId !== 'test') {
+      setStages((prev) => prev.map((s) => s.id === stageId ? { ...s, status: 'pending', timestamp: new Date().toLocaleTimeString() } : s));
+    }
   };
 
   // Run full sequential pipeline: Lint -> Build -> Test -> Deploy
@@ -232,17 +227,11 @@ export const PipelineStatus: React.FC<PipelineStatusProps> = ({
 
       await new Promise((r) => setTimeout(r, 650));
 
-      setStages((prev) =>
-        prev.map((s) =>
-          s.id === currentId
-            ? {
-                ...s,
-                status: 'success',
-                durationMs: Math.floor(Math.random() * 300) + 120,
-              }
-            : s
-        )
-      );
+      // Never synthesize a pass result for CI/CD. Real execution data owns the
+      // status; non-test stages return to queued when no authoritative result exists.
+      if (currentId !== 'test') {
+        setStages((prev) => prev.map((s) => s.id === currentId ? { ...s, status: 'pending' } : s));
+      }
     }
 
     setIsSimulatingPipeline(false);
@@ -300,7 +289,9 @@ export const PipelineStatus: React.FC<PipelineStatusProps> = ({
   ).toFixed(2);
 
   const passedCount = stages.filter((s) => s.status === 'success').length;
-  const isAllPassed = passedCount === stages.length;
+  const isAllPassed = stages.length > 0 && stages.every((s) => s.status === 'success');
+  const failedCount = stages.filter((s) => s.status === 'failed').length;
+  const runningCount = stages.filter((s) => s.status === 'running').length;
 
   return (
     <div
