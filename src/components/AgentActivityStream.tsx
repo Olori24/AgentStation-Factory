@@ -72,7 +72,11 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !autoScroll) return;
+    if (!container) return;
+    if (!autoScroll) {
+      setHasUnread(true);
+      return;
+    }
     container.scrollTop = container.scrollHeight;
     setHasUnread(false);
   }, [logs, isExecuting, autoScroll]);
