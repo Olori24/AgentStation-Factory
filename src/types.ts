@@ -268,3 +268,5 @@ export interface ToolExecutionRecord {
   errorMessage?: string;
   executedAt: string;
 }
+
+// Mission lifecycle state remains server-confirmed; cancellation is terminal for the active execution.
