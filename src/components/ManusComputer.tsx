@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Globe,
   Terminal,
@@ -23,6 +23,7 @@ import {
   Table,
   FileText,
   Send,
+  MoreHorizontal,
 } from 'lucide-react';
 import { WorkspaceFile, TestExecutionResult, VideoProject, CiStatusInfo, SpreadsheetDataset, DocumentArtifact, OutreachCampaign } from '../types';
 import { CodeWorkspace } from './CodeWorkspace';
@@ -91,6 +92,14 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
   const [viewportMode, setViewportMode] = useState<'desktop' | 'mobile'>('desktop');
   const [browserUrl, setBrowserUrl] = useState('http://localhost:3000/app');
   const [browserKey, setBrowserKey] = useState(0);
+  const [isToolsOpen, setIsToolsOpen] = useState(false);
+
+  const secondaryTabs: WorkstationTab[] = ['video', 'pipeline', 'data', 'report', 'outreach'];
+
+
+  useEffect(() => {
+    if (secondaryTabs.includes(currentTab)) setIsToolsOpen(true);
+  }, [currentTab]);
 
   const currentTab = onTabChange ? activeTab : internalTab;
   const setTab = (tab: WorkstationTab) => {
@@ -132,113 +141,52 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
           </div>
         </div>
 
-        {/* View Switcher Tabs */}
-        <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs overflow-x-auto max-w-[58vw] sm:max-w-none scrollbar-none">
-          {spreadsheet && (
+        {/* Primary workspace navigation. Specialized outputs stay available without competing with the core task surface. */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs overflow-x-auto max-w-[62vw] sm:max-w-none scrollbar-none" aria-label="Primary workstation views">
+            {[
+              ['browser', Globe, 'Browser'],
+              ['code', Code2, 'Code'],
+              ['terminal', Terminal, 'Terminal'],
+            ].map(([tab, Icon, label]) => (
+              <button
+                key={tab as string}
+                type="button"
+                onClick={() => setTab(tab as WorkstationTab)}
+                aria-pressed={currentTab === tab}
+                className={`flex items-center gap-1.5 min-h-9 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${currentTab === tab ? 'bg-blue-600 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{label as string}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="relative shrink-0">
             <button
-              onClick={() => setTab('data')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
-                currentTab === 'data'
-                  ? 'bg-teal-600 text-slate-950 shadow-sm font-bold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
+              type="button"
+              onClick={() => setIsToolsOpen((open) => !open)}
+              aria-expanded={isToolsOpen}
+              aria-haspopup="menu"
+              aria-label="Open workstation tools"
+              className={`flex items-center gap-1.5 min-h-9 px-2.5 rounded-md border text-xs font-semibold transition ${secondaryTabs.includes(currentTab) || isToolsOpen ? 'bg-slate-800 text-white border-slate-600' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800'}`}
             >
-              <Table className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Spreadsheet</span>
-              <span className="px-1 py-0.2 rounded-full bg-teal-500/20 text-teal-300 text-[10px] font-mono">
-                {spreadsheet.rows?.length || 20}
-              </span>
+              <MoreHorizontal className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Tools</span>
+              {secondaryTabs.includes(currentTab) && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
             </button>
-          )}
 
-          {document && (
-            <button
-              onClick={() => setTab('report')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
-                currentTab === 'report'
-                  ? 'bg-cyan-600 text-slate-950 shadow-sm font-bold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Dossier</span>
-            </button>
-          )}
-
-          {campaign && (
-            <button
-              onClick={() => setTab('outreach')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
-                currentTab === 'outreach'
-                  ? 'bg-orange-600 text-slate-950 shadow-sm font-bold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Campaign</span>
-            </button>
-          )}
-
-          <button
-            onClick={() => setTab('browser')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
-              currentTab === 'browser'
-                ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Browser</span>
-          </button>
-
-          <button
-            onClick={() => setTab('terminal')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
-              currentTab === 'terminal'
-                ? 'bg-amber-600 text-white shadow-sm font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Terminal className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Terminal</span>
-          </button>
-
-          <button
-            onClick={() => setTab('code')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
-              currentTab === 'code'
-                ? 'bg-indigo-600 text-white shadow-sm font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Code</span>
-          </button>
-
-          <button
-            onClick={() => setTab('video')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
-              currentTab === 'video'
-                ? 'bg-purple-600 text-white shadow-sm font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Film className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Video</span>
-          </button>
-
-          <button
-            onClick={() => setTab('pipeline')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${
-              currentTab === 'pipeline'
-                ? 'bg-emerald-600 text-slate-950 shadow-sm font-bold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Workflow className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">CI/CD</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          </button>
+            {isToolsOpen && (
+              <div role="menu" aria-label="Specialized workstation tools" className="absolute right-0 top-full mt-2 z-50 w-56 p-1.5 rounded-xl border border-slate-700 bg-slate-900/98 shadow-2xl shadow-black/60 backdrop-blur-xl">
+                <div className="px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-500">Specialized tools</div>
+                {video && <button type="button" role="menuitem" onClick={() => { setTab('video'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'video' ? 'bg-purple-600/20 text-purple-200' : 'text-slate-300 hover:bg-slate-800'}`}><Film className="w-3.5 h-3.5" /> Video Studio</button>}
+                {spreadsheet && <button type="button" role="menuitem" onClick={() => { setTab('data'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'data' ? 'bg-teal-600/20 text-teal-200' : 'text-slate-300 hover:bg-slate-800'}`}><Table className="w-3.5 h-3.5" /> Spreadsheet <span className="ml-auto text-[10px] text-slate-500">{spreadsheet.rows?.length || 20}</span></button>}
+                {document && <button type="button" role="menuitem" onClick={() => { setTab('report'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'report' ? 'bg-cyan-600/20 text-cyan-200' : 'text-slate-300 hover:bg-slate-800'}`}><FileText className="w-3.5 h-3.5" /> Dossier</button>}
+                {campaign && <button type="button" role="menuitem" onClick={() => { setTab('outreach'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'outreach' ? 'bg-orange-600/20 text-orange-200' : 'text-slate-300 hover:bg-slate-800'}`}><Send className="w-3.5 h-3.5" /> Campaign</button>}
+                <button type="button" role="menuitem" onClick={() => { setTab('pipeline'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'pipeline' ? 'bg-emerald-600/20 text-emerald-200' : 'text-slate-300 hover:bg-slate-800'}`}><Workflow className="w-3.5 h-3.5" /> CI/CD Pipeline <span className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400" /></button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Window actions */}
@@ -261,7 +209,8 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
           <button
             onClick={() => setIsMaximized(!isMaximized)}
             title={isMaximized ? 'Restore Viewport' : 'Maximize Computer'}
-            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            aria-label={isMaximized ? 'Restore workstation' : 'Maximize workstation'}
+            className="min-w-9 min-h-9 p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition"
           >
             {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
