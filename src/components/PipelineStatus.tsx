@@ -289,9 +289,6 @@ export const PipelineStatus: React.FC<PipelineStatusProps> = ({
   ).toFixed(2);
 
   const passedCount = stages.filter((s) => s.status === 'success').length;
-  const isAllPassed = stages.length > 0 && stages.every((s) => s.status === 'success');
-  const failedCount = stages.filter((s) => s.status === 'failed').length;
-  const runningCount = stages.filter((s) => s.status === 'running').length;
 
   return (
     <div
