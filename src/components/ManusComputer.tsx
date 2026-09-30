@@ -144,22 +144,15 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
         {/* Primary workspace navigation. Specialized outputs stay available without competing with the core task surface. */}
         <div className="flex items-center gap-1.5 min-w-0">
           <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs overflow-x-auto max-w-[62vw] sm:max-w-none scrollbar-none" aria-label="Primary workstation views">
-            {[
-              ['browser', Globe, 'Browser'],
-              ['code', Code2, 'Code'],
-              ['terminal', Terminal, 'Terminal'],
-            ].map(([tab, Icon, label]) => (
-              <button
-                key={tab as string}
-                type="button"
-                onClick={() => setTab(tab as WorkstationTab)}
-                aria-pressed={currentTab === tab}
-                className={`flex items-center gap-1.5 min-h-9 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${currentTab === tab ? 'bg-blue-600 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{label as string}</span>
-              </button>
-            ))}
+            <button type="button" onClick={() => setTab('browser')} aria-pressed={currentTab === 'browser'} className={`flex items-center gap-1.5 min-h-9 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${currentTab === 'browser' ? 'bg-blue-600 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'}`}>
+              <Globe className="w-3.5 h-3.5" /><span className="hidden sm:inline">Browser</span>
+            </button>
+            <button type="button" onClick={() => setTab('code')} aria-pressed={currentTab === 'code'} className={`flex items-center gap-1.5 min-h-9 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${currentTab === 'code' ? 'bg-indigo-600 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'}`}>
+              <Code2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Code</span>
+            </button>
+            <button type="button" onClick={() => setTab('terminal')} aria-pressed={currentTab === 'terminal'} className={`flex items-center gap-1.5 min-h-9 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${currentTab === 'terminal' ? 'bg-amber-600 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'}`}>
+              <Terminal className="w-3.5 h-3.5" /><span className="hidden sm:inline">Terminal</span>
+            </button>
           </div>
 
           <div className="relative shrink-0">
