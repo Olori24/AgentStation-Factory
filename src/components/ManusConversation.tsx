@@ -69,6 +69,8 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
   const [subtasks, setSubtasks] = useState<SubtaskRecord[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalRecord[]>([]);
   const [isResolvingApproval, setIsResolvingApproval] = useState(false);
+  const [pendingControl, setPendingControl] = useState<'pause' | 'resume' | 'cancel' | null>(null);
+  const [controlFeedback, setControlFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -134,39 +136,62 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
     }
   };
 
-  const handlePauseResume = async () => {
-    if (!mission?.id) return;
+  const runMissionControl = async (action: 'pause' | 'resume' | 'cancel') => {
+    if (!mission?.id || pendingControl) return;
+    setPendingControl(action);
+    setControlFeedback(null);
     try {
-      const endpoint = isPaused ? `/api/tasks/${mission.id}/resume` : `/api/tasks/${mission.id}/pause`;
-      const res = await fetch(endpoint, { method: 'POST' });
-      if (res.ok) {
-        setIsPaused(!isPaused);
+      const res = await fetch(`/api/tasks/${mission.id}/${action}`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success !== true) {
+        throw new Error(data?.message || data?.error || `Unable to ${action} this mission.`);
       }
-    } catch {}
+      if (action === 'pause') setIsPaused(true);
+      if (action === 'resume' || action === 'cancel') setIsPaused(false);
+      setControlFeedback({
+        type: 'success',
+        message: data.message || (action === 'cancel' ? 'Cancellation requested.' : action === 'pause' ? 'Mission paused.' : 'Mission resumed.'),
+      });
+      await fetchTaskDetails();
+    } catch (error) {
+      setControlFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'The mission control request failed. Please try again.',
+      });
+    } finally {
+      setPendingControl(null);
+    }
   };
 
-  const handleCancelTask = async () => {
-    if (!mission?.id) return;
-    try {
-      await fetch(`/api/tasks/${mission.id}/cancel`, { method: 'POST' });
-      setIsPaused(false);
-    } catch {}
+  const handlePauseResume = () => runMissionControl(isPaused ? 'resume' : 'pause');
+
+  const handleCancelTask = () => {
+    if (!window.confirm('Cancel this mission? The current execution may stop before producing its deliverables.')) return;
+    void runMissionControl('cancel');
   };
 
   const handleRespondApproval = async (approvalId: string, approved: boolean) => {
+    if (isResolvingApproval) return;
     setIsResolvingApproval(true);
+    setControlFeedback(null);
     try {
       const res = await fetch(`/api/tasks/${mission.id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ approvalId, approved, responder: 'Operator (You)' }),
       });
-      if (res.ok) {
-        setPendingApprovals((prev) => prev.filter((a) => a.id !== approvalId));
-        fetchTaskDetails();
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success !== true) {
+        throw new Error(data?.error || 'Unable to record your approval. Please try again.');
       }
-    } catch (err) {
-      console.error('Failed to resolve approval', err);
+      setPendingApprovals((prev) => prev.filter((a) => a.id !== approvalId));
+      setControlFeedback({ type: 'success', message: approved ? 'Approval recorded.' : 'Request rejected.' });
+      await fetchTaskDetails();
+    } catch (error) {
+      setControlFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to resolve approval.',
+      });
     } finally {
       setIsResolvingApproval(false);
     }
@@ -252,21 +277,25 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePauseResume}
+                disabled={pendingControl !== null}
                 title={isPaused ? "Resume execution" : "Pause execution"}
-                className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition"
+                aria-label={isPaused ? "Resume execution" : "Pause execution"}
+                className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition disabled:opacity-50 disabled:cursor-wait"
               >
                 {isPaused ? <Play className="w-3.5 h-3.5 text-emerald-400" /> : <Pause className="w-3.5 h-3.5 text-amber-400" />}
               </button>
               <button
                 onClick={handleCancelTask}
+                disabled={pendingControl !== null}
                 title="Cancel execution"
-                className="p-1.5 rounded-lg bg-slate-900 hover:bg-red-950/40 border border-slate-700 hover:border-red-600/50 text-slate-400 hover:text-red-400 transition"
+                aria-label="Cancel execution"
+                className="p-1.5 rounded-lg bg-slate-900 hover:bg-red-950/40 border border-slate-700 hover:border-red-600/50 text-slate-400 hover:text-red-400 transition disabled:opacity-50 disabled:cursor-wait"
               >
                 <XCircle className="w-3.5 h-3.5" />
               </button>
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
                 <div className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-amber-400 animate-ping'}`} />
-                <span className="hidden sm:inline">{isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
+                <span className="hidden sm:inline">{pendingControl === 'pause' ? 'Pausing…' : pendingControl === 'resume' ? 'Resuming…' : pendingControl === 'cancel' ? 'Cancelling…' : isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
               </div>
             </div>
           ) : mission.status === 'completed' ? (
@@ -287,6 +316,16 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
           )}
         </div>
       </div>
+
+      {controlFeedback && (
+        <div
+          role={controlFeedback.type === 'error' ? 'alert' : 'status'}
+          aria-live={controlFeedback.type === 'error' ? 'assertive' : 'polite'}
+          className={`mx-4 sm:mx-6 mt-3 rounded-lg border px-3 py-2 text-xs ${controlFeedback.type === 'error' ? 'border-red-500/40 bg-red-950/30 text-red-200' : 'border-emerald-500/30 bg-emerald-950/20 text-emerald-200'}`}
+        >
+          {controlFeedback.message}
+        </div>
+      )}
 
       {/* Scrollable Conversation Stream */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6 scrollbar-thin min-h-0">
