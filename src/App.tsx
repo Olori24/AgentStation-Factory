@@ -576,6 +576,9 @@ export default function App() {
     setMission(selected);
     setStreamingTerminalOutput(selected.execution?.stdout || '');
     setIsHomePromptMode(false);
+    // Selecting a mission completes the mobile navigation action; return
+    // focus to the workspace instead of leaving the drawer over the content.
+    setIsSidebarOpen(false);
     showToast(`Loaded mission: "${selected.prompt.slice(0, 36)}..."`);
   };
 
@@ -736,7 +739,10 @@ export default function App() {
                   isExecuting={isExecuting}
                   activeAgentRole={activeAgentRole}
                   onExecuteFollowUp={handleExecutePrompt}
-                  onNewTask={() => setIsHomePromptMode(true)}
+                  onNewTask={() => {
+             setIsHomePromptMode(true);
+             setIsSidebarOpen(false);
+           }}
                   onSelectTab={(tab) => {
                     setComputerTab(tab);
                     setMobileActiveView('workstation');
