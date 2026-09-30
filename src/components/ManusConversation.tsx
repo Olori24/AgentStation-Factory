@@ -295,7 +295,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
               </button>
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-mono">
                 <div className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-amber-400 animate-ping'}`} />
-                <span className="hidden sm:inline">{isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
+                <span className="hidden sm:inline">{pendingControl === 'pause' ? 'Pausing…' : pendingControl === 'resume' ? 'Resuming…' : pendingControl === 'cancel' ? 'Cancelling…' : isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
               </div>
             </div>
           ) : mission.status === 'completed' ? (
