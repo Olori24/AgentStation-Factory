@@ -198,8 +198,14 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
     ];
 
     return baseSteps.map((step, idx) => {
-      if (!isExecuting) {
+      if (mission.status === 'completed') {
         return { ...step, status: 'completed' as const };
+      }
+      if (mission.status === 'failed') {
+        return { ...step, status: idx === currentIdx ? 'failed' as const : 'pending' as const };
+      }
+      if (mission.status !== 'running' || !isExecuting || currentIdx < 0) {
+        return { ...step, status: 'pending' as const };
       }
       if (idx < currentIdx) {
         return { ...step, status: 'completed' as const };
@@ -263,10 +269,20 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                 <span className="hidden sm:inline">{isPaused ? 'AgentStation Paused' : `AgentStation Working (${elapsedSeconds}s)`}</span>
               </div>
             </div>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-mono">
+          ) : mission.status === 'completed' ? (
+            <div role="status" className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-mono">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               <span>Completed</span>
+            </div>
+          ) : mission.status === 'failed' ? (
+            <div role="status" className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-mono">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>Failed</span>
+            </div>
+          ) : (
+            <div role="status" className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Not Started</span>
             </div>
           )}
         </div>
