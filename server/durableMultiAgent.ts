@@ -59,14 +59,14 @@ export async function listDurableTasks(missionId?: string) {
 
 export async function enqueueDurableAgents(input: {
   missionId?: string;
-  tasks?: Array<{ agentId: string; objective: string }>;
+  tasks?: Array<{ agentId: string; objective: string; skillIds?: string[] }>;
   templateId?: string;
   variables?: Record<string, unknown>;
 }) {
   const expanded = input.templateId
     ? instantiateObjectiveTemplate(String(input.templateId), input.variables || {})
     : null;
-  const tasks = expanded?.tasks || input.tasks || [];
+  const tasks: Array<{ agentId: string; objective: string; skillIds?: string[] }> = expanded?.tasks || input.tasks || [];
   if (!Array.isArray(tasks) || tasks.length === 0) throw new Error("tasks must contain at least one agent task");
   if (tasks.length > MAX_TASKS) throw new Error("maximum 8 parallel agents per dispatch");
 
@@ -95,8 +95,8 @@ export async function enqueueDurableAgents(input: {
     for (const task of tasks) {
       const id = "agent-task-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
       const rows = await db.query(
-        "INSERT INTO agent_tasks (id,mission_id,objective_run_id,agent_id,objective,status,created_at) VALUES ($1,$2,$3,$4,$5,'queued',now()) RETURNING *",
-        [id, input.missionId || null, objectiveRunId, task.agentId, String(task.objective).trim()],
+        "INSERT INTO agent_tasks (id,mission_id,objective_run_id,agent_id,objective,skill_ids,status,created_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,'queued',now()) RETURNING *",
+        [id, input.missionId || null, objectiveRunId, task.agentId, String(task.objective).trim(), JSON.stringify(task.skillIds || [])],
       );
       created.push(taskFromRow(rows[0]));
     }

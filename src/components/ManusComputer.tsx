@@ -59,7 +59,7 @@ interface ManusComputerProps {
   onPushToGitHub?: () => void;
   activeTab?: WorkstationTab;
   onTabChange?: (tab: WorkstationTab) => void;
-  missionStatus?: 'idle' | 'running' | 'completed' | 'failed';
+  missionStatus?: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
   ciStatus?: CiStatusInfo | null;
   gitBranch?: string;
   gitCommitMessage?: string;
