@@ -39,7 +39,7 @@ export interface PipelineStage {
 }
 
 interface PipelineStatusProps {
-  missionStatus?: 'idle' | 'running' | 'completed' | 'failed';
+  missionStatus?: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
   execution?: TestExecutionResult;
   ciStatus?: CiStatusInfo | null;
   gitBranch?: string;

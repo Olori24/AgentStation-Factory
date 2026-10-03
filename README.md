@@ -1,38 +1,30 @@
-# AgentStation
-
 <div align="center">
 
-# ⚡ AgentStation
-### Autonomous Multi-Agent AI Workforce Platform
-**Mission planning • specialist agents • sandboxed execution • verification • artifact delivery**
+# AgentStation Factory
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4.1-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Express](https://img.shields.io/badge/Express-4.21-000000?logo=express&logoColor=white)](https://expressjs.com/)
-[![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-8E24AA?logo=google&logoColor=white)](https://ai.google.dev/)
-[![Ollama](https://img.shields.io/badge/Local_LLM-Ollama-black?logo=ollama&logoColor=white)](https://ollama.ai/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
+**Autonomous multi-agent AI workforce and artifact synthesis platform.**
 
-> **Repository status:** Active development. Implemented capabilities, verification evidence, environment-dependent features and roadmap items are kept explicitly separate.
-
-## Engineering focus
-
-Multi-agent workforce for planning, execution, verification and artifacts.
-
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-
-[Overview](#-overview) •
-[Core Principles](#-core-principles) •
-[Autonomous Workflow](#-autonomous-workflow) •
-[Workstation Architecture](#-workstation-architecture) •
-[Agent Fleet](#-the-specialist-agent-fleet) •
-[Tool Engine](#-tool-execution-engine) •
-[Quickstart](#-quickstart) •
-[API Reference](#-api-reference) •
-[GitHub Sync](#-github-integration)
+[![Documentation standard](https://img.shields.io/badge/README-Premium%20Standard-111827?style=flat-square)](#documentation-standard)
+[![GitHub](https://img.shields.io/badge/GitHub-Olori24-181717?style=flat-square&logo=github)](https://github.com/Olori24)
 
 </div>
+
+![AgentStation Factory architecture overview](./docs/assets/repo-hero.svg)
+
+> **Repository status:** Active development unless the project-specific status below says otherwise.
+
+## Documentation standard
+
+This repository follows the premium README standard established for NSMS: clear positioning, visual orientation, architecture, security boundaries, setup, validation evidence, maturity tracking and explicit separation between shipped work and roadmap.
+
+| Evidence label | Meaning |
+|---|---|
+| **IMPLEMENTED** | Present in the repository. |
+| **TESTED** | Supported by an executed test or CI result. |
+| **DEPLOYED** | A deployment target/configuration exists. |
+| **VERIFIED IN PRODUCTION** | Confirmed with production evidence. |
+| **MEASURED** | Backed by an actual measurement. |
+| **ROADMAP** | Planned work, not shipped capability. |
 
 ---
 
@@ -401,6 +393,3 @@ Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information
 <div align="center">
 <sub>Engineered with precision for autonomous AI workflows. AgentStation © 2026.</sub>
 </div>
-
-
-<!-- deployment trigger: 2026-09-28 durable-autonomy runtime -->

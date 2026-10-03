@@ -16,13 +16,13 @@ services:
         value: "15000"
       - key: AUTONOMY_MAX_CONCURRENCY
         value: "2"
-      - key: JOB_LEASE_MS
-        value: "120000"
       - key: AGENTSTATION_DATA_DIR
         value: /var/data
       - key: AGENTSTATION_WORKSPACE_DIR
         value: /var/workspace
       - key: GEMINI_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
         sync: false
       - key: ENCRYPTION_KEY
         generateValue: true

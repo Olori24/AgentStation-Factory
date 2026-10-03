@@ -154,7 +154,7 @@ export interface SquadMission {
   id: string;
   prompt: string;
   createdAt: string;
-  status: 'idle' | 'running' | 'completed' | 'failed';
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
   currentStage: string;
   progressPercent: number;
   files: WorkspaceFile[];

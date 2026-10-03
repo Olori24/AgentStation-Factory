@@ -2,7 +2,7 @@ name: AgentStation CI/CD Verification
 
 on:
   push:
-    branches: [ main, develop, 'feat/**', 'fix/**', 'release/**' ]
+    branches: [ main, develop, 'arena/**', 'feat/**', 'fix/**', 'ux/**', 'chore/**', 'docs/**', 'release/**' ]
   pull_request:
     branches: [ main ]
 
