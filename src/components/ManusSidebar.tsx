@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import {
   Plus,
   Search,
-  CheckCircle2,
-  Clock,
   Trash2,
   Cpu,
   Github,
@@ -14,6 +12,8 @@ import {
   ExternalLink,
   Bot,
   Film,
+  Zap,
+  Command,
 } from 'lucide-react';
 import { SquadMission } from '../types';
 
@@ -31,6 +31,8 @@ interface ManusSidebarProps {
   onOpenFullStack?: () => void;
   onOpenOnboarding?: () => void;
   onOpenGrowthFactory?: () => void;
+  onOpenAutonomy?: () => void;
+  onOpenCommandPalette?: () => void;
   aiProvider: 'gemini' | 'ollama';
   isMobile?: boolean;
 }
@@ -49,6 +51,8 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   onOpenFullStack,
   onOpenOnboarding,
   onOpenGrowthFactory,
+  onOpenAutonomy,
+  onOpenCommandPalette,
   aiProvider,
   isMobile = false,
 }) => {
@@ -73,15 +77,43 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
 
           <button
             onClick={onNewTask}
-            title="New Task (Ctrl+K)"
+            title="New Task"
             disabled={isExecuting}
             className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
           </button>
+
+          {onOpenCommandPalette && (
+            <button
+              onClick={onOpenCommandPalette}
+              title="Command Palette (⌘K)"
+              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition"
+            >
+              <Command className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <div className="flex flex-col items-center gap-2 text-slate-500">
+          {onOpenAutonomy && (
+            <button
+              onClick={onOpenAutonomy}
+              title="Autonomy Command Center & Multi-Agent Fabric"
+              className="p-2 rounded-lg text-emerald-400 hover:bg-emerald-950/60 transition"
+            >
+              <Zap className="w-4 h-4" />
+            </button>
+          )}
+          {onOpenGrowthFactory && (
+            <button
+              onClick={onOpenGrowthFactory}
+              title="Growth Factory"
+              className="p-2 rounded-lg text-cyan-400 hover:bg-cyan-950/60 transition"
+            >
+              <Film className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={onOpenGitHub}
             title="GitHub Sync"
@@ -104,7 +136,9 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   return (
     <aside
       aria-label="AgentStation navigation"
-      className={`w-[min(20rem,88vw)] lg:w-64 bg-slate-950 border-r border-slate-800/80 flex flex-col justify-between shrink-0 select-none h-full min-h-0 text-slate-200 font-sans transition-transform duration-200 ${isMobile ? 'fixed inset-y-0 left-0 z-[90] lg:static lg:z-auto shadow-2xl lg:shadow-none' : ''} ${isMobile && !isOpen ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}`}
+      className={`w-[min(20rem,88vw)] lg:w-64 bg-slate-950 border-r border-slate-800/80 flex flex-col justify-between shrink-0 select-none h-full min-h-0 text-slate-200 font-sans transition-transform duration-200 ${
+        isMobile ? 'fixed inset-y-0 left-0 z-[90] lg:static lg:z-auto shadow-2xl lg:shadow-none' : ''
+      } ${isMobile && !isOpen ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}`}
     >
       {/* Top Header & New Task Button */}
       <div className="p-3.5 pb-2 border-b border-slate-800/70">
@@ -133,31 +167,41 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
           </button>
         </div>
 
-        {/* Primary + New Task Button */}
-        <button
-          onClick={onNewTask}
-          disabled={isExecuting}
-          className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs shadow-lg shadow-blue-600/25 transition disabled:opacity-40"
-        >
-          <div className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            <span>New Task</span>
-          </div>
-          <span className="text-[10px] font-mono bg-blue-700/80 px-1.5 py-0.5 rounded text-blue-100">
-            ⌘K
-          </span>
-        </button>
+        {/* Primary + New Task & Command Palette Row */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onNewTask}
+            disabled={isExecuting}
+            className="flex-1 flex items-center justify-between px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs shadow-lg shadow-blue-600/25 transition disabled:opacity-40"
+          >
+            <div className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              <span>New Task</span>
+            </div>
+          </button>
+
+          {onOpenCommandPalette && (
+            <button
+              onClick={onOpenCommandPalette}
+              title="Open Command Palette (⌘K / Ctrl+K)"
+              className="px-2.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-mono flex items-center gap-1 transition"
+            >
+              <Command className="w-3.5 h-3.5 text-blue-400" />
+              <span>K</span>
+            </button>
+          )}
+        </div>
 
         {/* Search Bar */}
-        <div className="mt-3 relative">
+        <div className="mt-2.5 relative">
           <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search tasks..."
+            placeholder="Filter mission history..."
             aria-label="Search recent tasks"
-            className="w-full min-h-11 pl-8 pr-2.5 text-xs bg-slate-900/90 text-slate-200 placeholder-slate-500 rounded-lg border border-slate-800/80 focus:outline-none focus:border-blue-500 transition"
+            className="w-full py-2 pl-8 pr-2.5 text-xs bg-slate-900/90 text-slate-200 placeholder-slate-500 rounded-lg border border-slate-800/80 focus:outline-none focus:border-blue-500 transition"
           />
         </div>
       </div>
@@ -165,7 +209,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
       {/* Task History List */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 scrollbar-thin min-h-0">
         <div className="px-2 py-1 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold flex items-center justify-between">
-          <span>Recent Tasks</span>
+          <span>Mission Workspace</span>
           <span>{filteredMissions.length}</span>
         </div>
 
@@ -227,6 +271,38 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
 
       {/* Footer Settings & Status */}
       <div className="p-3 border-t border-slate-800/80 space-y-2 bg-slate-950/60">
+        {/* Autonomy & Multi-Agent Fabric */}
+        {onOpenAutonomy && (
+          <button
+            onClick={onOpenAutonomy}
+            className="w-full py-2 px-2.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-[11px] text-emerald-300 border border-emerald-800/60 transition flex items-center justify-between font-medium"
+          >
+            <div className="flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Autonomy & Agent Fabric</span>
+            </div>
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+              24/7
+            </span>
+          </button>
+        )}
+
+        {/* Growth Factory */}
+        {onOpenGrowthFactory && (
+          <button
+            onClick={onOpenGrowthFactory}
+            className="w-full py-2 px-2.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-[11px] text-cyan-300 border border-cyan-900/60 transition flex items-center justify-between font-medium"
+          >
+            <div className="flex items-center gap-2">
+              <Film className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Growth Factory Studio</span>
+            </div>
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
+              30D
+            </span>
+          </button>
+        )}
+
         {/* Model Status Pill */}
         <button
           onClick={onOpenOllama}
@@ -253,20 +329,12 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
           <ExternalLink className="w-3 h-3 text-slate-500" />
         </button>
 
-        {/* Growth Factory */}
-        {onOpenGrowthFactory && (
-          <button onClick={onOpenGrowthFactory} className="w-full py-2 px-2 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-[11px] text-cyan-300 border border-cyan-900/60 transition flex items-center justify-center gap-2">
-            <Film className="w-3.5 h-3.5" />
-            <span>Growth Factory</span>
-          </button>
-        )}
-
         {/* Full-Stack Ops & Guide */}
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-0.5">
           {onOpenFullStack && (
             <button
               onClick={onOpenFullStack}
-              className="flex-1 py-1 px-2 rounded-md bg-slate-900 hover:bg-slate-800 text-[11px] text-slate-400 hover:text-slate-200 border border-slate-800 text-center transition flex items-center justify-center gap-1"
+              className="flex-1 py-1.5 px-2 rounded-md bg-slate-900 hover:bg-slate-800 text-[11px] text-slate-400 hover:text-slate-200 border border-slate-800 text-center transition flex items-center justify-center gap-1"
             >
               <Server className="w-3 h-3 text-amber-400" />
               <span>Full-Stack</span>
@@ -276,7 +344,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
           {onOpenOnboarding && (
             <button
               onClick={onOpenOnboarding}
-              className="flex-1 py-1 px-2 rounded-md bg-slate-900 hover:bg-slate-800 text-[11px] text-slate-400 hover:text-slate-200 border border-slate-800 text-center transition flex items-center justify-center gap-1"
+              className="flex-1 py-1.5 px-2 rounded-md bg-slate-900 hover:bg-slate-800 text-[11px] text-slate-400 hover:text-slate-200 border border-slate-800 text-center transition flex items-center justify-center gap-1"
             >
               <HelpCircle className="w-3 h-3 text-emerald-400" />
               <span>Tour</span>

@@ -32,6 +32,7 @@ import { ManusConversation } from './components/ManusConversation';
 import { ManusComputer, WorkstationTab } from './components/ManusComputer';
 import { GrowthFactoryModal } from './components/GrowthFactoryModal';
 import { AutonomyCommandCenter } from './components/AutonomyCommandCenter';
+import { CommandPalette } from './components/CommandPalette';
 import { DEFAULT_AGENTS, INITIAL_MISSION, GITHUB_REPO_INFO } from './data/defaults';
 import { SAMPLE_MISSIONS } from './data/sampleMissions';
 import { SquadMission, AgentProfile, AgentRole, AgentLogEntry, WorkspaceFile, VideoProject, CiStatusInfo, TerminalStreamMessage } from './types';
@@ -84,6 +85,20 @@ export default function App() {
   const [isFullStackModalOpen, setIsFullStackModalOpen] = useState(false);
   const [isGrowthFactoryOpen, setIsGrowthFactoryOpen] = useState(false);
   const [isAutonomyOpen, setIsAutonomyOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+
+  // Global ⌘K / Ctrl+K shortcut for Command Palette (Jakob's Law)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   // Real-time WebSocket terminal streamer state
   const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
@@ -342,6 +357,16 @@ export default function App() {
     }));
 
     try {
+      // Emit initial Atlas SSE telemetry
+      fetch('/api/stream/test-emit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent: 'Atlas (Architect)',
+          thought: `Decomposing objective into modular architecture & subtasks: "${promptText.slice(0, 60)}"`,
+        }),
+      }).catch(() => {});
+
       // Simulate sequential hand-offs smoothly
       setTimeout(() => {
         setActiveAgentRole('developer');
@@ -354,6 +379,14 @@ export default function App() {
               : a
           )
         );
+        fetch('/api/stream/test-emit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent: 'Cypher (Lead Engineer)',
+            thought: 'Synthesizing typed application modules, interactive UI, and workspace artifacts.',
+          }),
+        }).catch(() => {});
       }, 900);
 
       setTimeout(() => {
@@ -368,6 +401,14 @@ export default function App() {
               : a
           )
         );
+        fetch('/api/stream/test-emit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent: 'Sentinel (QA Auditor)',
+            thought: 'Executing automated verification suite and sandbox assertions.',
+          }),
+        }).catch(() => {});
       }, 1800);
 
       setTimeout(() => {
@@ -381,6 +422,14 @@ export default function App() {
               : a
           )
         );
+        fetch('/api/stream/test-emit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent: 'Vesper (Dossier & Strategy)',
+            thought: 'Compiling executive dossier, structured spreadsheet dataset, and outreach sequence.',
+          }),
+        }).catch(() => {});
       }, 2700);
 
       setTimeout(() => {
@@ -417,6 +466,18 @@ export default function App() {
 
       // Retain context from previous logs
       finalMission.logs = [...finalMission.logs, ...mission.logs];
+
+      // Persist all generated mission files to workspace/ disk (Phase 2 + Phase 3 SSE sync)
+      if (Array.isArray(finalMission.files) && finalMission.files.length > 0) {
+        fetch('/api/files/save-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            missionId: newMissionId,
+            files: finalMission.files,
+          }),
+        }).catch(() => {});
+      }
 
       setMission(finalMission);
       updateHistoryWithMission(finalMission);
@@ -680,6 +741,8 @@ export default function App() {
           onOpenFullStack={() => setIsFullStackModalOpen(true)}
           onOpenOnboarding={() => setIsOnboardingOpen(true)}
           onOpenGrowthFactory={() => setIsGrowthFactoryOpen(true)}
+          onOpenAutonomy={() => setIsAutonomyOpen(true)}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           aiProvider={aiProvider}
         />
 
@@ -692,6 +755,9 @@ export default function App() {
               recentMissions={missionHistory}
               onSelectMission={handleSelectMission}
               onOpenOnboarding={() => setIsOnboardingOpen(true)}
+              onOpenAutonomy={() => setIsAutonomyOpen(true)}
+              onOpenGrowthFactory={() => setIsGrowthFactoryOpen(true)}
+              onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
             />
           </div>
         ) : (
@@ -747,6 +813,12 @@ export default function App() {
                     setComputerTab(tab);
                     setMobileActiveView('workstation');
                   }}
+                  onOpenFileInWorkstation={(filePath) => {
+                    setSelectedFilePath(filePath);
+                    setComputerTab('code');
+                    setMobileActiveView('workstation');
+                    showToast(`Opened ${filePath} in Code IDE`);
+                  }}
                 />
               </div>
 
@@ -795,6 +867,7 @@ export default function App() {
                   ciStatus={ciStatus}
                   gitBranch={mission.gitBranch || 'main'}
                   gitCommitMessage={mission.gitCommitMessage}
+                  selectedFilePath={selectedFilePath}
                 />
               </div>
             </div>
@@ -806,6 +879,289 @@ export default function App() {
         isOpen={isAutonomyOpen}
         onClose={() => setIsAutonomyOpen(false)}
         onToast={showToast}
+      />
+
+      {isGrowthFactoryOpen && (
+        <GrowthFactoryModal
+          onClose={() => setIsGrowthFactoryOpen(false)}
+          onMountCampaignToWorkstation={({ project, objective, campaign, targetTab = 'report' }) => {
+            const angles = Array.isArray(campaign?.angles) ? campaign.angles : [];
+            const trackingPattern = campaign?.tracking?.campaignIdPattern || `gf_${project.id}`;
+            const markdownDossier = [
+              `# ${campaign?.name || `${project.name} 30-Day Growth Campaign`}`,
+              `> **Project:** ${project.name} (${project.offer})  `,
+              `> **Target Audience:** ${project.audience}  `,
+              `> **Tracking Pattern:** \`${trackingPattern}\``,
+              ``,
+              `## 1. Strategic Positioning & Objective`,
+              `${campaign?.positioning || objective}`,
+              ``,
+              `## 2. High-Converting Short-Form Angles`,
+              ...angles.map(
+                (a: any, idx: number) =>
+                  `### Angle ${idx + 1}: ${a.title || `Hook ${idx + 1}`}\n- **Hook:** "${a.hook}"\n- **Format:** ${a.format || '9:16 Reel'}\n- **CTA:** ${a.cta}\n- **Conversion Goal:** ${a.conversionGoal || 'Qualified Lead'}`
+              ),
+              ``,
+              `## 3. 4-Week Execution Rollout`,
+              ...(campaign?.weeklyPlan || []).map(
+                (w: any) => `- **Week ${w.week} (${w.posts} posts):** ${w.focus}`
+              ),
+            ].join('\n');
+
+            const spreadsheetRows = angles.map((a: any, idx: number) => ({
+              angle_id: `ANG-0${idx + 1}`,
+              project: project.name,
+              title: a.title || `Angle ${idx + 1}`,
+              hook: a.hook || '',
+              format: a.format || '9:16 Reel',
+              cta: a.cta || 'Book Discovery Call',
+              conversion_goal: a.conversionGoal || 'Qualified Lead',
+              tracking_code: `${trackingPattern}_ang${idx + 1}`,
+              status: 'Ready',
+            }));
+
+            const csvHeader = 'angle_id,project,title,hook,format,cta,conversion_goal,tracking_code,status';
+            const csvBody = spreadsheetRows
+              .map((r: any) =>
+                [
+                  r.angle_id,
+                  `"${r.project}"`,
+                  `"${String(r.title).replace(/"/g, '""')}"`,
+                  `"${String(r.hook).replace(/"/g, '""')}"`,
+                  `"${r.format}"`,
+                  `"${String(r.cta).replace(/"/g, '""')}"`,
+                  `"${r.conversion_goal}"`,
+                  r.tracking_code,
+                  r.status,
+                ].join(',')
+              )
+              .join('\n');
+
+            const interactiveHtmlDashboard = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>${project.name} — Growth Factory Attribution Hub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6 font-sans">
+  <div class="max-w-4xl mx-auto space-y-6">
+    <div class="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <span class="px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-mono uppercase">Growth Factory Live App</span>
+        <h1 class="text-xl font-extrabold text-white mt-2">${project.name} — 30-Day Funnel & Attribution</h1>
+        <p class="text-xs text-slate-400 mt-1">${project.offer} • Target: ${project.audience}</p>
+      </div>
+      <div class="text-right font-mono text-xs">
+        <div class="text-slate-400">Tracking Pattern</div>
+        <div class="text-emerald-400 font-bold mt-0.5">${trackingPattern}</div>
+      </div>
+    </div>
+
+    <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 grid sm:grid-cols-3 gap-4">
+      <div>
+        <label class="text-[11px] font-mono text-slate-400 uppercase">Projected 30D Views</label>
+        <input id="viewsInput" type="number" value="45000" oninput="recalc()" class="w-full mt-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-sm font-mono text-white" />
+      </div>
+      <div>
+        <label class="text-[11px] font-mono text-slate-400 uppercase">Click-to-Lead Rate (%)</label>
+        <input id="rateInput" type="number" step="0.5" value="3.5" oninput="recalc()" class="w-full mt-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-sm font-mono text-white" />
+      </div>
+      <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col justify-center">
+        <span class="text-[10px] font-mono uppercase text-emerald-300">Estimated Qualified Leads</span>
+        <span id="leadsOut" class="text-2xl font-extrabold text-emerald-400 font-mono">1,575</span>
+      </div>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-3">
+      ${angles
+        .map(
+          (a: any, i: number) => `<div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between text-[11px] font-mono">
+          <span class="text-cyan-400 font-bold">ANGLE 0${i + 1}: ${a.title || 'Hook'}</span>
+          <span class="px-2 py-0.5 rounded bg-slate-950 text-slate-400">${a.format || '9:16 Reel'}</span>
+        </div>
+        <p class="text-xs font-semibold text-white leading-relaxed">"${a.hook || ''}"</p>
+        <div class="text-[11px] font-mono text-emerald-400">CTA: ${a.cta || ''}</div>
+      </div>`
+        )
+        .join('\n')}
+    </div>
+  </div>
+  <script>
+    function recalc() {
+      var v = Number(document.getElementById('viewsInput').value || 0);
+      var r = Number(document.getElementById('rateInput').value || 0);
+      var leads = Math.round(v * (r / 100));
+      document.getElementById('leadsOut').textContent = leads.toLocaleString();
+    }
+  </script>
+</body>
+</html>`;
+
+            const campaignFiles: WorkspaceFile[] = [
+              {
+                name: 'index.html',
+                path: 'public/index.html',
+                language: 'html',
+                content: interactiveHtmlDashboard,
+              },
+              {
+                name: 'growth_blueprint.md',
+                path: 'reports/growth_blueprint.md',
+                language: 'markdown',
+                content: markdownDossier,
+              },
+              {
+                name: 'campaign_attribution.py',
+                path: 'src/campaign_attribution.py',
+                language: 'python',
+                content: `"""\nGrowth Factory Attribution Tracker — ${project.name}\nTracking Pattern: ${trackingPattern}\n"""\n\nANGLES = ${JSON.stringify(spreadsheetRows, null, 2)}\n\ndef compute_conversion_rate(views: int, leads: int) -> float:\n    if views <= 0:\n        return 0.0\n    return round((leads / views) * 100.0, 2)\n\nif __name__ == "__main__":\n    print(f"Loaded {len(ANGLES)} growth angles for ${project.name}")\n`,
+              },
+              {
+                name: 'test_campaign_attribution.py',
+                path: 'tests/test_campaign_attribution.py',
+                language: 'python',
+                content: `from src.campaign_attribution import ANGLES, compute_conversion_rate\n\ndef test_angles_populated():\n    assert len(ANGLES) >= 1\n\ndef test_conversion_math():\n    assert compute_conversion_rate(1000, 45) == 4.5\n`,
+              },
+              ...(mission.files || []).filter(
+                (f) =>
+                  ![
+                    'public/index.html',
+                    'reports/growth_blueprint.md',
+                    'src/campaign_attribution.py',
+                    'tests/test_campaign_attribution.py',
+                  ].includes(f.path)
+              ),
+            ];
+
+            const campaignVideo: VideoProject = {
+              title: `${project.name} 30D Launch`,
+              hook: (angles[0]?.hook || `${project.name}: ${project.offer}`).toUpperCase().slice(0, 64),
+              subtitle: campaign?.positioning || objective,
+              totalDurationSec: 16,
+              soundtrackMood: 'energetic-tech',
+              audioScript: `Introducing the 30-day Growth Factory campaign for ${project.name}. ${angles[0]?.hook || ''} ${angles[0]?.cta || ''}`,
+              scenes: angles.slice(0, 4).map((a: any, idx: number) => ({
+                id: `gf-scene-${idx + 1}`,
+                sceneIndex: idx,
+                durationSec: 4,
+                badge: `ANGLE 0${idx + 1} • ${a.format || '9:16 REEL'}`,
+                heading: (a.title || `GROWTH HOOK ${idx + 1}`).toUpperCase(),
+                subheading: a.hook || objective,
+                bulletPoints: [
+                  `Offer: ${project.offer}`,
+                  `CTA: ${a.cta || 'Direct WhatsApp Lead'}`,
+                  `Track: ${trackingPattern}_ang${idx + 1}`,
+                ],
+                accentColor: ['#06b6d4', '#10b981', '#3b82f6', '#8b5cf6'][idx % 4],
+                callToAction: a.cta || project.name,
+              })),
+            };
+
+            const newMissionId = `growth-${Date.now()}`;
+            const mountedMission: SquadMission = {
+              ...mission,
+              id: newMissionId,
+              prompt: `[Growth Factory] ${project.name}: ${objective}`,
+              createdAt: 'Just now',
+              status: 'completed',
+              currentStage: 'Growth Campaign Mounted in Workstation',
+              progressPercent: 100,
+              files: campaignFiles,
+              video: campaignVideo,
+              spreadsheet: {
+                id: `sheet-gf-${Date.now()}`,
+                title: `${project.name} — 30-Day Content & Attribution Matrix`,
+                description: `Tracked short-form video hooks, formats, CTAs, and attribution codes for ${project.audience}`,
+                totalCount: spreadsheetRows.length,
+                csvContent: `${csvHeader}\n${csvBody}`,
+                summaryMetrics: [
+                  { label: 'Project', value: project.name },
+                  { label: 'Duration', value: '30 Days' },
+                  { label: 'Angles', value: String(spreadsheetRows.length) },
+                  { label: 'Tracking Prefix', value: trackingPattern },
+                ],
+                columns: [
+                  { key: 'angle_id', label: 'ID', type: 'badge' },
+                  { key: 'title', label: 'Angle Title', type: 'text' },
+                  { key: 'hook', label: 'Viral Hook Script', type: 'text' },
+                  { key: 'format', label: 'Format', type: 'badge' },
+                  { key: 'cta', label: 'Call To Action', type: 'text' },
+                  { key: 'tracking_code', label: 'Tracking ID', type: 'badge' },
+                ],
+                rows: spreadsheetRows,
+              },
+              document: {
+                id: `doc-gf-${Date.now()}`,
+                title: campaign?.name || `${project.name} 30-Day Growth Blueprint`,
+                category: 'executive_brief',
+                markdownContent: markdownDossier,
+                author: 'Vesper & Sterling (Growth Factory)',
+                createdAt: new Date().toLocaleDateString(),
+                readTimeMin: 5,
+                tags: [project.name, '30-Day Campaign', 'Short-Form Video', 'Lead Attribution'],
+              },
+              campaign: {
+                id: `camp-gf-${Date.now()}`,
+                campaignName: campaign?.name || `${project.name} Outreach & Conversion Sequence`,
+                targetAudience: project.audience,
+                strategy: campaign?.positioning || objective,
+                totalContacts: angles.length || 6,
+                cadenceSteps: [
+                  { day: 1, title: 'Hook & Value Drop', purpose: 'Capture high-intent attention' },
+                  { day: 4, title: 'Case Proof & Demo', purpose: 'Overcome skepticism with proof' },
+                  { day: 8, title: 'Direct Qualification CTA', purpose: 'Convert into booked call' },
+                ],
+                emails: angles.map((a: any, i: number) => ({
+                  id: `gf-email-${i + 1}`,
+                  recipientName: `${project.audience.split(',')[0]} Lead #${i + 1}`,
+                  recipientRole: a.title || `Decision Maker`,
+                  company: `${project.name} Target Segment`,
+                  email: `prospect${i + 1}@${project.id}.ng`,
+                  subject: a.title ? `${project.name}: ${a.title}` : `Quick question re: ${project.offer}`,
+                  body: `Hi there,\n\n${a.hook}\n\nWe built ${project.name} (${project.offer}) specifically for ${project.audience.toLowerCase()} looking to achieve: ${objective}\n\n${a.cta}\n\nBest regards,\nAgentStation Growth Squad`,
+                  callToAction: a.cta || 'Book a 10-minute walkthrough',
+                  stepIndex: (i % 3) + 1,
+                  status: 'ready' as const,
+                  followUpCadence: `Angle #${i + 1} (${a.format || '9:16 Video + DM'})`,
+                })),
+              },
+            };
+
+            fetch('/api/files/save-batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ files: campaignFiles, missionId: newMissionId }),
+            }).catch(() => {});
+
+            setMission(mountedMission);
+            updateHistoryWithMission(mountedMission);
+            setIsHomePromptMode(false);
+            setComputerTab(targetTab);
+            setMobileActiveView('workstation');
+            showToast(`Mounted "${project.name}" campaign into Dossier, Spreadsheet, Outreach & Video Studio!`);
+          }}
+        />
+      )}
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        missions={missionHistory}
+        onSelectMission={handleSelectMission}
+        onNewTask={() => setIsHomePromptMode(true)}
+        onExecutePrompt={handleExecutePrompt}
+        onSelectTab={(tab) => {
+          setComputerTab(tab);
+          setMobileActiveView('workstation');
+          setIsHomePromptMode(false);
+        }}
+        onOpenAutonomy={() => setIsAutonomyOpen(true)}
+        onOpenGrowthFactory={() => setIsGrowthFactoryOpen(true)}
+        onOpenFullStack={() => setIsFullStackModalOpen(true)}
+        onOpenGitHub={() => setIsGitHubModalOpen(true)}
+        onOpenOllama={() => setIsOllamaModalOpen(true)}
       />
 
       {/* GitHub Repository Modal */}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Globe,
   Terminal,
@@ -7,25 +7,24 @@ import {
   Maximize2,
   Minimize2,
   RotateCcw,
-  ExternalLink,
-  ChevronLeft,
-  ChevronRight,
   Monitor,
   Smartphone,
-  Copy,
-  Check,
-  Download,
-  FileArchive,
-  ShieldCheck,
   Cpu,
   Workflow,
   GitBranch,
   Table,
   FileText,
   Send,
-  MoreHorizontal,
 } from 'lucide-react';
-import { WorkspaceFile, TestExecutionResult, VideoProject, CiStatusInfo, SpreadsheetDataset, DocumentArtifact, OutreachCampaign } from '../types';
+import {
+  WorkspaceFile,
+  TestExecutionResult,
+  VideoProject,
+  CiStatusInfo,
+  SpreadsheetDataset,
+  DocumentArtifact,
+  OutreachCampaign,
+} from '../types';
 import { CodeWorkspace } from './CodeWorkspace';
 import { VideoStudio } from './VideoStudio';
 import { PipelineStatus } from './PipelineStatus';
@@ -33,7 +32,15 @@ import { SpreadsheetViewer } from './SpreadsheetViewer';
 import { DocumentViewer } from './DocumentViewer';
 import { OutreachCampaignViewer } from './OutreachCampaignViewer';
 
-export type WorkstationTab = 'browser' | 'terminal' | 'code' | 'video' | 'pipeline' | 'data' | 'report' | 'outreach';
+export type WorkstationTab =
+  | 'browser'
+  | 'terminal'
+  | 'code'
+  | 'video'
+  | 'pipeline'
+  | 'data'
+  | 'report'
+  | 'outreach';
 
 interface ManusComputerProps {
   files: WorkspaceFile[];
@@ -59,6 +66,7 @@ interface ManusComputerProps {
   spreadsheet?: SpreadsheetDataset;
   document?: DocumentArtifact;
   campaign?: OutreachCampaign;
+  selectedFilePath?: string | null;
 }
 
 export const ManusComputer: React.FC<ManusComputerProps> = ({
@@ -85,21 +93,16 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
   spreadsheet,
   document,
   campaign,
+  selectedFilePath,
 }) => {
   const [internalTab, setInternalTab] = useState<WorkstationTab>(activeTab);
   const [isMaximized, setIsMaximized] = useState(false);
-  const [isPipelineRibbonOpen, setIsPipelineRibbonOpen] = useState(true);
+  const [isPipelineRibbonOpen, setIsPipelineRibbonOpen] = useState(false);
   const [viewportMode, setViewportMode] = useState<'desktop' | 'mobile'>('desktop');
-  const [browserUrl, setBrowserUrl] = useState('http://localhost:3000/app');
+  const [browserUrl] = useState('https://sandbox.agentstation.local/app');
   const [browserKey, setBrowserKey] = useState(0);
-  const [isToolsOpen, setIsToolsOpen] = useState(false);
 
-  const secondaryTabs: WorkstationTab[] = ['video', 'pipeline', 'data', 'report', 'outreach'];
   const currentTab = onTabChange ? activeTab : internalTab;
-
-  useEffect(() => {
-    if (secondaryTabs.includes(currentTab)) setIsToolsOpen(true);
-  }, [currentTab]);
   const setTab = (tab: WorkstationTab) => {
     if (onTabChange) onTabChange(tab);
     setInternalTab(tab);
@@ -112,113 +115,236 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
   return (
     <div
       className={`flex flex-col bg-slate-950 border border-slate-800/90 rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ${
-        isMaximized
-          ? 'fixed inset-4 z-50 rounded-2xl'
-          : 'h-full min-h-0'
+        isMaximized ? 'fixed inset-4 z-50 rounded-2xl' : 'h-full min-h-0'
       }`}
     >
-      {/* 1. AgentStation Computer Titlebar */}
-      <div className="min-h-11 px-2.5 sm:px-4 py-1.5 bg-slate-900/95 border-b border-slate-800/90 flex items-center justify-between gap-2 shrink-0 select-none">
-        {/* Window controls & Name */}
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="hidden sm:flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-red-500/80 border border-red-600/40" />
-            <span className="w-3 h-3 rounded-full bg-amber-500/80 border border-amber-600/40" />
-            <span className="w-3 h-3 rounded-full bg-emerald-500/80 border border-emerald-600/40" />
+      {/* 1. AgentStation Workstation Titlebar (Jakob's Law: Familiar IDE/Browser Chrome + Visible Tab Strip) */}
+      <div className="px-2.5 sm:px-4 py-2 bg-slate-900/95 border-b border-slate-800/90 flex flex-col gap-2 shrink-0 select-none">
+        <div className="flex items-center justify-between gap-2">
+          {/* Window controls & Name */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="hidden sm:flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-red-500/80 border border-red-600/40" />
+              <span className="w-3 h-3 rounded-full bg-amber-500/80 border border-amber-600/40" />
+              <span className="w-3 h-3 rounded-full bg-emerald-500/80 border border-emerald-600/40" />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] sm:text-xs font-bold font-mono tracking-tight text-white flex items-center gap-1.5 truncate">
+                <Cpu className="w-3.5 h-3.5 text-blue-400" />
+                AgentStation Workstation
+              </span>
+              <span
+                role="status"
+                aria-live="polite"
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono ${
+                  isWsConnected
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isWsConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+                  }`}
+                />
+                {isWsConnected ? 'Sandbox Live' : 'Sandbox Ready'}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] sm:text-xs font-bold font-mono tracking-tight text-white flex items-center gap-1.5 truncate">
-              <Cpu className="w-3.5 h-3.5 text-blue-400" />
-              AgentStation Workstation
-            </span>
-            <span
-              role="status"
-              aria-live="polite"
-              className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono ${
-                isWsConnected
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-slate-800 text-slate-400 border-slate-700'
-              }`}
+          {/* Right Window Actions */}
+          <div className="flex items-center gap-1.5">
+            {currentTab !== 'pipeline' && (
+              <button
+                onClick={() => setIsPipelineRibbonOpen(!isPipelineRibbonOpen)}
+                title={isPipelineRibbonOpen ? 'Hide CI/CD Status Bar' : 'Show CI/CD Status Bar'}
+                className={`px-2 py-1 rounded-md text-xs font-mono flex items-center gap-1.5 transition ${
+                  isPipelineRibbonOpen
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <Workflow className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline text-[11px]">CI/CD Bar</span>
+              </button>
+            )}
+
+            {onPushToGitHub && (
+              <button
+                onClick={onPushToGitHub}
+                title="Sync workspace to GitHub"
+                className="px-2.5 py-1 rounded-md text-xs font-mono flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              >
+                <GitBranch className="w-3.5 h-3.5 text-blue-400" />
+                <span className="hidden sm:inline text-[11px]">{gitBranch}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setIsMaximized(!isMaximized)}
+              title={isMaximized ? 'Restore Viewport' : 'Maximize Workstation'}
+              aria-label={isMaximized ? 'Restore workstation' : 'Maximize workstation'}
+              className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition"
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${isWsConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-              {isWsConnected ? 'Sandbox Connected' : 'Sandbox Offline'}
-            </span>
+              {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
           </div>
         </div>
 
-        {/* Primary workspace navigation. Specialized outputs stay available without competing with the core task surface. */}
-        <div className="flex items-center gap-1.5 min-w-0">
-          <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-xs overflow-x-auto max-w-[62vw] sm:max-w-none scrollbar-none" aria-label="Primary workstation views">
-            <button type="button" onClick={() => setTab('browser')} aria-pressed={currentTab === 'browser'} className={`flex items-center gap-1.5 min-h-9 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${currentTab === 'browser' ? 'bg-blue-600 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'}`}>
-              <Globe className="w-3.5 h-3.5" /><span className="hidden sm:inline">Browser</span>
-            </button>
-            <button type="button" onClick={() => setTab('code')} aria-pressed={currentTab === 'code'} className={`flex items-center gap-1.5 min-h-9 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${currentTab === 'code' ? 'bg-indigo-600 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'}`}>
-              <Code2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Code</span>
-            </button>
-            <button type="button" onClick={() => setTab('terminal')} aria-pressed={currentTab === 'terminal'} className={`flex items-center gap-1.5 min-h-9 px-2.5 py-1 rounded-md transition font-medium text-xs whitespace-nowrap ${currentTab === 'terminal' ? 'bg-amber-600 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'}`}>
-              <Terminal className="w-3.5 h-3.5" /><span className="hidden sm:inline">Terminal</span>
-            </button>
-          </div>
+        {/* Unified Discoverable Tab Bar (Jakob's Law: VS Code / Cursor / Linear Tab Strip) */}
+        <div
+          className="flex items-center gap-1 overflow-x-auto scrollbar-none pt-0.5"
+          role="tablist"
+          aria-label="Workstation Deliverable Tabs"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={currentTab === 'browser'}
+            onClick={() => setTab('browser')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+              currentTab === 'browser'
+                ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>App Preview</span>
+          </button>
 
-          <div className="relative shrink-0">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={currentTab === 'code'}
+            onClick={() => setTab('code')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+              currentTab === 'code'
+                ? 'bg-indigo-600 text-white shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70'
+            }`}
+          >
+            <Code2 className="w-3.5 h-3.5" />
+            <span>Code IDE</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-black/25">
+              {files.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={currentTab === 'terminal'}
+            onClick={() => setTab('terminal')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+              currentTab === 'terminal'
+                ? 'bg-amber-600 text-slate-950 shadow-sm font-bold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70'
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span>Terminal</span>
+            {execution?.testsPassed ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300">
+                ✓{execution.testsPassed}
+              </span>
+            ) : null}
+          </button>
+
+          {spreadsheet && (
             <button
               type="button"
-              onClick={() => setIsToolsOpen((open) => !open)}
-              aria-expanded={isToolsOpen}
-              aria-haspopup="menu"
-              aria-label="Open workstation tools"
-              className={`flex items-center gap-1.5 min-h-9 px-2.5 rounded-md border text-xs font-semibold transition ${secondaryTabs.includes(currentTab) || isToolsOpen ? 'bg-slate-800 text-white border-slate-600' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800'}`}
-            >
-              <MoreHorizontal className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Tools</span>
-              {secondaryTabs.includes(currentTab) && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
-            </button>
-
-            {isToolsOpen && (
-              <div role="menu" aria-label="Specialized workstation tools" className="absolute right-0 top-full mt-2 z-50 w-56 p-1.5 rounded-xl border border-slate-700 bg-slate-900/98 shadow-2xl shadow-black/60 backdrop-blur-xl">
-                <div className="px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-500">Specialized tools</div>
-                {video && <button type="button" role="menuitem" onClick={() => { setTab('video'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'video' ? 'bg-purple-600/20 text-purple-200' : 'text-slate-300 hover:bg-slate-800'}`}><Film className="w-3.5 h-3.5" /> Video Studio</button>}
-                {spreadsheet && <button type="button" role="menuitem" onClick={() => { setTab('data'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'data' ? 'bg-teal-600/20 text-teal-200' : 'text-slate-300 hover:bg-slate-800'}`}><Table className="w-3.5 h-3.5" /> Spreadsheet <span className="ml-auto text-[10px] text-slate-500">{spreadsheet.rows?.length || 20}</span></button>}
-                {document && <button type="button" role="menuitem" onClick={() => { setTab('report'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'report' ? 'bg-cyan-600/20 text-cyan-200' : 'text-slate-300 hover:bg-slate-800'}`}><FileText className="w-3.5 h-3.5" /> Dossier</button>}
-                {campaign && <button type="button" role="menuitem" onClick={() => { setTab('outreach'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'outreach' ? 'bg-orange-600/20 text-orange-200' : 'text-slate-300 hover:bg-slate-800'}`}><Send className="w-3.5 h-3.5" /> Campaign</button>}
-                <button type="button" role="menuitem" onClick={() => { setTab('pipeline'); setIsToolsOpen(false); }} className={`w-full flex items-center gap-2 min-h-10 px-2 rounded-lg text-xs text-left transition ${currentTab === 'pipeline' ? 'bg-emerald-600/20 text-emerald-200' : 'text-slate-300 hover:bg-slate-800'}`}><Workflow className="w-3.5 h-3.5" /> CI/CD Pipeline <span className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400" /></button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Window actions */}
-        <div className="flex items-center gap-2">
-          {currentTab !== 'pipeline' && (
-            <button
-              onClick={() => setIsPipelineRibbonOpen(!isPipelineRibbonOpen)}
-              title={isPipelineRibbonOpen ? 'Hide Pipeline Timeline' : 'Show Pipeline Timeline'}
-              className={`px-2 py-1 rounded-md text-xs font-mono flex items-center gap-1.5 transition ${
-                isPipelineRibbonOpen
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              role="tab"
+              aria-selected={currentTab === 'data'}
+              onClick={() => setTab('data')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                currentTab === 'data'
+                  ? 'bg-teal-600 text-slate-950 shadow-sm font-bold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70'
               }`}
             >
-              <Workflow className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline text-[11px]">Timeline</span>
+              <Table className="w-3.5 h-3.5" />
+              <span>Spreadsheet</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-black/20">
+                {spreadsheet.rows?.length || 20}
+              </span>
+            </button>
+          )}
+
+          {document && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={currentTab === 'report'}
+              onClick={() => setTab('report')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                currentTab === 'report'
+                  ? 'bg-cyan-600 text-slate-950 shadow-sm font-bold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Dossier</span>
+            </button>
+          )}
+
+          {campaign && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={currentTab === 'outreach'}
+              onClick={() => setTab('outreach')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                currentTab === 'outreach'
+                  ? 'bg-orange-600 text-slate-950 shadow-sm font-bold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70'
+              }`}
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Outreach</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-black/20">
+                {campaign.emails?.length || 0}
+              </span>
+            </button>
+          )}
+
+          {video && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={currentTab === 'video'}
+              onClick={() => setTab('video')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                currentTab === 'video'
+                  ? 'bg-purple-600 text-white shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70'
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span>Video Studio</span>
             </button>
           )}
 
           <button
-            onClick={() => setIsMaximized(!isMaximized)}
-            title={isMaximized ? 'Restore Viewport' : 'Maximize Computer'}
-            aria-label={isMaximized ? 'Restore workstation' : 'Maximize workstation'}
-            className="min-w-9 min-h-9 p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            type="button"
+            role="tab"
+            aria-selected={currentTab === 'pipeline'}
+            onClick={() => setTab('pipeline')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+              currentTab === 'pipeline'
+                ? 'bg-emerald-600 text-slate-950 shadow-sm font-bold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70'
+            }`}
           >
-            {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <Workflow className="w-3.5 h-3.5" />
+            <span>CI/CD</span>
           </button>
         </div>
       </div>
 
       {/* 2. Content Area */}
       <div className="flex-1 flex flex-col min-h-0 bg-slate-950 overflow-hidden relative">
-        {/* Interactive CI/CD Timeline Ribbon across tabs */}
+        {/* Interactive CI/CD Timeline Ribbon across tabs (collapsible) */}
         {isPipelineRibbonOpen && currentTab !== 'pipeline' && (
           <div className="px-2 sm:px-3 pt-1.5 pb-1 bg-slate-950 border-b border-slate-800/70 shrink-0">
             <PipelineStatus
@@ -233,6 +359,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
             />
           </div>
         )}
+
         {/* TAB 0A: INTERACTIVE SPREADSHEET DATASET */}
         {currentTab === 'data' && (
           <div className="flex-1 flex flex-col min-h-0">
@@ -264,7 +391,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
                   onClick={handleRefresh}
                   aria-label="Reload application preview"
                   title="Reload Application"
-                  className="p-1 rounded hover:bg-slate-800 hover:text-white transition"
+                  className="p-1.5 rounded hover:bg-slate-800 hover:text-white transition"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
@@ -277,49 +404,63 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
                 <span className="ml-auto text-[10px] text-emerald-400 font-bold">200 OK</span>
               </div>
 
-              {/* Viewport Toggles */}
-              <div className="flex items-center gap-1 text-slate-400">
+              {/* Viewport Toggles (Responsive Device Preview) */}
+              <div className="flex items-center gap-1 text-slate-400 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
                 <button
                   onClick={() => setViewportMode('desktop')}
-                  className={`p-1 rounded transition ${
-                    viewportMode === 'desktop' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800'
+                  className={`px-2 py-1 rounded flex items-center gap-1 text-[11px] transition ${
+                    viewportMode === 'desktop' ? 'bg-slate-800 text-white font-semibold' : 'hover:text-slate-200'
                   }`}
-                  title="Desktop 1280px"
+                  title="Desktop Viewport (100%)"
                 >
                   <Monitor className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Desktop</span>
                 </button>
                 <button
                   onClick={() => setViewportMode('mobile')}
-                  className={`p-1 rounded transition ${
-                    viewportMode === 'mobile' ? 'bg-slate-800 text-white' : 'hover:bg-slate-800'
+                  className={`px-2 py-1 rounded flex items-center gap-1 text-[11px] transition ${
+                    viewportMode === 'mobile' ? 'bg-slate-800 text-white font-semibold' : 'hover:text-slate-200'
                   }`}
-                  title="Mobile 390px"
+                  title="Mobile Viewport (390px)"
                 >
                   <Smartphone className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Mobile</span>
                 </button>
               </div>
             </div>
 
             {/* Embedded Live Preview Canvas via CodeWorkspace */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <CodeWorkspace
-                key={browserKey}
-                files={files}
-                execution={execution}
-                video={video}
-                onUpdateVideo={onUpdateVideo}
-                defaultTab="preview"
-                onRunCommand={onRunCommand}
-                isRunningCommand={isRunningCommand}
-                streamingTerminalOutput={streamingTerminalOutput}
-                isStreamingTerminal={isStreamingTerminal}
-                isWsConnected={isWsConnected}
-                onClearTerminal={onClearTerminal}
-                onUpdateFile={onUpdateFile}
-                onAddFile={onAddFile}
-                onDeleteFile={onDeleteFile}
-                onPushToGitHub={onPushToGitHub}
-              />
+            <div
+              className={`flex-1 flex flex-col min-h-0 overflow-hidden ${
+                viewportMode === 'mobile' ? 'items-center bg-slate-950 p-3' : ''
+              }`}
+            >
+              <div
+                className={`flex-1 flex flex-col min-h-0 w-full transition-all duration-300 ${
+                  viewportMode === 'mobile'
+                    ? 'max-w-[400px] rounded-3xl border-4 border-slate-800 overflow-hidden shadow-2xl'
+                    : ''
+                }`}
+              >
+                <CodeWorkspace
+                  key={browserKey}
+                  files={files}
+                  execution={execution!}
+                  video={video}
+                  onUpdateVideo={onUpdateVideo}
+                  defaultTab="preview"
+                  onRunCommand={onRunCommand}
+                  isRunningCommand={isRunningCommand}
+                  streamingTerminalOutput={streamingTerminalOutput}
+                  isStreamingTerminal={isStreamingTerminal}
+                  isWsConnected={isWsConnected}
+                  onClearTerminal={onClearTerminal}
+                  onUpdateFile={onUpdateFile}
+                  onAddFile={onAddFile}
+                  onDeleteFile={onDeleteFile}
+                  onPushToGitHub={onPushToGitHub}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -329,7 +470,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
           <div className="flex-1 flex flex-col min-h-0">
             <CodeWorkspace
               files={files}
-              execution={execution}
+              execution={execution!}
               video={video}
               onUpdateVideo={onUpdateVideo}
               defaultTab="terminal"
@@ -352,7 +493,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
           <div className="flex-1 flex flex-col min-h-0">
             <CodeWorkspace
               files={files}
-              execution={execution}
+              execution={execution!}
               video={video}
               onUpdateVideo={onUpdateVideo}
               defaultTab="editor"
@@ -366,6 +507,7 @@ export const ManusComputer: React.FC<ManusComputerProps> = ({
               onAddFile={onAddFile}
               onDeleteFile={onDeleteFile}
               onPushToGitHub={onPushToGitHub}
+              selectedFilePath={selectedFilePath}
             />
           </div>
         )}

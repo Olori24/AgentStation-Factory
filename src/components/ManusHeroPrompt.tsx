@@ -21,6 +21,9 @@ interface ManusHeroPromptProps {
   recentMissions: SquadMission[];
   onSelectMission: (mission: SquadMission) => void;
   onOpenOnboarding?: () => void;
+  onOpenAutonomy?: () => void;
+  onOpenGrowthFactory?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 const INSPIRATION_CARDS = [
@@ -86,6 +89,9 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
   recentMissions,
   onSelectMission,
   onOpenOnboarding,
+  onOpenAutonomy,
+  onOpenGrowthFactory,
+  onOpenCommandPalette,
 }) => {
   const [promptText, setPromptText] = useState('');
 
@@ -183,6 +189,42 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
             </div>
           </div>
         </form>
+
+        {/* Jakob's Law Power Action Bar: Command Palette (⌘K), 24/7 Autonomy & Growth Factory */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          {onOpenCommandPalette && (
+            <button
+              type="button"
+              onClick={onOpenCommandPalette}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-mono text-slate-300 hover:text-white flex items-center gap-2 transition"
+            >
+              <span>Search & Commands</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-[10px] text-slate-400">
+                ⌘K
+              </kbd>
+            </button>
+          )}
+          {onOpenAutonomy && (
+            <button
+              type="button"
+              onClick={onOpenAutonomy}
+              className="px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-xs font-semibold text-emerald-300 flex items-center gap-1.5 transition"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>24/7 Autonomy & Templates</span>
+            </button>
+          )}
+          {onOpenGrowthFactory && (
+            <button
+              type="button"
+              onClick={onOpenGrowthFactory}
+              className="px-3 py-1.5 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 text-xs font-semibold text-cyan-300 flex items-center gap-1.5 transition"
+            >
+              <Video className="w-3.5 h-3.5 text-cyan-400" />
+              <span>30-Day Growth Factory Studio</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Inspiration Prompt Cards */}
