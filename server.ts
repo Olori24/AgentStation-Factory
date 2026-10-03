@@ -21,6 +21,7 @@ import { autonomy } from "./server/autonomy";
 import { listAgents, listTasks, dispatchAgents } from "./server/multiAgent";
 import { listDurableAgents, listDurableTasks, enqueueDurableAgents } from "./server/durableMultiAgent";
 import { getAgentRouterConfigStatus, agentRouterWallet, agentRouterUsage } from "./server/agentRouter";
+import { listObjectiveTemplates, getObjectiveTemplate, instantiateObjectiveTemplate } from "./server/objectiveTemplates";
 
 dotenv.config();
 
@@ -2089,6 +2090,36 @@ app.patch("/api/autonomy/goals/:id", async (req, res) => {
   res.json({ success:true, goal });
 });
 app.delete("/api/autonomy/goals/:id", async (req, res) => res.json({ success:true, removed:await autonomy.remove(req.params.id) }));
+app.post("/api/autonomy/goals/:id/run", async (req, res) => {
+  try {
+    const goal = await autonomy.triggerGoalNow(req.params.id);
+    if (!goal) return res.status(404).json({ success: false, error: "Goal not found" });
+    res.json({ success: true, goal });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/objectives/templates", (_req, res) => {
+  res.json({ success: true, templates: listObjectiveTemplates() });
+});
+
+app.get("/api/objectives/templates/:id", (req, res) => {
+  const template = getObjectiveTemplate(req.params.id);
+  if (!template) return res.status(404).json({ success: false, error: "Template not found" });
+  res.json({ success: true, template });
+});
+
+app.post("/api/objectives/instantiate", (req, res) => {
+  try {
+    const { templateId, variables = {} } = req.body || {};
+    const instantiated = instantiateObjectiveTemplate(String(templateId || ""), variables);
+    res.json({ success: true, instantiated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 app.get("/api/agents", async (_req, res) => {
   const durable = await listDurableAgents();
   res.json({ success: true, agents: durable || await listAgents() });
@@ -2350,18 +2381,136 @@ app.get("/api/files/download", async (req, res) => {
 
 app.post("/api/files/save", async (req, res) => {
   try {
-    const { path: relPath, content } = req.body || {};
+    const { path: relPath, content, missionId } = req.body || {};
     if (!relPath || typeof content !== "string") {
       return res.status(400).json({ success: false, error: "path and content required" });
     }
     const workspaceDir = path.resolve(process.cwd(), "workspace");
-    const target = path.join(workspaceDir, relPath);
+    const safeRel = String(relPath).replace(/^[\\\/]+/, "");
+    const target = path.resolve(workspaceDir, safeRel);
     if (!target.startsWith(workspaceDir)) {
       return res.status(403).json({ success: false, error: "Access denied" });
     }
     await fs.promises.mkdir(path.dirname(target), { recursive: true });
     await fs.promises.writeFile(target, content, "utf8");
-    res.json({ success: true, path: relPath, sizeBytes: Buffer.byteLength(content, "utf8") });
+    const sizeBytes = Buffer.byteLength(content, "utf8");
+    streaming.emitToMission(missionId || "workspace", {
+      type: "file_saved",
+      path: safeRel,
+      sizeBytes,
+      timestamp: new Date().toISOString(),
+    });
+    res.json({ success: true, path: safeRel, sizeBytes, savedAt: new Date().toISOString() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/files/save-batch", async (req, res) => {
+  try {
+    const { files = [], missionId } = req.body || {};
+    if (!Array.isArray(files)) {
+      return res.status(400).json({ success: false, error: "files array required" });
+    }
+    const workspaceDir = path.resolve(process.cwd(), "workspace");
+    let savedCount = 0;
+    for (const f of files) {
+      if (!f || typeof f.content !== "string") continue;
+      const safeRel = String(f.path || f.name || "").replace(/^[\\\/]+/, "");
+      if (!safeRel) continue;
+      const target = path.resolve(workspaceDir, safeRel);
+      if (!target.startsWith(workspaceDir)) continue;
+      await fs.promises.mkdir(path.dirname(target), { recursive: true });
+      await fs.promises.writeFile(target, f.content, "utf8");
+      savedCount++;
+    }
+    streaming.emitToMission(missionId || "workspace", {
+      type: "workspace_synced",
+      savedCount,
+      timestamp: new Date().toISOString(),
+    });
+    res.json({ success: true, savedCount, savedAt: new Date().toISOString() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/files/tree", async (_req, res) => {
+  try {
+    const workspaceDir = path.resolve(process.cwd(), "workspace");
+    await fs.promises.mkdir(workspaceDir, { recursive: true });
+
+    const inferLang = (name: string): string => {
+      if (name.endsWith(".py")) return "python";
+      if (name.endsWith(".ts") || name.endsWith(".tsx")) return "typescript";
+      if (name.endsWith(".html")) return "html";
+      if (name.endsWith(".css")) return "css";
+      if (name.endsWith(".json")) return "json";
+      if (name.endsWith(".sh")) return "bash";
+      return "markdown";
+    };
+
+    const collected: Array<{
+      name: string;
+      path: string;
+      language: string;
+      content: string;
+      sizeBytes: number;
+      updatedAt: string;
+    }> = [];
+
+    const walk = async (dir: string) => {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__pycache__") continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full);
+        } else if (entry.isFile()) {
+          const stat = await fs.promises.stat(full);
+          if (stat.size > 256 * 1024) continue;
+          const content = await fs.promises.readFile(full, "utf8");
+          const relPath = path.relative(workspaceDir, full).replace(/\\/g, "/");
+          collected.push({
+            name: entry.name,
+            path: relPath,
+            language: inferLang(entry.name),
+            content,
+            sizeBytes: stat.size,
+            updatedAt: stat.mtime.toISOString(),
+          });
+        }
+      }
+    };
+
+    await walk(workspaceDir);
+    res.json({ success: true, count: collected.length, files: collected });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/files/delete", async (req, res) => {
+  try {
+    const { path: relPath, missionId } = req.body || {};
+    if (!relPath) {
+      return res.status(400).json({ success: false, error: "path required" });
+    }
+    const workspaceDir = path.resolve(process.cwd(), "workspace");
+    const safeRel = String(relPath).replace(/^[\\\/]+/, "");
+    const target = path.resolve(workspaceDir, safeRel);
+    if (!target.startsWith(workspaceDir)) {
+      return res.status(403).json({ success: false, error: "Access denied" });
+    }
+    if (fs.existsSync(target)) {
+      await fs.promises.unlink(target);
+    }
+    streaming.emitToMission(missionId || "workspace", {
+      type: "file_deleted",
+      path: safeRel,
+      timestamp: new Date().toISOString(),
+    });
+    res.json({ success: true, deleted: safeRel });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -2371,7 +2520,13 @@ app.post("/api/files/save", async (req, res) => {
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true as const,
+        watch: {
+          ignored: ["**/workspace/**", "**/data/**"],
+        },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -2383,7 +2538,7 @@ async function startServer() {
     });
   }
 
-  if (process.env.AUTONOMY_ENABLED === "true") autonomy.start();
+  if (process.env.AUTONOMY_ENABLED !== "false") autonomy.start();
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`AgentStation fullstack server running on http://0.0.0.0:${PORT}`);
   });

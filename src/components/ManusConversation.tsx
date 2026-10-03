@@ -41,6 +41,7 @@ interface ManusConversationProps {
   onExecuteFollowUp: (prompt: string) => void;
   onNewTask: () => void;
   onSelectTab?: (tab: WorkstationTab) => void;
+  onOpenFileInWorkstation?: (filePath: string) => void;
 }
 
 interface PlanStep {
@@ -59,6 +60,7 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
   onExecuteFollowUp,
   onNewTask,
   onSelectTab,
+  onOpenFileInWorkstation,
 }) => {
   const [followUpText, setFollowUpText] = useState('');
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
@@ -72,7 +74,47 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
   const [pendingControl, setPendingControl] = useState<'pause' | 'resume' | 'cancel' | null>(null);
   const [controlFeedback, setControlFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [sseConnected, setSseConnected] = useState<boolean>(false);
+  const [liveSseLogs, setLiveSseLogs] = useState<AgentLogEntry[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Connect to Real-Time Server-Sent Events (/api/stream/events)
+  useEffect(() => {
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource('/api/stream/events');
+      es.onopen = () => setSseConnected(true);
+      es.onerror = () => setSseConnected(false);
+      es.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (!parsed || parsed.type === 'heartbeat' || parsed.type === 'connected') return;
+          const payload = parsed.data || parsed;
+          if (payload.thought || payload.message || payload.title || payload.path) {
+            const entry: AgentLogEntry = {
+              id: `sse-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              timestamp: new Date(parsed.timestamp || Date.now()).toLocaleTimeString(),
+              role: (payload.agentRole || 'system') as AgentRole,
+              agentName: payload.agent || payload.agentRole || 'AgentStation Telemetry',
+              type: 'thought',
+              message:
+                payload.thought ||
+                payload.message ||
+                (payload.path ? `Saved workspace file: ${payload.path}` : payload.title || 'Telemetry update'),
+              details: JSON.stringify(payload, null, 2),
+            };
+            setLiveSseLogs((prev) => [entry, ...prev.slice(0, 24)]);
+          }
+          if (parsed.type === 'approval_requested' || parsed.type === 'subtask_started' || parsed.type === 'progress') {
+            void fetchTaskDetails();
+          }
+        } catch {}
+      };
+    } catch {}
+    return () => {
+      if (es) es.close();
+    };
+  }, [mission?.id]);
 
   // Poll for subtasks and approvals for active mission
   const fetchTaskDetails = async () => {
@@ -327,6 +369,74 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
         </div>
       )}
 
+      {/* Active Specialist Squad Pipeline Bar (Jakob's Law: Multi-Agent Stage Visibility) */}
+      <div className="px-3 sm:px-5 py-2 bg-slate-900/60 border-b border-slate-800/70 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none shrink-0">
+        <div className="flex items-center gap-1.5 min-w-max">
+          {(
+            [
+              { id: 'architect', name: 'Atlas', title: 'Architect' },
+              { id: 'researcher', name: 'Hermes', title: 'Research' },
+              { id: 'developer', name: 'Cypher', title: 'Engineer' },
+              { id: 'qa', name: 'Sentinel', title: 'QA' },
+              { id: 'creative', name: 'Vesper', title: 'Dossier' },
+              { id: 'video_producer', name: 'Nova', title: 'Producer' },
+            ] as const
+          ).map((agent) => {
+            const isWorking = isExecuting && activeAgentRole === agent.id;
+            const isDone = !isExecuting && mission.status === 'completed';
+            return (
+              <div
+                key={agent.id}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-mono border transition ${
+                  isWorking
+                    ? 'bg-blue-600/20 border-blue-500/50 text-blue-300 font-bold shadow-sm'
+                    : isDone
+                    ? 'bg-slate-900/90 border-slate-800 text-slate-300'
+                    : 'bg-slate-950 border-slate-800/60 text-slate-500'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isWorking
+                      ? 'bg-amber-400 animate-ping'
+                      : isDone
+                      ? 'bg-emerald-400'
+                      : 'bg-slate-600'
+                  }`}
+                />
+                <span>{agent.name}</span>
+                <span className="text-[9px] text-slate-500 hidden xl:inline">({agent.title})</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              fetch('/api/stream/test-emit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  agent: 'Atlas',
+                  thought: `Live SSE telemetry verified for mission "${mission.prompt.slice(0, 36)}..."`,
+                }),
+              }).catch(() => {});
+            }}
+            title="Emit a live SSE test event from the backend"
+            className={`text-[10px] font-mono px-2 py-0.5 rounded-full border shrink-0 flex items-center gap-1 transition ${
+              sseConnected
+                ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/20 text-emerald-400'
+                : 'bg-slate-900 border-slate-800 text-slate-500'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${sseConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+            <span>{sseConnected ? `SSE Live (${liveSseLogs.length})` : 'Local Stream'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* Scrollable Conversation Stream */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6 scrollbar-thin min-h-0">
         {/* 1. User Message */}
@@ -519,67 +629,101 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
 
               {isPlanExpanded && (
                 <div className="p-3.5 space-y-2">
-                  {planSteps.map((step, idx) => (
-                    <div
-                      key={step.id}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/50 border border-slate-800/60 text-xs"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {step.status === 'completed' ? (
-                          <div className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                            <Check className="w-3 h-3 stroke-[3]" />
-                          </div>
-                        ) : step.status === 'in_progress' ? (
-                          <div className="w-4 h-4 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin shrink-0" />
-                        ) : step.status === 'failed' ? (
-                          <div className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
-                            <XCircle className="w-3 h-3 stroke-[3]" />
-                          </div>
-                        ) : (
-                          <div className="w-4 h-4 rounded-full border border-slate-700 bg-slate-800 shrink-0" />
-                        )}
+                  {planSteps.map((step, idx) => {
+                    const stepFiles = (mission.files || []).filter((f) => {
+                      const p = (f.path || f.name).toLowerCase();
+                      if (step.role === 'architect') return p.includes('readme') || p.endsWith('.json');
+                      if (step.role === 'developer') return p.startsWith('src/') || p.startsWith('public/');
+                      if (step.role === 'qa') return p.startsWith('tests/') || p.includes('test');
+                      if (step.role === 'creative') return p.startsWith('reports/');
+                      return false;
+                    });
+                    return (
+                      <div
+                        key={step.id}
+                        className="flex flex-col gap-1.5 p-2.5 rounded-xl bg-slate-950/50 border border-slate-800/60 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {step.status === 'completed' ? (
+                              <div className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                                <Check className="w-3 h-3 stroke-[3]" />
+                              </div>
+                            ) : step.status === 'in_progress' ? (
+                              <div className="w-4 h-4 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin shrink-0" />
+                            ) : step.status === 'failed' ? (
+                              <div className="w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+                                <XCircle className="w-3 h-3 stroke-[3]" />
+                              </div>
+                            ) : (
+                              <div className="w-4 h-4 rounded-full border border-slate-700 bg-slate-800 shrink-0" />
+                            )}
 
-                        <div className="truncate">
-                          <span
-                            className={`font-sans ${
-                              step.status === 'completed'
-                                ? 'text-slate-300'
+                            <div className="truncate">
+                              <span
+                                className={`font-sans ${
+                                  step.status === 'completed'
+                                    ? 'text-slate-300'
+                                    : step.status === 'in_progress'
+                                    ? 'text-amber-300 font-semibold'
+                                    : step.status === 'failed'
+                                    ? 'text-red-400'
+                                    : 'text-slate-500'
+                                }`}
+                              >
+                                {idx + 1}. {step.title}
+                              </span>
+                              {step.description && step.description !== step.title && (
+                                <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                  {step.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {step.toolName && (
+                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-blue-400 flex items-center gap-1">
+                                <Wrench className="w-2.5 h-2.5" />
+                                {step.toolName}
+                              </span>
+                            )}
+                            <span className="text-[10px] font-mono text-slate-500 uppercase">
+                              {step.status === 'completed'
+                                ? 'Done'
                                 : step.status === 'in_progress'
-                                ? 'text-amber-300 font-semibold'
+                                ? 'Running'
                                 : step.status === 'failed'
-                                ? 'text-red-400'
-                                : 'text-slate-500'
-                            }`}
-                          >
-                            {idx + 1}. {step.title}
-                          </span>
-                          {step.description && step.description !== step.title && (
-                            <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                              {step.description}
-                            </p>
-                          )}
+                                ? 'Failed'
+                                : 'Pending'}
+                            </span>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        {step.toolName && (
-                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-blue-400 flex items-center gap-1">
-                            <Wrench className="w-2.5 h-2.5" />
-                            {step.toolName}
-                          </span>
+                        {step.status === 'completed' && stepFiles.length > 0 && (
+                          <div className="pl-6 flex flex-wrap items-center gap-1.5 pt-0.5">
+                            {stepFiles.map((sf) => (
+                              <button
+                                key={sf.path || sf.name}
+                                type="button"
+                                onClick={() => {
+                                  if (onOpenFileInWorkstation) {
+                                    onOpenFileInWorkstation(sf.path || sf.name);
+                                  } else if (onSelectTab) {
+                                    onSelectTab('code');
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-blue-500/40 text-[10px] font-mono text-slate-300 hover:text-blue-300 transition"
+                              >
+                                <FileCode className="w-2.5 h-2.5 text-blue-400" />
+                                <span>{sf.path || sf.name}</span>
+                              </button>
+                            ))}
+                          </div>
                         )}
-                        <span className="text-[10px] font-mono text-slate-500 uppercase">
-                          {step.status === 'completed'
-                            ? 'Done'
-                            : step.status === 'in_progress'
-                            ? 'Running'
-                            : step.status === 'failed'
-                            ? 'Failed'
-                            : 'Pending'}
-                        </span>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -605,9 +749,12 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
 
               {isLogsExpanded && (
                 <div className="p-3 space-y-2 max-h-64 overflow-y-auto scrollbar-thin text-xs font-mono">
-                  {mission.logs && mission.logs.length > 0 ? (
-                    mission.logs.map((log) => {
+                  {[...liveSseLogs, ...(mission.logs || [])].length > 0 ? (
+                    [...liveSseLogs, ...(mission.logs || [])].map((log) => {
                       const isExpanded = expandedLogId === log.id;
+                      const matchedFile = (mission.files || []).find(
+                        (f) => log.message.includes(f.name) || (f.path && log.message.includes(f.path))
+                      );
                       return (
                         <div
                           key={log.id}
@@ -619,9 +766,21 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                               {log.timestamp}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 text-slate-200">
+                              <div className="flex items-center gap-1.5 text-slate-200 flex-wrap">
                                 <span className="text-blue-400 font-semibold">[{log.agentName}]:</span>
                                 <span className="text-slate-300 font-sans">{log.message}</span>
+                                {matchedFile && onOpenFileInWorkstation && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onOpenFileInWorkstation(matchedFile.path || matchedFile.name);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-blue-500/15 hover:bg-blue-500/30 border border-blue-500/30 text-blue-300 text-[10px] font-mono transition"
+                                  >
+                                    Open {matchedFile.name} →
+                                  </button>
+                                )}
                               </div>
                             </div>
                             {log.details && (
@@ -664,6 +823,54 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                   The objective has been executed and verified in the sandbox.
                   You can interact with the app, examine artifacts and source code, or run commands in the <strong>AgentStation Workstation</strong> (open in the right panel or tap the Workstation tab on mobile).
                 </p>
+
+                {/* Clickable Generated File Chips (Jakob's Law: Cursor / Claude Artifact Deep-Links) */}
+                {mission.files && mission.files.length > 0 && (
+                  <div className="pt-1 space-y-1.5">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block">
+                      Generated Workspace Files (Click to Inspect in IDE):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {mission.files.map((f) => {
+                        const bytes = new Blob([f.content || '']).size;
+                        const sizeLabel = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)}KB` : `${bytes}B`;
+                        const isHtml = (f.path || f.name).endsWith('.html') || f.language === 'html';
+                        return (
+                          <div
+                            key={f.path || f.name}
+                            className="inline-flex items-center rounded-lg bg-slate-900/90 border border-slate-700/80 hover:border-blue-500/50 overflow-hidden transition"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onOpenFileInWorkstation) {
+                                  onOpenFileInWorkstation(f.path || f.name);
+                                } else if (onSelectTab) {
+                                  onSelectTab('code');
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 hover:bg-slate-800 text-[11px] font-mono text-slate-200 hover:text-blue-300 transition"
+                            >
+                              <FileCode className="w-3 h-3 text-blue-400 shrink-0" />
+                              <span>{f.path || f.name}</span>
+                              <span className="text-[9px] text-slate-500">{sizeLabel}</span>
+                            </button>
+                            {isHtml && onSelectTab && (
+                              <button
+                                type="button"
+                                onClick={() => onSelectTab('browser')}
+                                className="px-2 py-1 bg-emerald-500/15 hover:bg-emerald-500/30 border-l border-slate-700/80 text-[10px] font-mono text-emerald-300 font-semibold transition"
+                                title="Open in Live App Preview"
+                              >
+                                Live App ↗
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {onSelectTab && (
                   <div className="flex items-center gap-2 pt-1 flex-wrap">
