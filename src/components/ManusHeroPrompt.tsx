@@ -109,21 +109,21 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-14 flex flex-col items-center justify-start sm:justify-center min-h-[calc(100dvh-4rem)]">
+    <div className="as-cinematic-shell w-full max-w-6xl mx-auto px-3 sm:px-6 py-8 sm:py-16 flex flex-col items-center justify-start sm:justify-center min-h-[calc(100dvh-4rem)] rounded-[2rem]">
       {/* Top AgentStation Brand Header */}
-      <div className="flex flex-col items-center text-center space-y-3 mb-6 sm:mb-8">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-700/80 text-xs font-mono text-slate-300 shadow-lg">
+      <div className="relative flex flex-col items-center text-center space-y-4 mb-8 sm:mb-10 max-w-4xl">
+        <div className="as-glass inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-mono text-slate-300 shadow-xl">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="font-semibold text-white tracking-wide">AGENTSTATION</span>
           <span className="text-slate-500">•</span>
           <span className="text-blue-400 font-medium">Autonomous Digital Workforce</span>
         </div>
 
-        <h1 className="text-2xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
+        <h1 className="as-shimmer text-3xl sm:text-6xl font-black tracking-[-0.04em] leading-[0.98]">
           What objective shall AgentStation execute today?
         </h1>
 
-        <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
+        <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto leading-7">
           Assign any complex engineering, research, or market intelligence objective. AgentStation decomposes tasks, deploys specialist agents, invokes sandboxed tools, and delivers verified artifacts.
         </p>
       </div>
@@ -131,7 +131,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
       {/* Center AgentStation Omnibox */}
       <div className="w-full relative mb-7 sm:mb-10">
         <form onSubmit={handleSubmit} className="relative group">
-          <div className="relative rounded-2xl bg-slate-900/95 border border-slate-700/80 hover:border-slate-600 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/20 shadow-2xl transition-all duration-200">
+          <div className="as-glass as-hero-glow relative rounded-[1.5rem] hover:border-slate-600 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/15 transition-all duration-300">
             <div className="p-4 sm:p-5">
               <textarea
                 value={promptText}
@@ -140,7 +140,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
                 placeholder="Assign an objective... (e.g. Research the Nigerian real estate market and prepare a pitch deck, or build an enterprise task manager with SQLite & PyTest)"
                 rows={4}
                 disabled={isExecuting}
-                className="w-full bg-transparent text-slate-100 placeholder-slate-500 text-base sm:text-lg focus:outline-none resize-none leading-relaxed font-sans"
+                className="w-full bg-transparent text-slate-100 placeholder-slate-500 text-base sm:text-lg focus:outline-none resize-none leading-7 font-sans as-focus-ring"
                 autoFocus
               />
             </div>
@@ -171,7 +171,7 @@ export const ManusHeroPrompt: React.FC<ManusHeroPromptProps> = ({
               <button
                 type="submit"
                 disabled={!promptText.trim() || isExecuting}
-                className="w-full sm:w-auto justify-center flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto justify-center flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-950 font-bold text-sm shadow-lg shadow-white/10 transition disabled:opacity-40 disabled:cursor-not-allowed as-focus-ring"
               >
                 {isExecuting ? (
                   <>
