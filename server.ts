@@ -50,8 +50,8 @@ app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { (req as any).
 
 
 app.post("/api/auth/bootstrap", (req, res) => {
-  const token = String(req.body?.bootstrapToken || "");
-  if (!verifyBootstrapToken(token)) return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
+  const bootstrapToken = String(req.body?.bootstrapToken || "");
+  if (!verifyBootstrapToken(bootstrapToken) return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
   const userId = String(req.body?.userId || "user-bolaji-01");
   const user = db.getUserById(userId);
   if (!user) return res.status(404).json({ success: false, error: "User not found" });
@@ -2192,7 +2192,7 @@ app.post("/api/simulations/mirofish", async (req, res) => {
     res.status(unavailable ? 503 : 400).json({ success: false, simulated: true, error: message });
   }
 });
-app.get("/api/companies", async (_req, res) => {
+app.get("/api/companies", async (req, res) => {
   const x = await listCompanies(req.user);
   if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
   res.json({ success: true, companies: x });
