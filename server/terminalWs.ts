@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { executeSandboxedCommand, SandboxExecutionResult } from './sandbox';
 import { streaming } from './streaming';
 import { db } from './db';
+import { verifySessionToken } from './auth';
 
 export interface TerminalWsMessage {
   type:
@@ -32,12 +33,24 @@ class TerminalWebSocketService {
   public init(httpServer: http.Server) {
     if (this.wss) return;
 
-    this.wss = new WebSocketServer({ noServer: true });
+    this.wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 
     httpServer.on('upgrade', (request, socket, head) => {
       try {
         const url = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
         if (url.pathname === '/ws/terminal' || url.pathname === '/ws') {
+          const authorization = String(request.headers.authorization || '');
+          let token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+          if (!token) {
+            const protocol = String(request.headers['sec-websocket-protocol'] || '');
+            const bearerProtocol = protocol.split(',').map((x) => x.trim()).find((x) => x.startsWith('bearer.'));
+            if (bearerProtocol) token = bearerProtocol.slice('bearer.'.length);
+          }
+          if (!verifySessionToken(token)) {
+            socket.write('HTTP/1.1 401 Unauthorized\\r\\nConnection: close\\r\\n\\r\\n');
+            socket.destroy();
+            return;
+          }
           this.wss?.handleUpgrade(request, socket, head, (ws) => {
             this.wss?.emit('connection', ws, request);
           });
@@ -74,6 +87,7 @@ class TerminalWebSocketService {
           } else if (parsed.type === 'execute') {
             // Execute command requested directly via WebSocket
             const { command, missionId, files, timeoutMs } = parsed;
+            if (typeof command !== 'string' || command.length > 20000) throw new Error('Invalid command');
             if (command) {
               await this.runAndStreamCommand(command, { missionId, files, timeoutMs });
             }
