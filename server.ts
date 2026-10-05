@@ -2501,10 +2501,12 @@ app.post("/api/settings", (req: any, res) => {
 });
 
 // Direct file management
-app.get("/api/files/download", async (req, res) => {
+app.get("/api/files/download", async (req: any, res) => {
   try {
     const relPath = req.query.path as string;
-    if (!relPath) return res.status(400).send("Path required");
+    const missionId = req.query.missionId as string;
+    if (!relPath || !missionId) return res.status(400).send("Path and missionId required");
+    if (!db.canAccessMission(req.user, missionId)) return res.status(403).send("Forbidden");
     const workspaceDir = path.resolve(process.cwd(), "workspace");
     const target = path.join(workspaceDir, relPath);
     if (!target.startsWith(workspaceDir) || !fs.existsSync(target)) {
@@ -2519,6 +2521,7 @@ app.get("/api/files/download", async (req, res) => {
 app.post("/api/files/save", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { path: relPath, content, missionId } = req.body || {};
+    if (!missionId || !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
     if (!relPath || typeof content !== "string") {
       return res.status(400).json({ success: false, error: "path and content required" });
     }
@@ -2546,6 +2549,7 @@ app.post("/api/files/save", requireRole(["admin","engineer"]), async (req, res) 
 app.post("/api/files/save-batch", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { files = [], missionId } = req.body || {};
+    if (!missionId || !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
     if (!Array.isArray(files)) {
       return res.status(400).json({ success: false, error: "files array required" });
     }
@@ -2572,7 +2576,7 @@ app.post("/api/files/save-batch", requireRole(["admin","engineer"]), async (req,
   }
 });
 
-app.get("/api/files/tree", async (_req, res) => {
+app.get("/api/files/tree", requireRole(["admin"]), async (_req, res) => {
   try {
     const workspaceDir = path.resolve(process.cwd(), "workspace");
     await fs.promises.mkdir(workspaceDir, { recursive: true });
@@ -2630,6 +2634,7 @@ app.get("/api/files/tree", async (_req, res) => {
 app.post("/api/files/delete", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { path: relPath, missionId } = req.body || {};
+    if (!missionId || !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
     if (!relPath) {
       return res.status(400).json({ success: false, error: "path required" });
     }
