@@ -33,7 +33,12 @@ export async function executeSandboxedCommand(
 ): Promise<SandboxExecutionResult> {
   const sandboxId = `sbx-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const sandboxPath = path.join(BASE_SANDBOX_DIR, sandboxId);
-  const timeoutMs = options.timeoutMs || 30000; // 30s cap
+  const requestedTimeout = Number(options.timeoutMs || 30000);
+  const timeoutMs = Math.min(Math.max(Number.isFinite(requestedTimeout) ? requestedTimeout : 30000, 1000), 120000);
+  if (process.env.NODE_ENV === 'production' && process.env.SANDBOX_RUNTIME !== 'docker') {
+    throw new Error('Production sandbox requires SANDBOX_RUNTIME=docker. Host shell execution is permanently disabled.');
+  }
+  if (!command || command.length > 20000) throw new Error('Command is missing or too large');
   const startTime = Date.now();
 
   try {
@@ -42,7 +47,9 @@ export async function executeSandboxedCommand(
     // Mount workspace files if provided
     if (options.files && options.files.length > 0) {
       for (const file of options.files) {
-        const fullFilePath = path.join(sandboxPath, file.path);
+        const fullFilePath = path.resolve(sandboxPath, file.path);
+        const relativeFilePath = path.relative(sandboxPath, fullFilePath);
+        if (!relativeFilePath || relativeFilePath.startsWith('..') || path.isAbsolute(relativeFilePath)) throw new Error('Sandbox file path escapes sandbox');
         await fs.promises.mkdir(path.dirname(fullFilePath), { recursive: true });
         await fs.promises.writeFile(fullFilePath, file.content, 'utf8');
       }
@@ -77,7 +84,7 @@ export async function executeSandboxedCommand(
       GEMINI_API_KEY: 'PROTECTED_SANDBOX_STUB',
       GITHUB_TOKEN: 'PROTECTED_SANDBOX_STUB',
       ENCRYPTION_KEY: 'PROTECTED_SANDBOX_STUB',
-      ...(options.env || {}),
+      ...Object.fromEntries(Object.entries(options.env || {}).filter(([key]) => !/^(GEMINI_API_KEY|GITHUB_TOKEN|ENCRYPTION_KEY|SESSION_SECRET|CRON_SECRET|AGENTIC_API_KEY|DATABASE_URL|POSTGRES_URL|NEON_DATABASE_URL)$/i.test(key))),
     };
 
     return new Promise((resolve) => {
@@ -90,9 +97,36 @@ export async function executeSandboxedCommand(
         streaming.streamTerminalLine(options.missionId, `$ [SANDBOX ISOLATED] ${command}\n`, 'stdout');
       }
 
-      const child = spawn('bash', ['-c', command], {
-        cwd: sandboxPath,
-        env: scrubbedEnv,
+      const runtime = (process.env.SANDBOX_RUNTIME || 'docker').trim().toLowerCase();
+      if (runtime !== 'docker') {
+        throw new Error('Unsupported sandbox runtime. Production requires SANDBOX_RUNTIME=docker.');
+      }
+
+      const image = (process.env.SANDBOX_IMAGE || 'agentstation-sandbox:latest').trim();
+      const dockerArgs = [
+        'run', '--rm',
+        '--network=none',
+        '--read-only',
+        '--tmpfs', '/tmp:rw,noexec,nosuid,size=128m',
+        '--cap-drop=ALL',
+        '--security-opt=no-new-privileges',
+        '--pids-limit=128',
+        '--memory=512m',
+        '--cpus=1',
+        '--user', '65532:65532',
+        '-v', sandboxPath + ':/workspace:rw',
+        '-w', '/workspace',
+        image,
+        'sh', '-lc', command,
+      ];
+
+      const child = spawn('docker', dockerArgs, {
+        cwd: process.cwd(),
+        env: {
+          PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+          DOCKER_CONFIG: '/nonexistent',
+          HOME: '/tmp',
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 

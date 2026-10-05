@@ -20,9 +20,23 @@ services:
         value: /var/data
       - key: AGENTSTATION_WORKSPACE_DIR
         value: /var/workspace
+      - key: SANDBOX_RUNTIME
+        value: "docker"
+      - key: SANDBOX_IMAGE
+        value: "agentstation-sandbox:latest"
       - key: GEMINI_API_KEY
         sync: false
+      - key: AGENTIC_API_KEY
+        sync: false
       - key: GITHUB_TOKEN
+        sync: false
+      - key: CRON_SECRET
+        generateValue: true
+      - key: AUTH_BOOTSTRAP_TOKEN
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GITHUB_WEBHOOK_SECRET
         sync: false
       - key: ENCRYPTION_KEY
         generateValue: true

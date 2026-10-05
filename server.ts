@@ -8,7 +8,7 @@ import { promisify } from "util";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import { db } from "./server/db";
-import { authMiddleware, getActiveUser, setActiveUser, issueSessionToken, requireRole } from "./server/auth";
+import { authMiddleware, getActiveUser, setActiveUser, issueSessionToken, requireRole, verifyBootstrapToken, verifyWebhookSignature } from "./server/auth";
 import { streaming } from "./server/streaming";
 import { jobQueue } from "./server/queue";
 import { executeSandboxedCommand } from "./server/sandbox";
@@ -37,7 +37,49 @@ if (process.env.VERCEL !== "1") {
   terminalWs.init(httpServer);
 }
 
-app.use(express.json({ limit: "10mb" }));
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (process.env.NODE_ENV === "production") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  next();
+});
+app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { (req as any).rawBody = Buffer.from(buf); } }));
+
+
+app.post("/api/auth/bootstrap", (req, res) => {
+  const bootstrapToken = String(req.body?.bootstrapToken || "");
+  if (!verifyBootstrapToken(bootstrapToken)) return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
+  const userId = String(req.body?.userId || "user-bolaji-01");
+  const user = db.getUserById(userId);
+  if (!user) return res.status(404).json({ success: false, error: "User not found" });
+  const token = issueSessionToken(user.id);
+  res.cookie("as_session", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 8 * 60 * 60 * 1000,
+    path: "/",
+  });
+  res.json({ success: true, user });
+});
+
+app.get("/api/auth/me", (req: any, res) => {
+  if (!req.user) return res.status(401).json({ success: false, error: "Authentication required" });
+  res.json({ success: true, user: req.user });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie("as_session", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/" });
+  res.status(204).end();
+});
+
+app.use("/api", (req, res, next) => {
+  if (req.path === "/health" || req.path === "/auth/bootstrap" || req.path === "/github/webhook" || req.path === "/autonomy/heartbeat") return next();
+  return authMiddleware(req as any, res, next);
+});
 app.use("/api/growth", growthRouter);
 
 // Lazy initialization for Google Gen AI client
@@ -50,6 +92,20 @@ function getGenAI(): GoogleGenAI | null {
 }
 
 // Health check endpoint
+const rateState = new Map<string, { count: number; resetAt: number }>();
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) return next();
+  const key = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const current = rateState.get(key);
+  const windowMs = 60_000;
+  const limit = req.path === "/api/auth/bootstrap" ? 10 : 180;
+  if (!current || current.resetAt <= now) rateState.set(key, { count: 1, resetAt: now + windowMs });
+  else if (current.count >= limit) return res.status(429).json({ success: false, error: "Rate limit exceeded" });
+  else current.count++;
+  next();
+});
+
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
@@ -310,7 +366,7 @@ app.get("/api/github/ci-status", async (_req, res) => {
 });
 
 // Create a new branch and automatically switch to it
-app.post("/api/github/create-branch", async (req, res) => {
+app.post("/api/github/create-branch", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     await ensureGitRepo();
     const rawBranch = (req.body?.branch || "").trim();
@@ -371,7 +427,7 @@ app.post("/api/github/create-branch", async (req, res) => {
 });
 
 // Switch to or checkout a target branch
-app.post("/api/github/switch-branch", async (req, res) => {
+app.post("/api/github/switch-branch", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     await ensureGitRepo();
     const targetBranch = (req.body?.branch || "").trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, "");
@@ -470,7 +526,7 @@ app.post("/api/github/switch-branch", async (req, res) => {
 });
 
 // Execute Git Push to GitHub with automatic upstream fetch & merge
-app.post("/api/github/push", async (req, res) => {
+app.post("/api/github/push", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     await ensureGitRepo();
     const customCommit = req.body?.commitMessage || "feat: AgentStation autonomous multi-agent cluster sync";
@@ -682,7 +738,7 @@ app.post("/api/github/push", async (req, res) => {
 });
 
 // Pull latest changes from remote GitHub repository
-app.post("/api/github/pull", async (req, res) => {
+app.post("/api/github/pull", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     await ensureGitRepo();
     const token = process.env.GITHUB_TOKEN?.trim();
@@ -750,7 +806,7 @@ app.post("/api/github/pull", async (req, res) => {
 });
 
 // Generate or submit GitHub Pull Request
-app.post("/api/github/create-pr", async (req, res) => {
+app.post("/api/github/create-pr", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { head, base = "main", title, body } = req.body || {};
     const token = process.env.GITHUB_TOKEN?.trim();
@@ -847,7 +903,7 @@ app.post("/api/ollama/status", async (req, res) => {
 });
 
 // Execute terminal command in sandbox with real-time WebSocket streaming
-app.post("/api/terminal/exec", async (req, res) => {
+app.post("/api/terminal/exec", requireRole(["admin","engineer"]), async (req, res) => {
   const { command, files = [], missionId } = req.body || {};
   const cmd = (command || "").trim();
 
@@ -1539,19 +1595,22 @@ async function saveMissionsStore(missions: any[]): Promise<void> {
   }
 }
 
-app.get("/api/missions", async (_req, res) => {
+app.get("/api/missions", async (req: any, res) => {
   try {
+    const user = req.user;
     const missions = await ensureMissionsStore();
-    res.json({ success: true, missions });
+    const visible = missions.filter((m: any) => user?.role === "admin" || (m.organizationId === user?.organizationId && m.userId === user?.id));
+    res.json({ success: true, missions: visible });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post("/api/missions", async (req, res) => {
+app.post("/api/missions", requireRole(["admin","engineer"]), async (req, res) => {
   try {
-    const newMission = req.body;
-    if (!newMission || !newMission.id) {
+    const user = req.user;
+    const newMission = { ...(req.body || {}), userId: user.id, organizationId: user.organizationId };
+    if (!newMission.id) {
       return res.status(400).json({ success: false, error: "Mission must have an ID" });
     }
     const missions = await ensureMissionsStore();
@@ -1568,10 +1627,15 @@ app.post("/api/missions", async (req, res) => {
   }
 });
 
-app.delete("/api/missions/:id", async (req, res) => {
+app.delete("/api/missions/:id", requireRole(["admin","engineer"]), async (req: any, res) => {
   try {
     const { id } = req.params;
+    const user = req.user;
     const missions = await ensureMissionsStore();
+    const target = missions.find((m: any) => m.id === id);
+    if (!target) return res.status(404).json({ success: false, error: "Mission not found" });
+    if (user.role !== "admin" && (target.organizationId !== user.organizationId || target.userId !== user.id)) return res.status(403).json({ success: false, error: "Forbidden" });
+    if (user.role === "admin" && target.organizationId !== user.organizationId) return res.status(403).json({ success: false, error: "Forbidden" });
     const filtered = missions.filter((m: any) => m.id !== id);
     await saveMissionsStore(filtered);
     res.json({ success: true, deletedId: id });
@@ -1597,10 +1661,14 @@ interface WebhookEventLog {
 
 const recentWebhooks: WebhookEventLog[] = [];
 
-app.post("/api/github/webhook", async (req, res) => {
+app.post("/api/github/webhook", async (req: any, res) => {
+  const rawBody = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(JSON.stringify(req.body || {}));
+  if (!verifyWebhookSignature(rawBody, String(req.headers["x-hub-signature-256"] || ""))) {
+    return res.status(401).json({ success: false, error: "Invalid webhook signature" });
+  }
   try {
     const githubEvent = (req.headers["x-github-event"] as string) || "custom";
-    const payload = req.body || {};
+    const payload = JSON.parse(rawBody.toString("utf8") || "{}");
     const repoName = payload.repository?.full_name || "Olori24/AgentStation";
     const sender = payload.sender?.login || "github-actions[bot]";
     const action = payload.action || "";
@@ -1746,7 +1814,7 @@ app.post("/api/github/simulate-webhook", async (req, res) => {
 // ==========================================
 // CI/CD Workflow Installer (.github/workflows)
 // ==========================================
-app.post("/api/github/install-workflow", async (_req, res) => {
+app.post("/api/github/install-workflow", requireRole(["admin"]), async (_req, res) => {
   try {
     await ensureGitRepo();
     const workflowDir = path.join(process.cwd(), ".github", "workflows");
@@ -1838,7 +1906,7 @@ jobs:
 // ==========================================
 // Phase 1: Relational Database & Multi-Tenant Auth
 // ==========================================
-app.use(authMiddleware);
+
 
 app.get("/api/auth/me", (req: any, res) => {
   const user = req.user || getActiveUser();
@@ -1852,7 +1920,7 @@ app.get("/api/auth/me", (req: any, res) => {
   });
 });
 
-app.get("/api/auth/users", (_req, res) => {
+app.get("/api/auth/users", requireRole(["admin"]), (_req, res) => {
   res.json({
     success: true,
     users: db.getUsers(),
@@ -1860,7 +1928,7 @@ app.get("/api/auth/users", (_req, res) => {
   });
 });
 
-app.post("/api/auth/switch", (req, res) => {
+app.post("/api/auth/switch", requireRole(["admin"]), (req, res) => {
   const { userId } = req.body || {};
   const user = setActiveUser(userId);
   if (!user) {
@@ -1963,7 +2031,7 @@ app.get("/api/jobs/:id", (req, res) => {
   res.json({ success: true, job });
 });
 
-app.post("/api/jobs/enqueue", (req, res) => {
+app.post("/api/jobs/enqueue", requireRole(["admin","engineer"]), (req, res) => {
   const { type, payload = {}, missionId } = req.body || {};
   if (!type) {
     return res.status(400).json({ success: false, error: "Job type is required" });
@@ -1995,7 +2063,7 @@ jobQueue.registerWorker("autonomous_mission", async (job, updateProgress) => {
 // ==========================================
 // Phase 4: Isolated Sandbox Execution API
 // ==========================================
-app.post("/api/sandbox/execute", async (req, res) => {
+app.post("/api/sandbox/execute", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { command, timeoutMs = 30000, missionId, files } = req.body || {};
     if (!command) {
@@ -2011,7 +2079,7 @@ app.post("/api/sandbox/execute", async (req, res) => {
 // ==========================================
 // Phase 5: Cloud Object Artifacts & Bundler
 // ==========================================
-app.post("/api/artifacts/bundle", async (req, res) => {
+app.post("/api/artifacts/bundle", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { missionId = "mission-current", missionTitle = "Autonomous Project", files = [] } = req.body || {};
     const meta = await generateMissionBundle(missionId, missionTitle, files);
@@ -2083,17 +2151,17 @@ app.get("/api/autonomy/heartbeat", async (req, res) => {
 
 app.get("/api/autonomy/status", async (_req, res) => res.json({ success: true, status: await autonomy.status() }));
 app.get("/api/autonomy/goals", async (_req, res) => res.json({ success: true, goals: await autonomy.list() }));
-app.post("/api/autonomy/goals", async (req, res) => {
+app.post("/api/autonomy/goals", requireRole(["admin"]), async (req, res) => {
   try { res.status(201).json({ success: true, goal: await autonomy.create(req.body || {}) }); }
   catch (err:any) { res.status(400).json({ success:false, error:err.message }); }
 });
-app.patch("/api/autonomy/goals/:id", async (req, res) => {
+app.patch("/api/autonomy/goals/:id", requireRole(["admin"]), async (req, res) => {
   const goal = await autonomy.update(req.params.id, req.body || {});
   if (!goal) return res.status(404).json({ success:false, error:"Goal not found" });
   res.json({ success:true, goal });
 });
-app.delete("/api/autonomy/goals/:id", async (req, res) => res.json({ success:true, removed:await autonomy.remove(req.params.id) }));
-app.post("/api/autonomy/goals/:id/run", async (req, res) => {
+app.delete("/api/autonomy/goals/:id", requireRole(["admin"]), async (req, res) => res.json({ success:true, removed:await autonomy.remove(req.params.id) }));
+app.post("/api/autonomy/goals/:id/run", requireRole(["admin"]), async (req, res) => {
   try {
     const goal = await autonomy.triggerGoalNow(req.params.id);
     if (!goal) return res.status(404).json({ success: false, error: "Goal not found" });
@@ -2124,14 +2192,14 @@ app.post("/api/simulations/mirofish", async (req, res) => {
     res.status(unavailable ? 503 : 400).json({ success: false, simulated: true, error: message });
   }
 });
-app.get("/api/companies", async (_req, res) => {
-  const x = await listCompanies();
+app.get("/api/companies", async (req, res) => {
+  const x = await listCompanies(req.user);
   if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
   res.json({ success: true, companies: x });
 });
-app.post("/api/companies", async (req, res) => {
+app.post("/api/companies", requireRole(["admin"]), async (req, res) => {
   try {
-    const x = await createCompany(req.body || {});
+    const x = await createCompany(req.body || {}, req.user);
     if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
     res.status(201).json({ success: true, company: x });
   } catch (e: any) {
@@ -2139,13 +2207,13 @@ app.post("/api/companies", async (req, res) => {
   }
 });
 app.get("/api/missions", async (req, res) => {
-  const x = await listMissions(typeof req.query.companyId === "string" ? req.query.companyId : undefined);
+  const x = await listMissions(req.user, typeof req.query.companyId === "string" ? req.query.companyId : undefined);
   if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
   res.json({ success: true, missions: x });
 });
 app.post("/api/missions", async (req, res) => {
   try {
-    const x = await createMission(req.body || {});
+    const x = await createMission(req.body || {}, req.user);
     if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
     res.status(201).json({ success: true, mission: x });
   } catch (e: any) {
@@ -2153,12 +2221,12 @@ app.post("/api/missions", async (req, res) => {
   }
 });
 app.get("/api/missions/:id", async (req, res) => {
-  const x = await getMission(req.params.id);
+  const x = await getMission(req.params.id, req.user);
   if (!x) return res.status(404).json({ success: false, error: "Mission not found" });
   res.json({ success: true, mission: x });
 });
-app.post("/api/missions/:id/start", async (req, res) => {
-  const x = await startMission(req.params.id);
+app.post("/api/missions/:id/start", requireRole(["admin","engineer"]), async (req, res) => {
+  const x = await startMission(req.params.id, req.user);
   if (!x) return res.status(404).json({ success: false, error: "Mission not found" });
   res.json({ success: true, mission: x });
 });
@@ -2194,7 +2262,7 @@ app.get("/api/agents/tasks", async (req, res) => {
   res.json({ success: true, tasks: durable || await listTasks(missionId) });
 });
 
-app.post("/api/agents/dispatch", async (req, res) => {
+app.post("/api/agents/dispatch", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const durable = await enqueueDurableAgents(req.body || {});
     const result = durable || await dispatchAgents(req.body || {});
@@ -2210,7 +2278,7 @@ app.post("/api/agents/dispatch", async (req, res) => {
 // ==========================================
 
 // Plan a mission into structured subtasks
-app.post("/api/tasks/plan", async (req, res) => {
+app.post("/api/tasks/plan", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { prompt, missionId = `mission-${Date.now()}` } = req.body || {};
     if (!prompt) {
@@ -2259,7 +2327,7 @@ app.post("/api/tasks/plan", async (req, res) => {
 });
 
 // Start autonomous execution loop
-app.post("/api/tasks/execute", async (req, res) => {
+app.post("/api/tasks/execute", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { missionId, prompt, options = {} } = req.body || {};
     if (!missionId) {
@@ -2315,12 +2383,14 @@ app.post("/api/tasks/execute", async (req, res) => {
 });
 
 // Inspect a task/mission with subtasks, tool executions, files, approvals
-app.get("/api/tasks/:id", (req, res) => {
+app.get("/api/tasks/:id", (req: any, res) => {
   const missionId = req.params.id;
   const mission = db.getMissionById(missionId);
   if (!mission) {
     return res.status(404).json({ success: false, error: "Task/mission not found" });
   }
+
+  if (!db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
 
   const subtasks = db.getSubtasks(missionId);
   const toolExecutions = db.getToolExecutions(missionId);
@@ -2342,28 +2412,32 @@ app.get("/api/tasks/:id", (req, res) => {
 });
 
 // Task execution controls
-app.post("/api/tasks/:id/pause", (req, res) => {
+app.post("/api/tasks/:id/pause", requireRole(["admin","engineer"]), (req, res) => {
+  if (!db.canAccessMission(req.user, req.params.id)) return res.status(403).json({ success: false, error: "Forbidden" });
   const success = AgentOrchestrator.pauseMission(req.params.id);
   res.json({ success, message: success ? "Task paused." : "Task not currently active or already paused." });
 });
 
-app.post("/api/tasks/:id/resume", (req, res) => {
+app.post("/api/tasks/:id/resume", requireRole(["admin","engineer"]), (req, res) => {
+  if (!db.canAccessMission(req.user, req.params.id)) return res.status(403).json({ success: false, error: "Forbidden" });
   const success = AgentOrchestrator.resumeMission(req.params.id);
   res.json({ success, message: success ? "Task resumed." : "Task not currently paused." });
 });
 
-app.post("/api/tasks/:id/cancel", (req, res) => {
+app.post("/api/tasks/:id/cancel", requireRole(["admin","engineer"]), (req, res) => {
+  if (!db.canAccessMission(req.user, req.params.id)) return res.status(403).json({ success: false, error: "Forbidden" });
   const success = AgentOrchestrator.cancelMission(req.params.id);
   res.json({ success, message: success ? "Task cancelled." : "Task not active." });
 });
 
-app.get("/api/tasks/:id/subtasks", (req, res) => {
+app.get("/api/tasks/:id/subtasks", (req: any, res) => {
+  if (!db.canAccessMission(req.user, req.params.id)) return res.status(403).json({ success: false, error: "Forbidden" });
   const subtasks = db.getSubtasks(req.params.id);
   res.json({ success: true, subtasks });
 });
 
 // Operator Approval endpoint
-app.post("/api/tasks/:id/approve", (req, res) => {
+app.post("/api/tasks/:id/approve", requireRole(["admin"]), (req, res) => {
   const { approvalId, approved = true, responder = "operator" } = req.body || {};
   if (!approvalId) {
     return res.status(400).json({ success: false, error: "approvalId is required." });
@@ -2385,7 +2459,7 @@ app.get("/api/tools", (_req, res) => {
 });
 
 // Direct Tool Execution endpoint
-app.post("/api/tools/execute", async (req, res) => {
+app.post("/api/tools/execute", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { toolName, input = {}, missionId = "manual-run", agentRole = "system", skipApprovalCheck = false } = req.body || {};
     if (!toolName) {
@@ -2427,10 +2501,12 @@ app.post("/api/settings", (req: any, res) => {
 });
 
 // Direct file management
-app.get("/api/files/download", async (req, res) => {
+app.get("/api/files/download", async (req: any, res) => {
   try {
     const relPath = req.query.path as string;
-    if (!relPath) return res.status(400).send("Path required");
+    const missionId = req.query.missionId as string;
+    if (!relPath || !missionId) return res.status(400).send("Path and missionId required");
+    if (!db.canAccessMission(req.user, missionId)) return res.status(403).send("Forbidden");
     const workspaceDir = path.resolve(process.cwd(), "workspace");
     const target = path.join(workspaceDir, relPath);
     if (!target.startsWith(workspaceDir) || !fs.existsSync(target)) {
@@ -2442,9 +2518,10 @@ app.get("/api/files/download", async (req, res) => {
   }
 });
 
-app.post("/api/files/save", async (req, res) => {
+app.post("/api/files/save", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { path: relPath, content, missionId } = req.body || {};
+    if (!missionId || !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
     if (!relPath || typeof content !== "string") {
       return res.status(400).json({ success: false, error: "path and content required" });
     }
@@ -2469,9 +2546,10 @@ app.post("/api/files/save", async (req, res) => {
   }
 });
 
-app.post("/api/files/save-batch", async (req, res) => {
+app.post("/api/files/save-batch", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { files = [], missionId } = req.body || {};
+    if (!missionId || !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
     if (!Array.isArray(files)) {
       return res.status(400).json({ success: false, error: "files array required" });
     }
@@ -2498,7 +2576,7 @@ app.post("/api/files/save-batch", async (req, res) => {
   }
 });
 
-app.get("/api/files/tree", async (_req, res) => {
+app.get("/api/files/tree", requireRole(["admin"]), async (_req, res) => {
   try {
     const workspaceDir = path.resolve(process.cwd(), "workspace");
     await fs.promises.mkdir(workspaceDir, { recursive: true });
@@ -2553,9 +2631,10 @@ app.get("/api/files/tree", async (_req, res) => {
   }
 });
 
-app.post("/api/files/delete", async (req, res) => {
+app.post("/api/files/delete", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { path: relPath, missionId } = req.body || {};
+    if (!missionId || !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
     if (!relPath) {
       return res.status(400).json({ success: false, error: "path required" });
     }

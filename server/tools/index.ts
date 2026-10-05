@@ -39,10 +39,32 @@ export interface ToolExecutionResponse {
 }
 
 // Helper: safe fetch text over HTTP/HTTPS
+function assertWorkspacePath(relPath: string): string {
+  const root = path.resolve(process.cwd(), "workspace");
+  const target = path.resolve(root, relPath);
+  const relative = path.relative(root, target);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Access denied: path outside workspace");
+  return target;
+}
+
+function assertSafeRemoteUrl(targetUrl: string): URL {
+  const u = new URL(targetUrl);
+  if (!["https:", "http:"].includes(u.protocol)) throw new Error("Only HTTP(S) URLs are allowed");
+  const hostname = u.hostname.toLowerCase();
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "0.0.0.0" ||
+      hostname === "::1" || hostname === "[::1]" || /^127\./.test(hostname) ||
+      /^10\./.test(hostname) || /^192\.168\./.test(hostname) ||
+      /^169\.254\./.test(hostname) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname) ||
+      hostname.endsWith(".internal") || hostname === "metadata.google.internal") {
+    throw new Error("Private or metadata network targets are blocked");
+  }
+  return u;
+}
+
 function fetchUrlText(targetUrl: string, timeoutMs = 10000): Promise<{ statusCode: number; text: string; headers: any }> {
   return new Promise((resolve, reject) => {
     try {
-      const urlObj = new URL(targetUrl);
+      const urlObj = assertSafeRemoteUrl(targetUrl);
       const client = urlObj.protocol === 'https:' ? https : http;
       const req = client.get(
         targetUrl,
@@ -244,7 +266,7 @@ export class ToolExecutionEngine {
 
     // Check sensitive action
     const sensitivity = this.isSensitiveAction(toolName, input);
-    if (sensitivity.isSensitive && !params.skipApprovalCheck) {
+    if (sensitivity.isSensitive) {
       const approval = db.createApproval({
         missionId,
         subtaskId,
@@ -344,7 +366,7 @@ export class ToolExecutionEngine {
 
         case 'web_fetch': {
           const targetUrl = input.url;
-          if (!targetUrl || !targetUrl.startsWith('http')) {
+          if (!targetUrl) {
             throw new Error('Invalid URL. Must start with http:// or https://');
           }
           const fetchRes = await fetchUrlText(targetUrl, 10000);
@@ -443,7 +465,8 @@ export class ToolExecutionEngine {
         }
 
         case 'file_list': {
-          const baseDir = path.resolve(process.cwd(), input.directory || 'workspace');
+          const requestedDir = String(input.directory || '');
+          const baseDir = requestedDir ? assertWorkspacePath(requestedDir) : path.resolve(process.cwd(), 'workspace');
           if (!fs.existsSync(baseDir)) {
             data = { directory: input.directory || 'workspace', files: [] };
             break;
@@ -530,7 +553,7 @@ export class ToolExecutionEngine {
           const content = input.content;
           const outputPath = input.outputPath || 'docs/REPORT.md';
           const workspaceDir = path.resolve(process.cwd(), 'workspace');
-          const fullPath = path.join(workspaceDir, outputPath);
+          const fullPath = assertWorkspacePath(outputPath);
 
           await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
           await fs.promises.writeFile(fullPath, content, 'utf8');
