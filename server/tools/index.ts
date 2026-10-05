@@ -465,7 +465,8 @@ export class ToolExecutionEngine {
         }
 
         case 'file_list': {
-          const requestedDir = String(input.directory || '');\n          const baseDir = requestedDir ? assertWorkspacePath(requestedDir) : path.resolve(process.cwd(), 'workspace');
+          const requestedDir = String(input.directory || '');
+          const baseDir = requestedDir ? assertWorkspacePath(requestedDir) : path.resolve(process.cwd(), 'workspace');
           if (!fs.existsSync(baseDir)) {
             data = { directory: input.directory || 'workspace', files: [] };
             break;
