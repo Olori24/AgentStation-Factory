@@ -1595,10 +1595,12 @@ async function saveMissionsStore(missions: any[]): Promise<void> {
   }
 }
 
-app.get("/api/missions", async (_req, res) => {
+app.get("/api/missions", async (req: any, res) => {
   try {
+    const user = req.user;
     const missions = await ensureMissionsStore();
-    res.json({ success: true, missions });
+    const visible = missions.filter((m: any) => user?.role === "admin" || (m.organizationId === user?.organizationId && m.userId === user?.id));
+    res.json({ success: true, missions: visible });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1606,8 +1608,9 @@ app.get("/api/missions", async (_req, res) => {
 
 app.post("/api/missions", requireRole(["admin","engineer"]), async (req, res) => {
   try {
-    const newMission = req.body;
-    if (!newMission || !newMission.id) {
+    const user = req.user;
+    const newMission = { ...(req.body || {}), userId: user.id, organizationId: user.organizationId };
+    if (!newMission.id) {
       return res.status(400).json({ success: false, error: "Mission must have an ID" });
     }
     const missions = await ensureMissionsStore();
@@ -1624,10 +1627,15 @@ app.post("/api/missions", requireRole(["admin","engineer"]), async (req, res) =>
   }
 });
 
-app.delete("/api/missions/:id", async (req, res) => {
+app.delete("/api/missions/:id", requireRole(["admin","engineer"]), async (req: any, res) => {
   try {
     const { id } = req.params;
+    const user = req.user;
     const missions = await ensureMissionsStore();
+    const target = missions.find((m: any) => m.id === id);
+    if (!target) return res.status(404).json({ success: false, error: "Mission not found" });
+    if (user.role !== "admin" && (target.organizationId !== user.organizationId || target.userId !== user.id)) return res.status(403).json({ success: false, error: "Forbidden" });
+    if (user.role === "admin" && target.organizationId !== user.organizationId) return res.status(403).json({ success: false, error: "Forbidden" });
     const filtered = missions.filter((m: any) => m.id !== id);
     await saveMissionsStore(filtered);
     res.json({ success: true, deletedId: id });
@@ -2375,12 +2383,14 @@ app.post("/api/tasks/execute", requireRole(["admin","engineer"]), async (req, re
 });
 
 // Inspect a task/mission with subtasks, tool executions, files, approvals
-app.get("/api/tasks/:id", (req, res) => {
+app.get("/api/tasks/:id", (req: any, res) => {
   const missionId = req.params.id;
   const mission = db.getMissionById(missionId);
   if (!mission) {
     return res.status(404).json({ success: false, error: "Task/mission not found" });
   }
+
+  if (!db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
 
   const subtasks = db.getSubtasks(missionId);
   const toolExecutions = db.getToolExecutions(missionId);
@@ -2403,21 +2413,25 @@ app.get("/api/tasks/:id", (req, res) => {
 
 // Task execution controls
 app.post("/api/tasks/:id/pause", requireRole(["admin","engineer"]), (req, res) => {
+  if (!db.canAccessMission(req.user, req.params.id)) return res.status(403).json({ success: false, error: "Forbidden" });
   const success = AgentOrchestrator.pauseMission(req.params.id);
   res.json({ success, message: success ? "Task paused." : "Task not currently active or already paused." });
 });
 
 app.post("/api/tasks/:id/resume", requireRole(["admin","engineer"]), (req, res) => {
+  if (!db.canAccessMission(req.user, req.params.id)) return res.status(403).json({ success: false, error: "Forbidden" });
   const success = AgentOrchestrator.resumeMission(req.params.id);
   res.json({ success, message: success ? "Task resumed." : "Task not currently paused." });
 });
 
 app.post("/api/tasks/:id/cancel", requireRole(["admin","engineer"]), (req, res) => {
+  if (!db.canAccessMission(req.user, req.params.id)) return res.status(403).json({ success: false, error: "Forbidden" });
   const success = AgentOrchestrator.cancelMission(req.params.id);
   res.json({ success, message: success ? "Task cancelled." : "Task not active." });
 });
 
-app.get("/api/tasks/:id/subtasks", (req, res) => {
+app.get("/api/tasks/:id/subtasks", (req: any, res) => {
+  if (!db.canAccessMission(req.user, req.params.id)) return res.status(403).json({ success: false, error: "Forbidden" });
   const subtasks = db.getSubtasks(req.params.id);
   res.json({ success: true, subtasks });
 });
