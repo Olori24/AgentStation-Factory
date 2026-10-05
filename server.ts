@@ -51,7 +51,7 @@ app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { (req as any).
 
 app.post("/api/auth/bootstrap", (req, res) => {
   const bootstrapToken = String(req.body?.bootstrapToken || "");
-  if (!verifyBootstrapToken(bootstrapToken) return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
+  if (!verifyBootstrapToken(bootstrapToken)) return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
   const userId = String(req.body?.userId || "user-bolaji-01");
   const user = db.getUserById(userId);
   if (!user) return res.status(404).json({ success: false, error: "User not found" });
