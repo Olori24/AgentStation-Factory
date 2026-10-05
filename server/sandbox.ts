@@ -33,7 +33,12 @@ export async function executeSandboxedCommand(
 ): Promise<SandboxExecutionResult> {
   const sandboxId = `sbx-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const sandboxPath = path.join(BASE_SANDBOX_DIR, sandboxId);
-  const timeoutMs = options.timeoutMs || 30000; // 30s cap
+  const requestedTimeout = Number(options.timeoutMs || 30000);
+  const timeoutMs = Math.min(Math.max(Number.isFinite(requestedTimeout) ? requestedTimeout : 30000, 1000), 120000);
+  if (process.env.NODE_ENV === 'production' && process.env.SANDBOX_ALLOW_HOST_EXECUTION !== 'true') {
+    throw new Error('Host shell execution is disabled in production. Configure a containerized sandbox runtime before enabling execution.');
+  }
+  if (!command || command.length > 20000) throw new Error('Command is missing or too large');
   const startTime = Date.now();
 
   try {
@@ -42,7 +47,9 @@ export async function executeSandboxedCommand(
     // Mount workspace files if provided
     if (options.files && options.files.length > 0) {
       for (const file of options.files) {
-        const fullFilePath = path.join(sandboxPath, file.path);
+        const fullFilePath = path.resolve(sandboxPath, file.path);
+        const relativeFilePath = path.relative(sandboxPath, fullFilePath);
+        if (!relativeFilePath || relativeFilePath.startsWith('..') || path.isAbsolute(relativeFilePath)) throw new Error('Sandbox file path escapes sandbox');
         await fs.promises.mkdir(path.dirname(fullFilePath), { recursive: true });
         await fs.promises.writeFile(fullFilePath, file.content, 'utf8');
       }
@@ -77,7 +84,7 @@ export async function executeSandboxedCommand(
       GEMINI_API_KEY: 'PROTECTED_SANDBOX_STUB',
       GITHUB_TOKEN: 'PROTECTED_SANDBOX_STUB',
       ENCRYPTION_KEY: 'PROTECTED_SANDBOX_STUB',
-      ...(options.env || {}),
+      ...Object.fromEntries(Object.entries(options.env || {}).filter(([key]) => !/^(GEMINI_API_KEY|GITHUB_TOKEN|ENCRYPTION_KEY|SESSION_SECRET|CRON_SECRET|AGENTIC_API_KEY|DATABASE_URL|POSTGRES_URL|NEON_DATABASE_URL)$/i.test(key))),
     };
 
     return new Promise((resolve) => {
