@@ -330,6 +330,19 @@ class RelationalDatabase {
   public getMissionById(id: string): DbMissionRecord | undefined {
     return this.data.missions.find((m) => m.id === id);
   }
+  public getMissionsForUser(user: UserRecord, limit = 100): DbMissionRecord[] {
+    return this.data.missions
+      .filter((m) => user.role === 'admin' || (m.organizationId === user.organizationId && m.userId === user.id))
+      .slice(0, limit);
+  }
+
+  public canAccessMission(user: UserRecord, missionId: string): boolean {
+    const mission = this.getMissionById(missionId);
+    if (!mission) return false;
+    if (user.role === 'admin') return mission.organizationId === user.organizationId;
+    return mission.organizationId === user.organizationId && mission.userId === user.id;
+  }
+
 
   public upsertMission(mission: DbMissionRecord): DbMissionRecord {
     const idx = this.data.missions.findIndex((m) => m.id === mission.id);
