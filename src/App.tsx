@@ -38,73 +38,7 @@ import { SAMPLE_MISSIONS } from './data/sampleMissions';
 import { SquadMission, AgentProfile, AgentRole, AgentLogEntry, WorkspaceFile, VideoProject, CiStatusInfo, TerminalStreamMessage } from './types';
 import { executeAutonomousPipeline, simulateSandboxCommand } from './services/autonomousEngine';
 
-export default function App() {
-  const [authenticated, setAuthenticated] = useState(false);
-  const [authChecking, setAuthChecking] = useState(true);
-  const [bootstrapToken, setBootstrapToken] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then((res) => {
-        setAuthenticated(res.ok);
-      })
-      .catch(() => setAuthenticated(false))
-      .finally(() => setAuthChecking(false));
-  }, []);
-
-  const handleBootstrapLogin = async () => {
-    setAuthError(null);
-    if (!bootstrapToken.trim()) {
-      setAuthError('Enter the administrator bootstrap token.');
-      return;
-    }
-    try {
-      const res = await fetch('/api/auth/bootstrap', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bootstrapToken: bootstrapToken.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Authentication failed');
-      setAuthenticated(true);
-      setBootstrapToken('');
-    } catch (err: any) {
-      setAuthError(err?.message || 'Authentication failed');
-    }
-  };
-
-  if (authChecking) {
-    return <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center text-sm">Securing AgentStation…</div>;
-  }
-
-  if (!authenticated) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center"><Bot className="w-5 h-5" /></div>
-            <div><h1 className="text-lg font-bold">AgentStation</h1><p className="text-xs text-slate-400">Secure operator sign-in</p></div>
-          </div>
-          <label className="block text-xs font-semibold text-slate-300 mb-2">Bootstrap token</label>
-          <input
-            type="password"
-            value={bootstrapToken}
-            onChange={(e) => setBootstrapToken(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') void handleBootstrapLogin(); }}
-            autoComplete="current-password"
-            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-blue-500"
-            placeholder="Enter your server-issued bootstrap token"
-          />
-          {authError && <p className="mt-3 text-xs text-red-400">{authError}</p>}
-          <button type="button" onClick={() => void handleBootstrapLogin()} className="mt-4 w-full rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-3 text-sm font-semibold">Sign in securely</button>
-          <p className="mt-4 text-[11px] leading-5 text-slate-500">The token is sent only to the server. It is never stored in browser storage or returned to the page.</p>
-        </div>
-      </div>
-    );
-  }
-
+function AgentStationApp() {
   const [missionHistory, setMissionHistory] = useState<SquadMission[]>(() => {
     try {
       const saved = localStorage.getItem('agentstation_missions_v1');
@@ -1329,4 +1263,73 @@ export default function App() {
       />
     </div>
   );
+}
+
+
+export default function App() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [bootstrapToken, setBootstrapToken] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((res) => setAuthenticated(res.ok))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setAuthChecking(false));
+  }, []);
+
+  const handleBootstrapLogin = async () => {
+    setAuthError(null);
+    if (!bootstrapToken.trim()) {
+      setAuthError('Enter the administrator bootstrap token.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/bootstrap', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bootstrapToken: bootstrapToken.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Authentication failed');
+      setAuthenticated(true);
+      setBootstrapToken('');
+    } catch (err: any) {
+      setAuthError(err?.message || 'Authentication failed');
+    }
+  };
+
+  if (authChecking) {
+    return <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center text-sm">Securing AgentStation…</div>;
+  }
+
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center"><Bot className="w-5 h-5" /></div>
+            <div><h1 className="text-lg font-bold">AgentStation</h1><p className="text-xs text-slate-400">Secure operator sign-in</p></div>
+          </div>
+          <label className="block text-xs font-semibold text-slate-300 mb-2">Bootstrap token</label>
+          <input
+            type="password"
+            value={bootstrapToken}
+            onChange={(e) => setBootstrapToken(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void handleBootstrapLogin(); }}
+            autoComplete="current-password"
+            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-blue-500"
+            placeholder="Enter your server-issued bootstrap token"
+          />
+          {authError && <p className="mt-3 text-xs text-red-400">{authError}</p>}
+          <button type="button" onClick={() => void handleBootstrapLogin()} className="mt-4 w-full rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-3 text-sm font-semibold">Sign in securely</button>
+          <p className="mt-4 text-[11px] leading-5 text-slate-500">The token is sent only to the server. It is never stored in browser storage or returned to the page.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <AgentStationApp />;
 }
