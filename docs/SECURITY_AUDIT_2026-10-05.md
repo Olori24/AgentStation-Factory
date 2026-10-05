@@ -39,9 +39,9 @@ A third important readiness issue remains:
 | SEC-012 | Medium | Database | Neon/PostgreSQL schema contains multi-tenant concepts but does not currently demonstrate RLS policies for application records. | Add and test PostgreSQL RLS or equivalent server-side ownership enforcement for every tenant-owned table. | Open |
 | SEC-013 | Medium | Storage | Local JSON persistence and filesystem workspace are not suitable as the sole production data layer for a horizontally scaled/serverless deployment. | Use durable PostgreSQL/object storage and explicit backup/restore procedures. | Open |
 | SEC-014 | Medium | Rate limiting | Original API surface lacked abuse controls. | Added process-local API rate limiting. Production should use a shared/distributed limiter for multiple instances. | Partially fixed |
-| SEC-015 | Medium | Dependencies | Dependency vulnerability audit is now a CI gate. | npm audit --audit-level=high added to CI; final result must be verified by a green CI run. | Verification pending |
+| SEC-015 | Medium | Dependencies | Dependency vulnerability audit is now a CI gate. | npm audit --audit-level=high passes on the latest remediation head; qs was pinned to 6.16.0. | Fixed / verified |
 | SEC-016 | Low | Dev server | Vite development configuration allows all hosts. | Development-only configuration should be restricted for shared environments; do not expose the Vite dev server publicly. | Open |
-| SEC-017 | Medium | Deployment | The repository contains both Vercel and Render deployment configurations with materially different runtime characteristics. | Select one production runtime and certify its environment, storage, WebSocket behavior, and background-worker model. | Open |
+| SEC-017 | Medium | Deployment | The repository contains both Vercel and Render deployment configurations with materially different runtime characteristics. | Select one production runtime and certify its environment, storage, WebSocket behavior, and background-worker model. Latest Vercel deployment for the remediation head reports BUILD_FAILED / Resource provisioning failed, so deployment is not certified. | Open — deployment blocker |
 
 ## Controls reviewed
 
