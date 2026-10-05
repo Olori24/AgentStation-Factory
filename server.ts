@@ -8,7 +8,7 @@ import { promisify } from "util";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import { db } from "./server/db";
-import { authMiddleware, getActiveUser, setActiveUser, issueSessionToken, requireRole } from "./server/auth";
+import { authMiddleware, getActiveUser, setActiveUser, issueSessionToken, requireRole, verifyBootstrapToken, verifyWebhookSignature } from "./server/auth";
 import { streaming } from "./server/streaming";
 import { jobQueue } from "./server/queue";
 import { executeSandboxedCommand } from "./server/sandbox";
@@ -37,8 +37,31 @@ if (process.env.VERCEL !== "1") {
   terminalWs.init(httpServer);
 }
 
-app.use(express.json({ limit: "10mb" }));
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (process.env.NODE_ENV === "production") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  next();
+});
+app.use(express.json({ limit: "2mb" }));
 app.use("/api/growth", growthRouter);
+
+app.post("/api/auth/bootstrap", (req, res) => {
+  const token = String(req.body?.bootstrapToken || "");
+  if (!verifyBootstrapToken(token)) return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
+  const userId = String(req.body?.userId || "user-bolaji-01");
+  const user = db.getUserById(userId);
+  if (!user) return res.status(404).json({ success: false, error: "User not found" });
+  res.json({ success: true, token: issueSessionToken(user.id), user });
+});
+
+app.use("/api", (req, res, next) => {
+  if (req.path === "/health" || req.path === "/auth/bootstrap" || req.path === "/github/webhook" || req.path === "/autonomy/heartbeat") return next();
+  return authMiddleware(req as any, res, next);
+});
 
 // Lazy initialization for Google Gen AI client
 let aiClient: GoogleGenAI | null = null;
@@ -50,6 +73,20 @@ function getGenAI(): GoogleGenAI | null {
 }
 
 // Health check endpoint
+const rateState = new Map<string, { count: number; resetAt: number }>();
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) return next();
+  const key = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const current = rateState.get(key);
+  const windowMs = 60_000;
+  const limit = req.path === "/api/auth/bootstrap" ? 10 : 180;
+  if (!current || current.resetAt <= now) rateState.set(key, { count: 1, resetAt: now + windowMs });
+  else if (current.count >= limit) return res.status(429).json({ success: false, error: "Rate limit exceeded" });
+  else current.count++;
+  next();
+});
+
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
@@ -1597,10 +1634,14 @@ interface WebhookEventLog {
 
 const recentWebhooks: WebhookEventLog[] = [];
 
-app.post("/api/github/webhook", async (req, res) => {
+app.post("/api/github/webhook", express.raw({ type: "application/json", limit: "1mb" }), async (req, res) => {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+  if (!verifyWebhookSignature(rawBody, String(req.headers["x-hub-signature-256"] || ""))) {
+    return res.status(401).json({ success: false, error: "Invalid webhook signature" });
+  }
   try {
     const githubEvent = (req.headers["x-github-event"] as string) || "custom";
-    const payload = req.body || {};
+    const payload = JSON.parse(rawBody.toString("utf8") || "{}");
     const repoName = payload.repository?.full_name || "Olori24/AgentStation";
     const sender = payload.sender?.login || "github-actions[bot]";
     const action = payload.action || "";
@@ -1838,7 +1879,7 @@ jobs:
 // ==========================================
 // Phase 1: Relational Database & Multi-Tenant Auth
 // ==========================================
-app.use(authMiddleware);
+
 
 app.get("/api/auth/me", (req: any, res) => {
   const user = req.user || getActiveUser();
@@ -1852,7 +1893,7 @@ app.get("/api/auth/me", (req: any, res) => {
   });
 });
 
-app.get("/api/auth/users", (_req, res) => {
+app.get("/api/auth/users", requireRole(["admin"]), (_req, res) => {
   res.json({
     success: true,
     users: db.getUsers(),
@@ -1860,7 +1901,7 @@ app.get("/api/auth/users", (_req, res) => {
   });
 });
 
-app.post("/api/auth/switch", (req, res) => {
+app.post("/api/auth/switch", requireRole(["admin"]), (req, res) => {
   const { userId } = req.body || {};
   const user = setActiveUser(userId);
   if (!user) {
