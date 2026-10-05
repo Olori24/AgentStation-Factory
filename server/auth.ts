@@ -84,6 +84,14 @@ export function verifySessionToken(token: string): UserRecord | null {
   }
 }
 
+declare global {
+  namespace Express {
+    interface Request {
+      user?: UserRecord;
+    }
+  }
+}
+
 export interface AuthenticatedRequest extends Request { user?: UserRecord; }
 
 export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
