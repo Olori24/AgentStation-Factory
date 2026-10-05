@@ -37,7 +37,11 @@ def test_ssrf_and_workspace_boundaries_are_enforced():
 
 def test_sandbox_fails_closed_in_production():
     sandbox = read("server/sandbox.ts")
-    assert "SANDBOX_ALLOW_HOST_EXECUTION !== 'true'" in sandbox
+    assert "SANDBOX_RUNTIME !== 'docker'" in sandbox
+    assert "spawn('docker'" in sandbox
+    assert "--network=none" in sandbox
+    assert "--cap-drop=ALL" in sandbox
+    assert "--security-opt=no-new-privileges" in sandbox
     assert "Sandbox file path escapes sandbox" in sandbox
 
 def test_terminal_websocket_requires_authentication():
@@ -45,3 +49,27 @@ def test_terminal_websocket_requires_authentication():
     assert "verifySessionToken" in ws
     assert "401 Unauthorized" in ws
     assert "maxPayload: 1024 * 1024" in ws
+
+
+def test_browser_auth_is_cookie_based_and_server_owned():
+    auth = read("server/auth.ts")
+    server = read("server.ts")
+    app = read("src/App.tsx")
+    assert "httpOnly: true" in server
+    assert 'sameSite: "strict"' in server
+    assert "api/auth/me" in app
+    assert "credentials: 'include'" in app
+    assert "bootstrapToken" in app
+    assert "SESSION_COOKIE" in auth
+
+def test_tenant_ownership_and_rls_migration_exist():
+    migration = read("db/migrations/005_tenant_security.sql")
+    db = read("server/db.ts")
+    company = read("server/companyControlPlane.ts")
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "owner_user_id" in migration
+    assert "organization_id" in migration
+    assert "getMissionsForUser" in db
+    assert "canAccessMission" in db
+    assert "owner_user_id" in company
+    assert "organization_id" in company
