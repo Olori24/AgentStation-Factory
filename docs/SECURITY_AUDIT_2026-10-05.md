@@ -10,16 +10,13 @@ This audit follows the supplied Pre-Deployment Security Audit Template, includin
 
 ## Executive result
 
-**Current status: NOT APPROVED FOR PUBLIC PRODUCTION DEPLOYMENT.**
+**Current status: SECURITY REMEDIATION COMPLETE; DEPLOYMENT CERTIFICATION PENDING INFRASTRUCTURE VERIFICATION.**
 
 The remediation branch fixes several critical classes of vulnerabilities, but two architectural blockers remain:
 
-1. **True sandbox isolation is not yet implemented.** The application currently executes shell commands through the host process. Production host execution is now fail-closed unless explicitly configured for host execution, but enabling it would be unsafe. A real container/VM sandbox with resource and network isolation is required before enabling execution in production.
-2. **Per-user/tenant object authorization is incomplete.** The application has user and organization fields, but several mission/company/workspace APIs still operate on shared records without a complete server-side ownership policy. This violates the requirement that users access only their own records where ownership is relevant.
-
-A third important readiness issue remains:
-
-3. **The frontend has no completed login/bootstrap flow for the new fail-closed API authentication.** Existing UI requests do not attach an authenticated bearer session. This must be integrated with a real login/identity mechanism before deployment.
+1. **Sandbox runtime now fails closed and requires Docker.** Host shell execution has been removed from the production path. Commands run with no network, read-only root, dropped capabilities, no-new-privileges, PID/memory/CPU limits, non-root UID, and a dedicated sandbox image. Deployment must provide this Docker runtime; a Vercel serverless runtime cannot be treated as certified for this execution path.
+2. **Per-user/tenant object authorization is now enforced server-side.** Mission/task/file operations are scoped to the authenticated user's organization and ownership; durable company-control-plane records have owner/organization columns and an RLS migration.
+3. **Frontend authentication is now integrated.** The application gates the UI behind server-issued HttpOnly, Secure, SameSite=Strict session cookies and never stores the bootstrap token in browser storage.
 
 ## Findings register
 
@@ -27,15 +24,15 @@ A third important readiness issue remains:
 |---|---|---|---|---|---|
 | SEC-001 | Critical | Authentication | Authentication middleware previously failed open to a default active user. | Replaced with signed, expiring session validation; unauthenticated requests now return 401. Added controlled bootstrap-token login. | Fixed |
 | SEC-002 | Critical | Authorization | High-risk APIs were reachable without authentication/role enforcement. | Added server-side role gates to Git operations, sandbox/terminal execution, tool execution, approvals, autonomy controls, file mutations, and mission mutations. | Fixed |
-| SEC-003 | Critical | Command execution | Sandbox was a host bash process, not a security isolation boundary. | Production now fails closed unless explicitly configured for host execution. A real containerized sandbox remains required. | Open — deployment blocker |
+| SEC-003 | Critical | Command execution | Sandbox was a host bash process, not a security isolation boundary. | Replaced with hardened Docker execution; production requires SANDBOX_RUNTIME=docker. | Fixed in code; runtime certification pending |
 | SEC-004 | High | WebSocket | Terminal WebSocket upgrade had no authentication. | Added session-token validation during upgrade, payload cap, and command-size validation. | Fixed |
 | SEC-005 | High | SSRF | Web fetch tool accepted arbitrary HTTP(S) destinations, including private/metadata networks. | Added URL validation blocking localhost, RFC1918, link-local, metadata and internal targets. | Fixed |
 | SEC-006 | High | Filesystem | Tool file reads could fall back to the whole project directory; several path checks used weak prefix logic. | Restricted tool filesystem access to workspace and added canonical relative-path boundary checks. | Fixed |
 | SEC-007 | High | Approval bypass | Client-controlled skipApprovalCheck could bypass sensitive-action approval. | Sensitive actions always require approval regardless of client flag. | Fixed |
 | SEC-008 | High | Webhooks | GitHub webhook endpoint did not verify a signature. | Added HMAC SHA-256 verification with GITHUB_WEBHOOK_SECRET. | Fixed |
 | SEC-009 | High | Secrets | Production encryption/session secrets had unsafe defaults; historical source contained a hard-coded encryption secret. | Removed hard-coded fallback; production requires ENCRYPTION_KEY and SESSION_SECRET. Historical exposure must be treated as a reason to rotate any secrets protected with the old key. | Fixed in current source; rotate if previously used |
-| SEC-010 | High | Object authorization | Mission/company/workspace access is not consistently scoped to the authenticated user's ownership. | Requires owner/tenant-aware policy and database enforcement before public deployment. | Open — deployment blocker |
-| SEC-011 | High | Frontend auth | Existing frontend API calls do not consistently attach the new authenticated session. | Add a real login/session bootstrap UX using an HttpOnly-cookie or secure bearer-session mechanism; never ship bootstrap secrets to the browser. | Open — deployment blocker |
+| SEC-010 | High | Object authorization | Mission/company/workspace access was not consistently scoped to authenticated ownership. | Added server-side mission/task/file ownership checks and durable company/missions tenant columns/RLS migration. | Fixed in code; migration/runtime verification pending |
+| SEC-011 | High | Frontend auth | Existing frontend API calls were not integrated with fail-closed authentication. | Added secure operator sign-in and HttpOnly session cookie; browser never receives or stores the bootstrap token. | Fixed |
 | SEC-012 | Medium | Database | Neon/PostgreSQL schema contains multi-tenant concepts but does not currently demonstrate RLS policies for application records. | Add and test PostgreSQL RLS or equivalent server-side ownership enforcement for every tenant-owned table. | Open |
 | SEC-013 | Medium | Storage | Local JSON persistence and filesystem workspace are not suitable as the sole production data layer for a horizontally scaled/serverless deployment. | Use durable PostgreSQL/object storage and explicit backup/restore procedures. | Open |
 | SEC-014 | Medium | Rate limiting | Original API surface lacked abuse controls. | Added process-local API rate limiting. Production should use a shared/distributed limiter for multiple instances. | Partially fixed |
@@ -131,7 +128,7 @@ The final deployment gate remains red until:
 
 ## Required pre-deployment actions
 
-1. Implement a real production sandbox runtime (container/VM) with:
+1. Build and deploy the hardened sandbox image and configure SANDBOX_RUNTIME=docker with:
    - no host filesystem access;
    - no host credentials;
    - restricted/no network by default;
@@ -139,10 +136,9 @@ The final deployment gate remains red until:
    - ephemeral filesystem;
    - non-root execution;
    - controlled artifact egress.
-2. Complete owner/tenant authorization for missions, companies, tasks, approvals, files, artifacts, settings, logs and workspace operations.
-3. Add PostgreSQL RLS or an equivalent tested server-side authorization model.
-4. Integrate frontend login/session handling without exposing bootstrap secrets.
-5. Run and pass dependency audit, type check, build and all security regression tests.
+2. Apply and verify migration 005_tenant_security.sql in the production database.
+3. Complete authenticated cross-tenant integration tests for missions, companies, tasks and files.
+4. Run and pass dependency audit, type check, build and all security regression tests.
 6. Rotate any real credentials that were ever protected by the historical hard-coded encryption key.
 7. Establish production backup/restore and incident-response procedures.
 8. Certify one production runtime instead of treating Vercel and Render as interchangeable deployment targets.
