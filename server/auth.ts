@@ -63,7 +63,7 @@ export function issueSessionToken(userId: string): string {
   return `as_sess_${payload}.${sign(payload)}`;
 }
 
-function verifySessionToken(token: string): UserRecord | null {
+export function verifySessionToken(token: string): UserRecord | null {
   if (!token.startsWith('as_sess_')) return null;
   const raw = token.slice('as_sess_'.length);
   const dot = raw.lastIndexOf('.');
