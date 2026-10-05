@@ -55,7 +55,25 @@ app.post("/api/auth/bootstrap", (req, res) => {
   const userId = String(req.body?.userId || "user-bolaji-01");
   const user = db.getUserById(userId);
   if (!user) return res.status(404).json({ success: false, error: "User not found" });
-  res.json({ success: true, token: issueSessionToken(user.id), user });
+  const token = issueSessionToken(user.id);
+  res.cookie("as_session", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 8 * 60 * 60 * 1000,
+    path: "/",
+  });
+  res.json({ success: true, user });
+});
+
+app.get("/api/auth/me", (req: any, res) => {
+  if (!req.user) return res.status(401).json({ success: false, error: "Authentication required" });
+  res.json({ success: true, user: req.user });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie("as_session", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/" });
+  res.status(204).end();
 });
 
 app.use("/api", (req, res, next) => {
