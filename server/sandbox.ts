@@ -35,8 +35,8 @@ export async function executeSandboxedCommand(
   const sandboxPath = path.join(BASE_SANDBOX_DIR, sandboxId);
   const requestedTimeout = Number(options.timeoutMs || 30000);
   const timeoutMs = Math.min(Math.max(Number.isFinite(requestedTimeout) ? requestedTimeout : 30000, 1000), 120000);
-  if (process.env.NODE_ENV === 'production' && process.env.SANDBOX_ALLOW_HOST_EXECUTION !== 'true') {
-    throw new Error('Host shell execution is disabled in production. Configure a containerized sandbox runtime before enabling execution.');
+  if (process.env.NODE_ENV === 'production' && process.env.SANDBOX_RUNTIME !== 'docker') {
+    throw new Error('Production sandbox requires SANDBOX_RUNTIME=docker. Host shell execution is permanently disabled.');
   }
   if (!command || command.length > 20000) throw new Error('Command is missing or too large');
   const startTime = Date.now();
@@ -97,9 +97,36 @@ export async function executeSandboxedCommand(
         streaming.streamTerminalLine(options.missionId, `$ [SANDBOX ISOLATED] ${command}\n`, 'stdout');
       }
 
-      const child = spawn('bash', ['-c', command], {
-        cwd: sandboxPath,
-        env: scrubbedEnv,
+      const runtime = (process.env.SANDBOX_RUNTIME || 'docker').trim().toLowerCase();
+      if (runtime !== 'docker') {
+        throw new Error('Unsupported sandbox runtime. Production requires SANDBOX_RUNTIME=docker.');
+      }
+
+      const image = (process.env.SANDBOX_IMAGE || 'agentstation-sandbox:latest').trim();
+      const dockerArgs = [
+        'run', '--rm',
+        '--network=none',
+        '--read-only',
+        '--tmpfs', '/tmp:rw,noexec,nosuid,size=128m',
+        '--cap-drop=ALL',
+        '--security-opt=no-new-privileges',
+        '--pids-limit=128',
+        '--memory=512m',
+        '--cpus=1',
+        '--user', '65532:65532',
+        '-v', sandboxPath + ':/workspace:rw',
+        '-w', '/workspace',
+        image,
+        'sh', '-lc', command,
+      ];
+
+      const child = spawn('docker', dockerArgs, {
+        cwd: process.cwd(),
+        env: {
+          PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+          DOCKER_CONFIG: '/nonexistent',
+          HOME: '/tmp',
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
