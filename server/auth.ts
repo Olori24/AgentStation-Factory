@@ -5,6 +5,7 @@ import { db, UserRecord } from './db';
 const ENCRYPTION_SECRET = process.env.ENCRYPTION_KEY?.trim();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const SESSION_SECRET = process.env.SESSION_SECRET?.trim();
+const SESSION_COOKIE = 'as_session';
 
 if (process.env.NODE_ENV === 'production' && (!ENCRYPTION_SECRET || !SESSION_SECRET)) {
   throw new Error('ENCRYPTION_KEY and SESSION_SECRET are required in production');
@@ -87,8 +88,11 @@ export interface AuthenticatedRequest extends Request { user?: UserRecord; }
 
 export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = String(req.headers.authorization || '');
-  if (!authHeader.startsWith('Bearer ')) return res.status(401).json({ success: false, error: 'Authentication required' });
-  const user = verifySessionToken(authHeader.slice(7).trim());
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const cookieHeader = String(req.headers.cookie || '');
+  const cookie = cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`));
+  const cookieToken = cookie ? decodeURIComponent(cookie.slice(SESSION_COOKIE.length + 1)) : '';
+  const user = verifySessionToken(bearer || cookieToken);
   if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
   req.user = user;
   next();
