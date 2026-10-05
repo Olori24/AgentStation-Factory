@@ -2193,13 +2193,13 @@ app.post("/api/simulations/mirofish", async (req, res) => {
   }
 });
 app.get("/api/companies", async (_req, res) => {
-  const x = await listCompanies();
+  const x = await listCompanies(req.user);
   if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
   res.json({ success: true, companies: x });
 });
 app.post("/api/companies", requireRole(["admin"]), async (req, res) => {
   try {
-    const x = await createCompany(req.body || {});
+    const x = await createCompany(req.body || {}, req.user);
     if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
     res.status(201).json({ success: true, company: x });
   } catch (e: any) {
@@ -2207,13 +2207,13 @@ app.post("/api/companies", requireRole(["admin"]), async (req, res) => {
   }
 });
 app.get("/api/missions", async (req, res) => {
-  const x = await listMissions(typeof req.query.companyId === "string" ? req.query.companyId : undefined);
+  const x = await listMissions(req.user, typeof req.query.companyId === "string" ? req.query.companyId : undefined);
   if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
   res.json({ success: true, missions: x });
 });
 app.post("/api/missions", async (req, res) => {
   try {
-    const x = await createMission(req.body || {});
+    const x = await createMission(req.body || {}, req.user);
     if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
     res.status(201).json({ success: true, mission: x });
   } catch (e: any) {
@@ -2221,12 +2221,12 @@ app.post("/api/missions", async (req, res) => {
   }
 });
 app.get("/api/missions/:id", async (req, res) => {
-  const x = await getMission(req.params.id);
+  const x = await getMission(req.params.id, req.user);
   if (!x) return res.status(404).json({ success: false, error: "Mission not found" });
   res.json({ success: true, mission: x });
 });
 app.post("/api/missions/:id/start", requireRole(["admin","engineer"]), async (req, res) => {
-  const x = await startMission(req.params.id);
+  const x = await startMission(req.params.id, req.user);
   if (!x) return res.status(404).json({ success: false, error: "Mission not found" });
   res.json({ success: true, mission: x });
 });
