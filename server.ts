@@ -46,8 +46,8 @@ app.use((req, res, next) => {
   if (process.env.NODE_ENV === "production") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   next();
 });
-app.use(express.json({ limit: "2mb" }));
-app.use("/api/growth", growthRouter);
+app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { (req as any).rawBody = Buffer.from(buf); } }));
+
 
 app.post("/api/auth/bootstrap", (req, res) => {
   const token = String(req.body?.bootstrapToken || "");
@@ -62,6 +62,7 @@ app.use("/api", (req, res, next) => {
   if (req.path === "/health" || req.path === "/auth/bootstrap" || req.path === "/github/webhook" || req.path === "/autonomy/heartbeat") return next();
   return authMiddleware(req as any, res, next);
 });
+app.use("/api/growth", growthRouter);
 
 // Lazy initialization for Google Gen AI client
 let aiClient: GoogleGenAI | null = null;
@@ -347,7 +348,7 @@ app.get("/api/github/ci-status", async (_req, res) => {
 });
 
 // Create a new branch and automatically switch to it
-app.post("/api/github/create-branch", async (req, res) => {
+app.post("/api/github/create-branch", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     await ensureGitRepo();
     const rawBranch = (req.body?.branch || "").trim();
@@ -408,7 +409,7 @@ app.post("/api/github/create-branch", async (req, res) => {
 });
 
 // Switch to or checkout a target branch
-app.post("/api/github/switch-branch", async (req, res) => {
+app.post("/api/github/switch-branch", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     await ensureGitRepo();
     const targetBranch = (req.body?.branch || "").trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, "");
@@ -507,7 +508,7 @@ app.post("/api/github/switch-branch", async (req, res) => {
 });
 
 // Execute Git Push to GitHub with automatic upstream fetch & merge
-app.post("/api/github/push", async (req, res) => {
+app.post("/api/github/push", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     await ensureGitRepo();
     const customCommit = req.body?.commitMessage || "feat: AgentStation autonomous multi-agent cluster sync";
@@ -719,7 +720,7 @@ app.post("/api/github/push", async (req, res) => {
 });
 
 // Pull latest changes from remote GitHub repository
-app.post("/api/github/pull", async (req, res) => {
+app.post("/api/github/pull", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     await ensureGitRepo();
     const token = process.env.GITHUB_TOKEN?.trim();
@@ -787,7 +788,7 @@ app.post("/api/github/pull", async (req, res) => {
 });
 
 // Generate or submit GitHub Pull Request
-app.post("/api/github/create-pr", async (req, res) => {
+app.post("/api/github/create-pr", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { head, base = "main", title, body } = req.body || {};
     const token = process.env.GITHUB_TOKEN?.trim();
@@ -884,7 +885,7 @@ app.post("/api/ollama/status", async (req, res) => {
 });
 
 // Execute terminal command in sandbox with real-time WebSocket streaming
-app.post("/api/terminal/exec", async (req, res) => {
+app.post("/api/terminal/exec", requireRole(["admin","engineer"]), async (req, res) => {
   const { command, files = [], missionId } = req.body || {};
   const cmd = (command || "").trim();
 
@@ -1585,7 +1586,7 @@ app.get("/api/missions", async (_req, res) => {
   }
 });
 
-app.post("/api/missions", async (req, res) => {
+app.post("/api/missions", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const newMission = req.body;
     if (!newMission || !newMission.id) {
@@ -1634,8 +1635,8 @@ interface WebhookEventLog {
 
 const recentWebhooks: WebhookEventLog[] = [];
 
-app.post("/api/github/webhook", express.raw({ type: "application/json", limit: "1mb" }), async (req, res) => {
-  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+app.post("/api/github/webhook", async (req: any, res) => {
+  const rawBody = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(JSON.stringify(req.body || {}));
   if (!verifyWebhookSignature(rawBody, String(req.headers["x-hub-signature-256"] || ""))) {
     return res.status(401).json({ success: false, error: "Invalid webhook signature" });
   }
@@ -1787,7 +1788,7 @@ app.post("/api/github/simulate-webhook", async (req, res) => {
 // ==========================================
 // CI/CD Workflow Installer (.github/workflows)
 // ==========================================
-app.post("/api/github/install-workflow", async (_req, res) => {
+app.post("/api/github/install-workflow", requireRole(["admin"]), async (_req, res) => {
   try {
     await ensureGitRepo();
     const workflowDir = path.join(process.cwd(), ".github", "workflows");
@@ -2004,7 +2005,7 @@ app.get("/api/jobs/:id", (req, res) => {
   res.json({ success: true, job });
 });
 
-app.post("/api/jobs/enqueue", (req, res) => {
+app.post("/api/jobs/enqueue", requireRole(["admin","engineer"]), (req, res) => {
   const { type, payload = {}, missionId } = req.body || {};
   if (!type) {
     return res.status(400).json({ success: false, error: "Job type is required" });
@@ -2036,7 +2037,7 @@ jobQueue.registerWorker("autonomous_mission", async (job, updateProgress) => {
 // ==========================================
 // Phase 4: Isolated Sandbox Execution API
 // ==========================================
-app.post("/api/sandbox/execute", async (req, res) => {
+app.post("/api/sandbox/execute", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { command, timeoutMs = 30000, missionId, files } = req.body || {};
     if (!command) {
@@ -2052,7 +2053,7 @@ app.post("/api/sandbox/execute", async (req, res) => {
 // ==========================================
 // Phase 5: Cloud Object Artifacts & Bundler
 // ==========================================
-app.post("/api/artifacts/bundle", async (req, res) => {
+app.post("/api/artifacts/bundle", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { missionId = "mission-current", missionTitle = "Autonomous Project", files = [] } = req.body || {};
     const meta = await generateMissionBundle(missionId, missionTitle, files);
@@ -2124,17 +2125,17 @@ app.get("/api/autonomy/heartbeat", async (req, res) => {
 
 app.get("/api/autonomy/status", async (_req, res) => res.json({ success: true, status: await autonomy.status() }));
 app.get("/api/autonomy/goals", async (_req, res) => res.json({ success: true, goals: await autonomy.list() }));
-app.post("/api/autonomy/goals", async (req, res) => {
+app.post("/api/autonomy/goals", requireRole(["admin"]), async (req, res) => {
   try { res.status(201).json({ success: true, goal: await autonomy.create(req.body || {}) }); }
   catch (err:any) { res.status(400).json({ success:false, error:err.message }); }
 });
-app.patch("/api/autonomy/goals/:id", async (req, res) => {
+app.patch("/api/autonomy/goals/:id", requireRole(["admin"]), async (req, res) => {
   const goal = await autonomy.update(req.params.id, req.body || {});
   if (!goal) return res.status(404).json({ success:false, error:"Goal not found" });
   res.json({ success:true, goal });
 });
-app.delete("/api/autonomy/goals/:id", async (req, res) => res.json({ success:true, removed:await autonomy.remove(req.params.id) }));
-app.post("/api/autonomy/goals/:id/run", async (req, res) => {
+app.delete("/api/autonomy/goals/:id", requireRole(["admin"]), async (req, res) => res.json({ success:true, removed:await autonomy.remove(req.params.id) }));
+app.post("/api/autonomy/goals/:id/run", requireRole(["admin"]), async (req, res) => {
   try {
     const goal = await autonomy.triggerGoalNow(req.params.id);
     if (!goal) return res.status(404).json({ success: false, error: "Goal not found" });
@@ -2170,7 +2171,7 @@ app.get("/api/companies", async (_req, res) => {
   if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
   res.json({ success: true, companies: x });
 });
-app.post("/api/companies", async (req, res) => {
+app.post("/api/companies", requireRole(["admin"]), async (req, res) => {
   try {
     const x = await createCompany(req.body || {});
     if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
@@ -2198,7 +2199,7 @@ app.get("/api/missions/:id", async (req, res) => {
   if (!x) return res.status(404).json({ success: false, error: "Mission not found" });
   res.json({ success: true, mission: x });
 });
-app.post("/api/missions/:id/start", async (req, res) => {
+app.post("/api/missions/:id/start", requireRole(["admin","engineer"]), async (req, res) => {
   const x = await startMission(req.params.id);
   if (!x) return res.status(404).json({ success: false, error: "Mission not found" });
   res.json({ success: true, mission: x });
@@ -2235,7 +2236,7 @@ app.get("/api/agents/tasks", async (req, res) => {
   res.json({ success: true, tasks: durable || await listTasks(missionId) });
 });
 
-app.post("/api/agents/dispatch", async (req, res) => {
+app.post("/api/agents/dispatch", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const durable = await enqueueDurableAgents(req.body || {});
     const result = durable || await dispatchAgents(req.body || {});
@@ -2251,7 +2252,7 @@ app.post("/api/agents/dispatch", async (req, res) => {
 // ==========================================
 
 // Plan a mission into structured subtasks
-app.post("/api/tasks/plan", async (req, res) => {
+app.post("/api/tasks/plan", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { prompt, missionId = `mission-${Date.now()}` } = req.body || {};
     if (!prompt) {
@@ -2300,7 +2301,7 @@ app.post("/api/tasks/plan", async (req, res) => {
 });
 
 // Start autonomous execution loop
-app.post("/api/tasks/execute", async (req, res) => {
+app.post("/api/tasks/execute", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { missionId, prompt, options = {} } = req.body || {};
     if (!missionId) {
@@ -2383,17 +2384,17 @@ app.get("/api/tasks/:id", (req, res) => {
 });
 
 // Task execution controls
-app.post("/api/tasks/:id/pause", (req, res) => {
+app.post("/api/tasks/:id/pause", requireRole(["admin","engineer"]), (req, res) => {
   const success = AgentOrchestrator.pauseMission(req.params.id);
   res.json({ success, message: success ? "Task paused." : "Task not currently active or already paused." });
 });
 
-app.post("/api/tasks/:id/resume", (req, res) => {
+app.post("/api/tasks/:id/resume", requireRole(["admin","engineer"]), (req, res) => {
   const success = AgentOrchestrator.resumeMission(req.params.id);
   res.json({ success, message: success ? "Task resumed." : "Task not currently paused." });
 });
 
-app.post("/api/tasks/:id/cancel", (req, res) => {
+app.post("/api/tasks/:id/cancel", requireRole(["admin","engineer"]), (req, res) => {
   const success = AgentOrchestrator.cancelMission(req.params.id);
   res.json({ success, message: success ? "Task cancelled." : "Task not active." });
 });
@@ -2404,7 +2405,7 @@ app.get("/api/tasks/:id/subtasks", (req, res) => {
 });
 
 // Operator Approval endpoint
-app.post("/api/tasks/:id/approve", (req, res) => {
+app.post("/api/tasks/:id/approve", requireRole(["admin"]), (req, res) => {
   const { approvalId, approved = true, responder = "operator" } = req.body || {};
   if (!approvalId) {
     return res.status(400).json({ success: false, error: "approvalId is required." });
@@ -2426,7 +2427,7 @@ app.get("/api/tools", (_req, res) => {
 });
 
 // Direct Tool Execution endpoint
-app.post("/api/tools/execute", async (req, res) => {
+app.post("/api/tools/execute", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { toolName, input = {}, missionId = "manual-run", agentRole = "system", skipApprovalCheck = false } = req.body || {};
     if (!toolName) {
@@ -2483,7 +2484,7 @@ app.get("/api/files/download", async (req, res) => {
   }
 });
 
-app.post("/api/files/save", async (req, res) => {
+app.post("/api/files/save", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { path: relPath, content, missionId } = req.body || {};
     if (!relPath || typeof content !== "string") {
@@ -2510,7 +2511,7 @@ app.post("/api/files/save", async (req, res) => {
   }
 });
 
-app.post("/api/files/save-batch", async (req, res) => {
+app.post("/api/files/save-batch", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { files = [], missionId } = req.body || {};
     if (!Array.isArray(files)) {
@@ -2594,7 +2595,7 @@ app.get("/api/files/tree", async (_req, res) => {
   }
 });
 
-app.post("/api/files/delete", async (req, res) => {
+app.post("/api/files/delete", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const { path: relPath, missionId } = req.body || {};
     if (!relPath) {
