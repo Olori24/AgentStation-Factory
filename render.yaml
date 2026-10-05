@@ -20,8 +20,10 @@ services:
         value: /var/data
       - key: AGENTSTATION_WORKSPACE_DIR
         value: /var/workspace
-      - key: SANDBOX_ALLOW_HOST_EXECUTION
-        value: "false"
+      - key: SANDBOX_RUNTIME
+        value: "docker"
+      - key: SANDBOX_IMAGE
+        value: "agentstation-sandbox:latest"
       - key: GEMINI_API_KEY
         sync: false
       - key: AGENTIC_API_KEY
