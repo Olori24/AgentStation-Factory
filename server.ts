@@ -297,7 +297,7 @@ app.get("/api/github/status", async (_req, res) => {
       ciStatus,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -361,7 +361,7 @@ app.get("/api/github/ci-status", async (_req, res) => {
     const ciStatus = await fetchLatestCiStatus();
     res.json({ success: true, ciStatus });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -421,7 +421,7 @@ app.post("/api/github/create-branch", requireRole(["admin","engineer"]), async (
   } catch (err: any) {
     return res.status(500).json({
       success: false,
-      error: err.stderr || err.message || "Failed to create and switch branch.",
+      error: publicError(500),
     });
   }
 });
@@ -520,7 +520,7 @@ app.post("/api/github/switch-branch", requireRole(["admin","engineer"]), async (
   } catch (err: any) {
     return res.status(500).json({
       success: false,
-      error: err.stderr || err.message || "Failed to switch branch",
+      error: publicError(500),
     });
   }
 });
@@ -725,7 +725,7 @@ app.post("/api/github/push", requireRole(["admin","engineer"]), async (req, res)
   } catch (err: any) {
     return res.status(500).json({
       success: false,
-      error: err.message || "Failed to execute Git push",
+      error: publicError(500),
     });
   }
 });
@@ -789,7 +789,7 @@ app.post("/api/github/pull", requireRole(["admin","engineer"]), async (req, res)
   } catch (err: any) {
     return res.status(500).json({
       success: false,
-      error: err.stderr || err.message || "Failed to pull from GitHub",
+      error: publicError(500),
     });
   }
 });
@@ -864,7 +864,7 @@ app.post("/api/github/create-pr", requireRole(["admin","engineer"]), async (req,
       });
     }
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || "Failed to create PR" });
+    return res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -1592,7 +1592,7 @@ app.get("/api/missions", async (req: any, res) => {
     const visible = missions.filter((m: any) => user?.role === "admin" || (m.organizationId === user?.organizationId && m.userId === user?.id));
     res.json({ success: true, missions: visible });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -1613,7 +1613,7 @@ app.post("/api/missions", requireRole(["admin","engineer"]), async (req, res) =>
     await saveMissionsStore(missions);
     res.json({ success: true, mission: newMission });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -1630,7 +1630,7 @@ app.delete("/api/missions/:id", requireRole(["admin","engineer"]), async (req: a
     await saveMissionsStore(filtered);
     res.json({ success: true, deletedId: id });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -1717,7 +1717,7 @@ app.post("/api/github/webhook", async (req: any, res) => {
       event: logEntry,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -1889,7 +1889,7 @@ jobs:
       message: "GitHub Actions CI/CD workflow installed and committed to Git.",
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2062,7 +2062,7 @@ app.post("/api/sandbox/execute", requireRole(["admin","engineer"]), async (req, 
     const result = await terminalWs.runAndStreamCommand(command, { timeoutMs, missionId, files });
     res.json({ success: true, execution: result });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2085,7 +2085,7 @@ app.post("/api/artifacts/bundle", requireRole(["admin","engineer"]), async (req,
     const meta = await generateMissionBundle(String(missionId), String(missionTitle).slice(0, 200), files);
     res.json({ success: true, artifact: meta });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2120,7 +2120,7 @@ app.get("/api/agentrouter/wallet", requireRole(["admin"]), async (_req, res) => 
     const wallet = await agentRouterWallet();
     res.json({ success: true, wallet });
   } catch (err: any) {
-    res.status(502).json({ success: false, error: err.message });
+    res.status(502).json({ success: false, error: publicError(502) });
   }
 });
 
@@ -2130,7 +2130,7 @@ app.get("/api/agentrouter/usage", requireRole(["admin"]), async (req, res) => {
     const usage = await agentRouterUsage(Number.isFinite(limit) ? limit : 20);
     res.json({ success: true, usage });
   } catch (err: any) {
-    res.status(502).json({ success: false, error: err.message });
+    res.status(502).json({ success: false, error: publicError(502) });
   }
 });
 
@@ -2148,7 +2148,7 @@ app.get("/api/autonomy/heartbeat", async (req, res) => {
     res.json({ success: true, status, timestamp: new Date().toISOString() });
   } catch (err: any) {
     console.error("[AUTONOMY] heartbeat failed:", err);
-    res.status(500).json({ success: false, error: err.message || "Heartbeat failed" });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2170,7 +2170,7 @@ app.post("/api/autonomy/goals/:id/run", requireRole(["admin"]), async (req, res)
     if (!goal) return res.status(404).json({ success: false, error: "Goal not found" });
     res.json({ success: true, goal });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2250,7 +2250,7 @@ app.post("/api/objectives/instantiate", requireRole(["admin","engineer","reviewe
     const instantiated = instantiateObjectiveTemplate(String(templateId || ""), variables);
     res.json({ success: true, instantiated });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(400).json({ success: false, error: publicError(400) });
   }
 });
 
@@ -2271,7 +2271,7 @@ app.post("/api/agents/dispatch", requireRole(["admin","engineer"]), async (req, 
     const result = durable || await dispatchAgents(req.body || {});
     res.status(202).json({ success: true, durable: Boolean(durable), ...result });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(400).json({ success: false, error: publicError(400) });
   }
 });
 
@@ -2328,7 +2328,7 @@ app.post("/api/tasks/plan", requireRole(["admin","engineer"]), async (req, res) 
     const plan = await AgentOrchestrator.planMission(missionId, prompt);
     res.json({ success: true, plan });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2387,7 +2387,7 @@ app.post("/api/tasks/execute", requireRole(["admin","engineer"]), async (req, re
       message: 'Autonomous multi-agent execution loop launched.',
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2485,7 +2485,7 @@ app.post("/api/tools/execute", requireRole(["admin","engineer"]), async (req, re
 
     res.json({ success: result.success, execution: result });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2524,7 +2524,7 @@ app.get("/api/files/download", async (req: any, res) => {
     }
     res.download(target);
   } catch (err: any) {
-    res.status(500).send(err.message);
+    res.status(500).send(publicError(500));
   }
 });
 
@@ -2553,7 +2553,7 @@ app.post("/api/files/save", requireRole(["admin","engineer"]), async (req, res) 
     });
     res.json({ success: true, path: safeRel, sizeBytes, savedAt: new Date().toISOString() });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2584,7 +2584,7 @@ app.post("/api/files/save-batch", requireRole(["admin","engineer"]), async (req,
     });
     res.json({ success: true, savedCount, savedAt: new Date().toISOString() });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2639,7 +2639,7 @@ app.get("/api/files/tree", requireRole(["admin"]), async (_req, res) => {
     await walk(workspaceDir);
     res.json({ success: true, count: collected.length, files: collected });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
@@ -2667,7 +2667,7 @@ app.post("/api/files/delete", requireRole(["admin","engineer"]), async (req, res
     });
     res.json({ success: true, deleted: safeRel });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
