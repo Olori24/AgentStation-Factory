@@ -2029,12 +2029,14 @@ jobQueue.registerWorker("autonomous_mission", async (job, updateProgress) => {
 // ==========================================
 // Phase 4: Isolated Sandbox Execution API
 // ==========================================
-app.post("/api/sandbox/execute", requireRole(["admin","engineer"]), async (req, res) => {
+app.post("/api/sandbox/execute", requireRole(["admin","engineer"]), async (req: any, res) => {
   try {
+    if (process.env.TERMINAL_EXECUTION_ENABLED !== "true") return res.status(503).json({ success: false, error: "Sandbox execution is disabled in this environment." });
     const { command, timeoutMs = 30000, missionId, files } = req.body || {};
-    if (!command) {
-      return res.status(400).json({ success: false, error: "Command string is required" });
+    if (typeof command !== "string" || command.length > 20000 || typeof missionId !== "string" || !db.canAccessMission(req.user, missionId)) {
+      return res.status(400).json({ success: false, error: "Valid command and authorized missionId are required" });
     }
+    if (!Array.isArray(files) || files.length > 200) return res.status(400).json({ success: false, error: "Invalid sandbox files" });
     const result = await terminalWs.runAndStreamCommand(command, { timeoutMs, missionId, files });
     res.json({ success: true, execution: result });
   } catch (err: any) {
