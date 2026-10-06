@@ -254,3 +254,61 @@ The remediation work closes multiple critical application-layer vulnerabilities.
 **The application is not yet certified secure for public production.**
 
 The application-layer remediation is substantially stronger, and the final hardening branch closes several concrete vulnerabilities. However, the JSON-vs-PostgreSQL/RLS mismatch, unverified Docker isolation, runtime incompatibility, and remaining Git credential handling prevent an honest green security sign-off.
+
+
+## Remediation continuation — 2026-10-06
+
+### Additional fixes completed
+
+- **Production persistence is now fail-closed.** `server/db.ts` requires `AGENTSTATION_STORAGE=postgres` and `DATABASE_URL` in production. Local JSON storage remains development-only.
+- **Durable PostgreSQL state store added.** `agentstation_state` stores the complete application state as JSONB per organization. Production startup waits for the database state to load before serving requests.
+- **RLS is actually enabled on the production state table.** The Neon main branch now reports `relrowsecurity=true`, `relforcerowsecurity=true`, and an active policy for `agentstation_state`.
+- **The previous `005_tenant_security.sql` migration was removed.** The live Neon database does not contain the `companies`/`missions` tables assumed by that migration, so keeping it would create a false security claim and a migration failure risk.
+- **The old file-backed `missions_store.json` API was removed.** Mission CRUD now uses the authenticated database layer and server-side ownership checks.
+- **Unprovisioned company-control-plane routes are disabled with HTTP 410** instead of failing against nonexistent tables.
+- **Terminal WebSocket authorization was hardened.** Authentication now uses the HttpOnly session cookie; command execution requires admin/engineer role and an authorized mission; subscriptions are ownership-checked; broadcasts no longer leak mission streams to unsubscribed sockets; concurrent execution per socket is limited.
+- **Sandbox environment inheritance was replaced by an allowlist.** Application/database/API secrets are no longer inherited by sandbox containers. Output is capped at 2 MB per stream and additional container restrictions were added.
+- **Health endpoint no longer exposes whether a Gemini key is configured.**
+- **Authentication session lifetime reduced to one hour.** Session tokens are statelessly signed so authentication works consistently across instances.
+- **Auth responses use `Cache-Control: no-store`.**
+- **GitHub token-in-URL authentication was removed from Git fetch/push operations.** Git now receives the token through an environment-based HTTP authorization header.
+- **CI now requires `npm ci` and scans Git history with Gitleaks.**
+- **Known vulnerable transitive dependencies were pinned to patched releases:** `proxy-addr 2.0.8` and `source-map-js 1.2.2`.
+- **File batch operations now have file-count and aggregate-size limits.**
+- **Rate-limit state is bounded to prevent attacker-controlled memory growth.**
+
+### Current database verification
+
+The production Neon database `twilight-credit-89574302` / `neondb` currently contains the existing autonomy tables plus the new `agentstation_state` table. Direct inspection confirmed:
+
+- RLS enabled: **yes**
+- FORCE RLS enabled: **yes**
+- Security policy present: **yes**
+
+The old 005 migration's referenced `public.companies` table was not present before the new state-store migration, confirming that 005 could not have been the application's actual tenant boundary.
+
+### Latest CI observation
+
+A CI run for an earlier PR merge ref failed at `npm audit --audit-level=high` with:
+- `proxy-addr` critical vulnerability
+- `source-map-js` high vulnerability
+
+Those dependencies have now been pinned to patched releases. The latest remediation head is `c63d65f5ee8f3b74da13d9b5c6a047391ff1dd14`. A fresh GitHub Actions result for this exact head is still pending and therefore is **not claimed green**.
+
+### Revised deployment decision
+
+The system is now materially safer and has a real durable PostgreSQL persistence path with enforced RLS at the organization state boundary.
+
+It is **still not certified for public production** until:
+
+1. CI is green on the latest remediation head.
+2. The production runtime is verified to provide the required Docker sandbox boundary.
+3. A real `DATABASE_URL` is configured in the production secret store.
+4. The PostgreSQL state-store migration is included in the production migration process.
+5. Cross-user and cross-organization integration tests are executed against the production-like database.
+6. The remaining GitHub credential flow is reviewed for minimum token permissions and preferably replaced with GitHub App installation credentials.
+7. Historical credentials protected by the old hard-coded encryption secret are rotated if they were ever real.
+
+### Important distinction
+
+The application is **not being declared "secure" merely because the database now has an RLS table**. RLS protects the durable organization state row; application-layer authorization still protects user-owned mission objects inside that state. Both controls are required.
