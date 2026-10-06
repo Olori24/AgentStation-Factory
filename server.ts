@@ -2301,6 +2301,7 @@ app.post("/api/tasks/plan", requireRole(["admin","engineer"]), async (req, res) 
 
     // Ensure mission record is initialized in the database
     let mission = db.getMissionById(missionId);
+    if (mission && !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
     if (!mission) {
       db.upsertMission({
         id: missionId,
@@ -2330,6 +2331,8 @@ app.post("/api/tasks/plan", requireRole(["admin","engineer"]), async (req, res) 
         logs: [],
         gitBranch: 'main',
         gitCommitMessage: `feat: autonomous execution for "${prompt.slice(0, 40)}"`,
+        userId: req.user.id,
+        organizationId: req.user.organizationId,
       });
     }
 
@@ -2349,6 +2352,7 @@ app.post("/api/tasks/execute", requireRole(["admin","engineer"]), async (req, re
     }
 
     let mission = db.getMissionById(missionId);
+    if (mission && !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
     if (!mission && prompt) {
       mission = db.upsertMission({
         id: missionId,
