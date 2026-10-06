@@ -2081,8 +2081,18 @@ app.post("/api/sandbox/execute", requireRole(["admin","engineer"]), async (req, 
 // ==========================================
 app.post("/api/artifacts/bundle", requireRole(["admin","engineer"]), async (req, res) => {
   try {
-    const { missionId = "mission-current", missionTitle = "Autonomous Project", files = [] } = req.body || {};
-    const meta = await generateMissionBundle(missionId, missionTitle, files);
+    const { missionId, missionTitle = "Autonomous Project", files = [] } = req.body || {};
+    if (!missionId || !db.canAccessMission(req.user, String(missionId))) {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+    if (!Array.isArray(files) || files.length > 200) {
+      return res.status(400).json({ success: false, error: "Invalid files payload" });
+    }
+    const totalBytes = files.reduce((sum: number, file: any) => sum + Buffer.byteLength(String(file?.content || ""), "utf8"), 0);
+    if (totalBytes > 20 * 1024 * 1024) {
+      return res.status(413).json({ success: false, error: "Artifact payload too large" });
+    }
+    const meta = await generateMissionBundle(String(missionId), String(missionTitle).slice(0, 200), files);
     res.json({ success: true, artifact: meta });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -2091,6 +2101,8 @@ app.post("/api/artifacts/bundle", requireRole(["admin","engineer"]), async (req,
 
 app.get("/api/artifacts", (req, res) => {
   const missionId = req.query.missionId as string | undefined;
+  if (missionId && !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
+  if (!missionId && req.user.role !== "admin") return res.status(403).json({ success: false, error: "missionId is required" });
   const list = listArtifacts(missionId);
   res.json({ success: true, count: list.length, artifacts: list });
 });
@@ -2100,6 +2112,7 @@ app.get("/api/artifacts/download/:id", (req, res) => {
   if (!artifact) {
     return res.status(404).send("Artifact not found");
   }
+  if (!db.canAccessMission(req.user, artifact.meta.missionId)) return res.status(403).send("Forbidden");
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename="${artifact.meta.name}"`);
   res.send(artifact.buffer);
@@ -2528,7 +2541,8 @@ app.post("/api/files/save", requireRole(["admin","engineer"]), async (req, res) 
     const workspaceDir = path.resolve(process.cwd(), "workspace");
     const safeRel = String(relPath).replace(/^[\\\/]+/, "");
     const target = path.resolve(workspaceDir, safeRel);
-    if (!target.startsWith(workspaceDir)) {
+    const relativeTarget = path.relative(workspaceDir, target);
+    if (relativeTarget.startsWith("..") || path.isAbsolute(relativeTarget)) {
       return res.status(403).json({ success: false, error: "Access denied" });
     }
     await fs.promises.mkdir(path.dirname(target), { recursive: true });
@@ -2560,7 +2574,8 @@ app.post("/api/files/save-batch", requireRole(["admin","engineer"]), async (req,
       const safeRel = String(f.path || f.name || "").replace(/^[\\\/]+/, "");
       if (!safeRel) continue;
       const target = path.resolve(workspaceDir, safeRel);
-      if (!target.startsWith(workspaceDir)) continue;
+      const relativeTarget = path.relative(workspaceDir, target);
+      if (relativeTarget.startsWith("..") || path.isAbsolute(relativeTarget)) continue;
       await fs.promises.mkdir(path.dirname(target), { recursive: true });
       await fs.promises.writeFile(target, f.content, "utf8");
       savedCount++;
