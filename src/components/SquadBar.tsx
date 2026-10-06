@@ -72,7 +72,6 @@ export const SquadBar: React.FC<SquadBarProps> = ({
           })}
         </div>
       </div>
-    </div>
     </section>
   );
 };
