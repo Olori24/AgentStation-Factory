@@ -60,7 +60,7 @@ app.post("/api/auth/bootstrap", (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
-    maxAge: 8 * 60 * 60 * 1000,
+    maxAge: 60 * 60 * 1000,
     path: "/",
   });
   res.json({ success: true, user });
