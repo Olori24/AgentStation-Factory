@@ -1558,77 +1558,56 @@ tests/test_${slug || "app"}.py::test_empty_payload_raises PASSED        [100%]
 // ==========================================
 // Persistent Missions API
 // ==========================================
-const MISSIONS_STORE_DIR = path.join(process.cwd(), "data");
-const MISSIONS_STORE_FILE = path.join(MISSIONS_STORE_DIR, "missions_store.json");
-
-async function ensureMissionsStore(): Promise<any[]> {
+// Mission persistence is handled exclusively by the authenticated database layer.
+app.get("/api/missions", (req: any, res) => {
   try {
-    await fs.promises.mkdir(MISSIONS_STORE_DIR, { recursive: true });
-    if (!fs.existsSync(MISSIONS_STORE_FILE)) {
-      await fs.promises.writeFile(MISSIONS_STORE_FILE, JSON.stringify([], null, 2), "utf8");
-      return [];
-    }
-    const content = await fs.promises.readFile(MISSIONS_STORE_FILE, "utf8");
-    return JSON.parse(content || "[]");
+    const user = req.user;
+    const missions = db.getMissionsForUser(user, 100);
+    res.json({ success: true, missions });
   } catch {
-    return [];
-  }
-}
-
-async function saveMissionsStore(missions: any[]): Promise<void> {
-  try {
-    await fs.promises.mkdir(MISSIONS_STORE_DIR, { recursive: true });
-    await fs.promises.writeFile(MISSIONS_STORE_FILE, JSON.stringify(missions, null, 2), "utf8");
-  } catch (err: any) {
-    console.warn("Failed to write missions store:", err.message);
-  }
-}
-
-app.get("/api/missions", async (req: any, res) => {
-  try {
-    const user = req.user;
-    const missions = await ensureMissionsStore();
-    const visible = missions.filter((m: any) => user?.role === "admin" || (m.organizationId === user?.organizationId && m.userId === user?.id));
-    res.json({ success: true, missions: visible });
-  } catch (err: any) {
     res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
-app.post("/api/missions", requireRole(["admin","engineer"]), async (req, res) => {
+app.post("/api/missions", requireRole(["admin","engineer"]), (req: any, res) => {
   try {
     const user = req.user;
-    const newMission = { ...(req.body || {}), userId: user.id, organizationId: user.organizationId };
-    if (!newMission.id) {
-      return res.status(400).json({ success: false, error: "Mission must have an ID" });
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    if (!id || !prompt || prompt.length > 20000) {
+      return res.status(400).json({ success: false, error: "Invalid mission payload" });
     }
-    const missions = await ensureMissionsStore();
-    const existingIndex = missions.findIndex((m: any) => m.id === newMission.id);
-    if (existingIndex >= 0) {
-      missions[existingIndex] = newMission;
-    } else {
-      missions.unshift(newMission);
+    const existing = db.getMissionById(id);
+    if (existing && !db.canAccessMission(user, id)) {
+      return res.status(403).json({ success: false, error: "Forbidden" });
     }
-    await saveMissionsStore(missions);
-    res.json({ success: true, mission: newMission });
-  } catch (err: any) {
+    const mission = db.upsertMission({
+      ...body,
+      id,
+      prompt,
+      userId: existing?.userId || user.id,
+      organizationId: existing?.organizationId || user.organizationId,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    res.json({ success: true, mission });
+  } catch {
     res.status(500).json({ success: false, error: publicError(500) });
   }
 });
 
-app.delete("/api/missions/:id", requireRole(["admin","engineer"]), async (req: any, res) => {
+app.delete("/api/missions/:id", requireRole(["admin","engineer"]), (req: any, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id || "").trim();
     const user = req.user;
-    const missions = await ensureMissionsStore();
-    const target = missions.find((m: any) => m.id === id);
-    if (!target) return res.status(404).json({ success: false, error: "Mission not found" });
-    if (user.role !== "admin" && (target.organizationId !== user.organizationId || target.userId !== user.id)) return res.status(403).json({ success: false, error: "Forbidden" });
-    if (user.role === "admin" && target.organizationId !== user.organizationId) return res.status(403).json({ success: false, error: "Forbidden" });
-    const filtered = missions.filter((m: any) => m.id !== id);
-    await saveMissionsStore(filtered);
+    const target = db.getMissionById(id);
+    if (!target || !db.canAccessMission(user, id)) {
+      return res.status(404).json({ success: false, error: "Mission not found" });
+    }
+    db.deleteMission(id);
     res.json({ success: true, deletedId: id });
-  } catch (err: any) {
+  } catch {
     res.status(500).json({ success: false, error: publicError(500) });
   }
 });
