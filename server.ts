@@ -16,6 +16,7 @@ import { generateMissionBundle, getArtifact, listArtifacts } from "./server/arti
 import { terminalWs } from "./server/terminalWs";
 import { AgentOrchestrator } from "./server/orchestrator";
 import { ToolExecutionEngine, TOOL_DEFINITIONS } from "./server/tools";
+import { assertSafeRemoteUrl } from "./server/tools";
 import { growthRouter } from "./server/growthFactory";
 import { autonomy } from "./server/autonomy";
 import { listAgents, listTasks, dispatchAgents } from "./server/multiAgent";
@@ -942,9 +943,9 @@ app.post("/api/terminal/exec", requireRole(["admin","engineer"]), async (req, re
 });
 
 // Run Autonomous Multi-Agent Squad
-app.post("/api/agents/run", async (req, res) => {
+app.post("/api/agents/run", requireRole(["admin","engineer"]), async (req, res) => {
   const { prompt, provider = "gemini", ollamaUrl = "http://localhost:11434", ollamaModel = "llama3" } = req.body || {};
-  if (!prompt || typeof prompt !== "string") {
+  if (!prompt || typeof prompt !== "string" || prompt.length > 20000) {
     return res.status(400).json({ error: "Missing or invalid prompt" });
   }
 
@@ -1095,7 +1096,7 @@ Return a valid JSON object matching EXACTLY this schema:
           console.log(`[AgentStation] Attempting direct synthesis with local Ollama (${ollamaModel}) at ${ollamaUrl}...`);
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 20000);
-          const ollamaRes = await fetch(`${ollamaUrl}/api/generate`, {
+          const ollamaRes = await fetch(`${safeOllamaUrl.origin}/api/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             signal: controller.signal,
