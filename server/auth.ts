@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { db, UserRecord } from './db';
 
 const ENCRYPTION_SECRET = process.env.ENCRYPTION_KEY?.trim();
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 60 * 60 * 1000;
 const SESSION_SECRET = process.env.SESSION_SECRET?.trim();
 const SESSION_COOKIE = 'as_session';
 
