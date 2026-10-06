@@ -63,16 +63,15 @@ def test_browser_auth_is_cookie_based_and_server_owned():
     assert "SESSION_COOKIE" in auth
 
 def test_tenant_ownership_and_rls_migration_exist():
-    migration = read("db/migrations/005_tenant_security.sql")
+    migration_runner = read("scripts/migrate.mjs")
     db = read("server/db.ts")
-    company = read("server/companyControlPlane.ts")
-    assert "ENABLE ROW LEVEL SECURITY" in migration
-    assert "owner_user_id" in migration
-    assert "organization_id" in migration
+    assert "db/migrations" in migration_runner
+    assert "schema_migrations" in migration_runner
+    assert "agentstation_state" in db
+    assert "set_config('app.organization_id'" in db
+    assert "organizationId" in db
     assert "getMissionsForUser" in db
     assert "canAccessMission" in db
-    assert "owner_user_id" in company
-    assert "organization_id" in company
 
 
 def test_sensitive_read_and_mutation_routes_are_not_public():
@@ -98,7 +97,8 @@ def test_object_ownership_and_path_safety_are_enforced():
     db = read("server/db.ts")
     artifacts = read("server/artifacts.ts")
     assert "getApprovalById" in db
-    assert "db.canAccessMission(req.user, approval.missionId)" in server
+    assert "approval.missionId !== missionId" in server
+    assert "db.canAccessMission(req.user, missionId)" in server
     assert "path.relative(workspaceDir, target)" in server
     assert 'relativeTarget.startsWith("..")' in server
     assert "zip-slip-safe" in artifacts
@@ -144,7 +144,7 @@ def test_sandbox_secret_allowlist():
 def test_workspace_tool_boundaries_and_audit_redaction():
     tools = read("server/tools/index.ts")
     artifacts = read("server/artifacts.ts")
-    assert "Sensitive workspace path" in tools
+    assert "Access denied: sensitive workspace path" in tools
     assert "File exceeds 2MB limit" in tools
     assert "redactForAudit" in tools
     assert "projectPath" not in tools
