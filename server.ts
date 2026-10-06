@@ -2330,8 +2330,14 @@ app.post("/api/tasks/execute", requireRole(["admin","engineer"]), async (req, re
       });
     }
 
+    if (!mission) return res.status(404).json({ success: false, error: "Mission not found" });
+    const safeOptions = {
+      provider: options?.provider === "gemini" || options?.provider === "ollama" || options?.provider === "agentrouter" ? options.provider : undefined,
+      model: typeof options?.model === "string" ? options.model.slice(0, 200) : undefined,
+      autoApproveSafeTools: typeof options?.autoApproveSafeTools === "boolean" ? options.autoApproveSafeTools : undefined,
+    };
     // Launch background execution loop
-    AgentOrchestrator.executeMission(missionId, options).catch((err) => {
+    AgentOrchestrator.executeMission(missionId, safeOptions).catch(() => {
       console.error('[API Execute Error]:', err);
     });
 
@@ -2400,12 +2406,18 @@ app.get("/api/tasks/:id/subtasks", (req: any, res) => {
 });
 
 // Operator Approval endpoint
-app.post("/api/tasks/:id/approve", requireRole(["admin"]), (req, res) => {
-  const { approvalId, approved = true, responder = "operator" } = req.body || {};
+app.post("/api/tasks/:id/approve", requireRole(["admin"]), (req: any, res) => {
+  const { approvalId, approved = true } = req.body || {};
+  const missionId = String(req.params.id || "");
   if (!approvalId) {
     return res.status(400).json({ success: false, error: "approvalId is required." });
   }
-  const result = db.resolveApproval(approvalId, Boolean(approved), responder);
+  if (!db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
+  const approval = db.getApprovalById(String(approvalId));
+  if (!approval || approval.missionId !== missionId) {
+    return res.status(404).json({ success: false, error: "Approval request not found." });
+  }
+  const result = db.resolveApproval(String(approvalId), Boolean(approved), req.user.id);
   if (!result) {
     return res.status(404).json({ success: false, error: "Approval request not found." });
   }
