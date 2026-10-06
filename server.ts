@@ -2660,6 +2660,7 @@ app.post("/api/files/delete", requireRole(["admin","engineer"]), async (req, res
 
 // Vite middleware setup
 async function startServer() {
+  await db.ready();
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: {
