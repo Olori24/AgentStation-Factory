@@ -63,6 +63,7 @@ app.post("/api/auth/bootstrap", (req, res) => {
     maxAge: 60 * 60 * 1000,
     path: "/",
   });
+  res.setHeader("Cache-Control", "no-store");
   res.json({ success: true, user });
 });
 
@@ -1880,6 +1881,7 @@ jobs:
 app.get("/api/auth/me", (req: any, res) => {
   if (!req.user) return res.status(401).json({ success: false, error: "Authentication required" });
   const org = db.getOrganizations().find((item) => item.id === req.user.organizationId) || null;
+  res.setHeader("Cache-Control", "no-store");
   res.json({ success: true, user: req.user, organization: org });
 });
 
