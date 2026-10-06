@@ -52,7 +52,7 @@ app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { (req as any).
 app.post("/api/auth/bootstrap", (req, res) => {
   const bootstrapToken = String(req.body?.bootstrapToken || "");
   if (!verifyBootstrapToken(bootstrapToken)) return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
-  const userId = String(req.body?.userId || "user-bolaji-01");
+  const userId = String(process.env.AUTH_BOOTSTRAP_USER_ID || "");
   const user = db.getUserById(userId);
   if (!user) return res.status(404).json({ success: false, error: "User not found" });
   const token = issueSessionToken(user.id);
@@ -184,7 +184,7 @@ app.get("/api/github/status", async (_req, res) => {
     // Fetch remote branches from GitHub if token is available
     if (token) {
       try {
-        await execAsync(`git fetch https://${token}@github.com/Olori24/AgentStation-Factory.git +refs/heads/*:refs/remotes/origin/*`);
+        await runGit(["fetch","origin","+refs/heads/*:refs/remotes/origin/*"], token);
       } catch {}
     }
 
@@ -440,7 +440,7 @@ app.post("/api/github/switch-branch", requireRole(["admin","engineer"]), async (
     // 1. Fetch remote tracking refs
     if (token) {
       try {
-        await execAsync(`git fetch https://${token}@github.com/Olori24/AgentStation-Factory.git +refs/heads/*:refs/remotes/origin/*`);
+        await runGit(["fetch","origin","+refs/heads/*:refs/remotes/origin/*"], token);
       } catch {}
     } else {
       try {
@@ -537,12 +537,8 @@ app.post("/api/github/push", requireRole(["admin","engineer"]), async (req, res)
     const auditSteps: string[] = [];
 
     // Step 1: Fetch latest refs from remote origin
-    const primaryFetchUrl = token
-      ? `https://${token}@github.com/Olori24/AgentStation-Factory.git`
-      : "origin";
-
     try {
-      await execAsync(`git fetch ${primaryFetchUrl} +refs/heads/*:refs/remotes/origin/*`);
+      await runGit(["fetch", "origin", "+refs/heads/*:refs/remotes/origin/*"], token);
       auditSteps.push(`✓ Fetched latest remote branches from GitHub`);
     } catch (fetchErr: any) {
       auditSteps.push(`ℹ Remote fetch note: ${fetchErr.stderr || fetchErr.message}`);
@@ -654,7 +650,7 @@ app.post("/api/github/push", requireRole(["admin","engineer"]), async (req, res)
     try {
       const statusRes = await execAsync("git status --porcelain");
       if (statusRes.stdout.trim()) {
-        await execAsync(`git commit -m "${customCommit.replace(/"/g, '\\"')}"`);
+        await execFileAsync("git", ["commit", "-m", String(customCommit).slice(0, 200)]);
         auditSteps.push(`✓ Staged and committed changes: "${customCommit}"`);
       } else {
         auditSteps.push("ℹ Working tree clean (all changes committed)");
@@ -665,10 +661,7 @@ app.post("/api/github/push", requireRole(["admin","engineer"]), async (req, res)
 
     // Step 6: Push to remote repository / repositories
     if (token) {
-      const repos = [
-        "https://" + token + "@github.com/Olori24/AgentStation-Factory.git",
-        "https://" + token + "@github.com/Olori24/AgentStation-Factory.git"
-      ];
+      const repos = ["origin"];
       let outputs: string[] = [];
       for (const repoUrl of repos) {
         try {
@@ -746,15 +739,11 @@ app.post("/api/github/pull", requireRole(["admin","engineer"]), async (req, res)
     const currentBranch = currentBranchRes.stdout.trim() || "main";
     const targetBranch = (req.body?.branch || currentBranch).trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, "") || "main";
 
-    const fetchUrl = token
-      ? `https://${token}@github.com/Olori24/AgentStation-Factory.git`
-      : "origin";
-
     const auditSteps: string[] = [];
 
     // Fetch latest remote tracking refs
     try {
-      await execAsync(`git fetch ${fetchUrl} +refs/heads/*:refs/remotes/origin/*`);
+      await runGit(["fetch", "origin", "+refs/heads/*:refs/remotes/origin/*"], token);
       auditSteps.push(`✓ Fetched latest refs from origin`);
     } catch (fetchErr: any) {
       auditSteps.push(`ℹ Fetch note: ${fetchErr.stderr || fetchErr.message}`);
