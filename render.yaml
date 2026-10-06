@@ -3,7 +3,9 @@ services:
     name: agentstation-autonomous
     runtime: node
     plan: starter
+    numInstances: 1
     buildCommand: npm ci && npm run build
+    preDeployCommand: npm run db:migrate
     startCommand: npm start
     autoDeployTrigger: checksPass
     healthCheckPath: /api/health
