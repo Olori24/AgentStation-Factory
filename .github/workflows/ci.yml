@@ -22,10 +22,15 @@ jobs:
           cache: 'npm'
 
       - name: Install Node Dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Dependency Security Audit
         run: npm audit --audit-level=high
+
+      - name: Secret History Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Type Check and Lint
         run: npm run lint
