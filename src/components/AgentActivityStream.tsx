@@ -210,7 +210,7 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
                     {log.details}
                   </div>
                 )}
-              </div>
+              </article>
             );
           })
         )}
