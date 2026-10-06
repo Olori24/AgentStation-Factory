@@ -312,3 +312,35 @@ It is **still not certified for public production** until:
 ### Important distinction
 
 The application is **not being declared "secure" merely because the database now has an RLS table**. RLS protects the durable organization state row; application-layer authorization still protects user-owned mission objects inside that state. Both controls are required.
+
+
+### Third hardening pass — 2026-10-06
+
+Additional application-level findings were closed after the second pass:
+
+- Removed personal email/identity values from source defaults and automated Git configuration.
+- Added production feature flags that keep terminal/sandbox execution disabled until the runtime is independently certified.
+- Added mission ownership checks to direct terminal and sandbox APIs.
+- Closed an Ollama status endpoint SSRF path by removing client-controlled URLs and validating the server-configured endpoint.
+- Closed a WebSocket mission-stream authorization leak and bound terminal execution to authenticated mission access.
+- Removed project-root fallback from the AI `file_read` tool. It can no longer read arbitrary repository files or `.env`-style secrets.
+- Hardened workspace path handling against traversal and existing symlink escapes.
+- Added sensitive-path blocking for `.env`, key/certificate and Git metadata paths.
+- Added 2 MB file/document limits and 2,000-entry workspace listing limits.
+- Redacted secret-shaped values from tool audit records and stopped storing tool error stacks.
+- Prevented sensitive files from entering downloadable artifact bundles.
+- Removed raw orchestrator execution errors from streamed client events.
+- Bound approval resolution to the exact mission and authenticated responder identity.
+- Restricted task execution options to an explicit allowlist.
+- Added a transactional migration runner and Render pre-deploy migration hook.
+- Render production is pinned to one instance because the snapshot-backed compatibility layer is not certified for multi-instance concurrent writes.
+- Render production has autonomous and terminal execution disabled by default.
+
+### Remaining hard blockers
+
+1. **Production sandbox runtime certification:** execution is intentionally disabled until Docker isolation is verified on the actual production host. This is a fail-closed state, not a security vulnerability.
+2. **CI certification:** the latest GitHub Actions run is currently in progress. Do not claim green until the latest head completes every dependency, secret-scan, build, type-check and security-regression step.
+3. **Production secret configuration:** `DATABASE_URL`, `SESSION_SECRET`, `ENCRYPTION_KEY`, `AUTH_BOOTSTRAP_TOKEN`, and the required provider secrets must be supplied through the production secret manager. No secret values belong in the repository.
+4. **Historical secret rotation:** the historical hard-coded encryption material remains an operational rotation requirement if it ever protected real encrypted data.
+5. **GitHub credential minimum privilege:** Git token transport was hardened, but the remaining token should be replaced with a GitHub App installation credential with minimum repository permissions before enabling automated push/PR actions in production.
+6. **Full relational decomposition:** the current PostgreSQL state store provides durable organization-level RLS, while the application maintains user-level ownership inside the JSONB state. This is an intentional compatibility bridge, not the final normalized multi-tenant schema. A fully normalized PostgreSQL model is still the preferred long-term architecture.
