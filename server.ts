@@ -2468,22 +2468,38 @@ app.post("/api/tools/execute", requireRole(["admin","engineer"]), async (req, re
 });
 
 // Approvals query
-app.get("/api/approvals", (req, res) => {
-  const missionId = req.query.missionId as string | undefined;
+app.get("/api/approvals", (req: any, res) => {
+  const missionId = typeof req.query.missionId === "string" ? req.query.missionId : undefined;
+  if (missionId && !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
+  if (!missionId && req.user.role !== "admin") return res.status(403).json({ success: false, error: "missionId is required" });
   const approvals = db.getApprovals(missionId);
   res.json({ success: true, approvals });
 });
 
 // User settings
 app.get("/api/settings", (req: any, res) => {
-  const user = req.user || getActiveUser();
+  const user = req.user;
+  if (!user) return res.status(401).json({ success: false, error: "Authentication required" });
   const settings = db.getUserSettings(user.id);
   res.json({ success: true, settings });
 });
 
 app.post("/api/settings", (req: any, res) => {
-  const user = req.user || getActiveUser();
-  const updated = db.updateUserSettings(user.id, req.body || {});
+  const user = req.user;
+  if (!user) return res.status(401).json({ success: false, error: "Authentication required" });
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const patch: any = {};
+  if (body.defaultProvider === "gemini" || body.defaultProvider === "ollama") patch.defaultProvider = body.defaultProvider;
+  for (const key of ["ollamaModel", "geminiModel"]) {
+    if (typeof body[key] === "string" && body[key].length <= 200) patch[key] = body[key].trim();
+  }
+  if (typeof body.safeMode === "boolean") patch.safeMode = body.safeMode;
+  if (typeof body.autoApproveSafeTools === "boolean") patch.autoApproveSafeTools = body.autoApproveSafeTools;
+  if (Number.isInteger(body.maxSubtasksPerMission)) patch.maxSubtasksPerMission = Math.min(Math.max(body.maxSubtasksPerMission, 1), 50);
+  if (Number.isInteger(body.executionTimeoutSec)) patch.executionTimeoutSec = Math.min(Math.max(body.executionTimeoutSec, 5), 600);
+  // Client-supplied Ollama endpoints are never persisted or used in production.
+  patch.ollamaUrl = process.env.OLLAMA_URL || "";
+  const updated = db.updateUserSettings(user.id, patch);
   res.json({ success: true, settings: updated });
 });
 
@@ -2539,13 +2555,15 @@ app.post("/api/files/save-batch", requireRole(["admin","engineer"]), async (req,
   try {
     const { files = [], missionId } = req.body || {};
     if (!missionId || !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
-    if (!Array.isArray(files)) {
-      return res.status(400).json({ success: false, error: "files array required" });
+    if (!Array.isArray(files) || files.length > 200) {
+      return res.status(400).json({ success: false, error: "Invalid files array" });
     }
+    const totalBytes = files.reduce((sum: number, f: any) => sum + (typeof f?.content === "string" ? Buffer.byteLength(f.content, "utf8") : 0), 0);
+    if (totalBytes > 20 * 1024 * 1024) return res.status(413).json({ success: false, error: "File payload too large" });
     const workspaceDir = path.resolve(process.cwd(), "workspace");
     let savedCount = 0;
     for (const f of files) {
-      if (!f || typeof f.content !== "string") continue;
+      if (!f || typeof f.content !== "string" || Buffer.byteLength(f.content, "utf8") > 2 * 1024 * 1024) continue;
       const safeRel = String(f.path || f.name || "").replace(/^[\\\/]+/, "");
       if (!safeRel) continue;
       const target = path.resolve(workspaceDir, safeRel);
