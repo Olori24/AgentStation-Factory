@@ -894,11 +894,17 @@ app.post("/api/ollama/status", async (req, res) => {
 
 // Execute terminal command in sandbox with real-time WebSocket streaming
 app.post("/api/terminal/exec", requireRole(["admin","engineer"]), async (req, res) => {
+  if (process.env.TERMINAL_EXECUTION_ENABLED !== "true") {
+    return res.status(503).json({ success: false, error: "Terminal execution is disabled in this environment." });
+  }
   const { command, files = [], missionId } = req.body || {};
   const cmd = (command || "").trim();
 
-  if (!cmd) {
-    return res.status(400).json({ success: false, error: "Command string is required" });
+  if (!cmd || cmd.length > 20000 || typeof missionId !== "string" || !db.canAccessMission(req.user, missionId)) {
+    return res.status(400).json({ success: false, error: "Valid command and authorized missionId are required" });
+  }
+  if (!Array.isArray(files) || files.length > 200 || files.some((f: any) => typeof f?.content !== "string")) {
+    return res.status(400).json({ success: false, error: "Invalid sandbox files" });
   }
 
   try {
@@ -921,8 +927,8 @@ app.post("/api/terminal/exec", requireRole(["admin","engineer"]), async (req, re
   } catch (err: any) {
     res.status(500).json({
       command: cmd,
-      stdout: `Execution failed: ${err.message}`,
-      stderr: err.message,
+      stdout: "Execution failed.",
+      stderr: "Sandbox execution failed.",
       exitCode: 1,
       testsPassed: 0,
       testsFailed: 1,
