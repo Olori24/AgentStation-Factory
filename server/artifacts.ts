@@ -32,9 +32,21 @@ export async function generateMissionBundle(
   const zip = new JSZip();
   const safeName = missionTitle.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
 
-  // Populate files
+  // Populate files with zip-slip-safe, bounded paths.
+  let totalBytes = 0;
+  if (!Array.isArray(files) || files.length > 200) throw new Error("Invalid artifact file list");
   for (const file of files) {
-    zip.file(file.path, file.content);
+    const rawPath = String(file?.path || "");
+    const safePath = path.posix.normalize(rawPath.replace(/\\/g, "/")).replace(/^\/+/, "");
+    if (!safePath || safePath === "." || safePath.startsWith("../") || safePath.includes("/../")) {
+      throw new Error("Invalid artifact file path");
+    }
+    const content = String(file?.content || "");
+    totalBytes += Buffer.byteLength(content, "utf8");
+    if (Buffer.byteLength(content, "utf8") > 2 * 1024 * 1024 || totalBytes > 20 * 1024 * 1024) {
+      throw new Error("Artifact payload too large");
+    }
+    zip.file(safePath, content);
   }
 
   // Add build & execution README
