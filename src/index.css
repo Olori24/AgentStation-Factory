@@ -179,3 +179,10 @@ button{-webkit-tap-highlight-color:transparent}
 .as-command-surface [aria-label="Mission presets"] button{transition:transform 160ms ease,border-color 160ms ease,background-color 160ms ease,box-shadow 160ms ease}
 .as-command-surface [aria-label="Mission presets"] button:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.2)}
 @media (prefers-reduced-motion:reduce){.as-command-surface [aria-label="Mission presets"] button{transition:none}.as-command-surface [aria-label="Mission presets"] button:hover{transform:none}}
+
+
+/* Command-center chrome: quieter framing, clearer operational states. */
+.as-topbar{box-shadow:0 12px 50px rgba(0,0,0,.22),inset 0 -1px rgba(255,255,255,.02)}
+.as-topbar button,.as-sidebar button{outline-offset:3px}
+.as-sidebar{box-shadow:12px 0 50px rgba(0,0,0,.16)}
+.as-sidebar input:focus-visible{outline:2px solid var(--as-accent);outline-offset:1px}
