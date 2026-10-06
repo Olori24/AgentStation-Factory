@@ -122,7 +122,8 @@ async function ensureGitRepo() {
   } catch {
     try {
       await execAsync("git init && git branch -m main");
-      await execAsync('git config user.name "Bolaji Akande" && git config user.email "bakande11@gmail.com"');
+      await execFileAsync("git", ["config", "user.name", process.env.GIT_AUTHOR_NAME || "AgentStation Bot"]);
+      await execFileAsync("git", ["config", "user.email", process.env.GIT_AUTHOR_EMAIL || "agentstation-bot@users.noreply.github.com"]);
       await execAsync("git remote add origin https://github.com/Olori24/AgentStation-Factory.git");
       await execAsync('git add -A && git commit -m "feat: AgentStation autonomous multi-agent cluster sync"');
     } catch {}
