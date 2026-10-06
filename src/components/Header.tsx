@@ -95,13 +95,13 @@ export const Header: React.FC<HeaderProps> = ({
         {onOpenFullStack && (
           <button
             onClick={onOpenFullStack}
-            title="Full-Stack Operations Center (DB, Auth RBAC, Real-time SSE, Job Queue, Sandbox, Artifacts)"
+            title="Open the Full-Stack Operations Center"
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 hover:text-indigo-200 transition shadow-sm"
           >
             <Server className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">Full-Stack Ops</span>
+            <span className="hidden sm:inline">Ops Center</span>
             <span className="sm:hidden">Ops</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse hidden sm:inline"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-500 hidden sm:inline"></span>
           </button>
         )}
 
