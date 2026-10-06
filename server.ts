@@ -8,7 +8,7 @@ import { promisify } from "util";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import { db } from "./server/db";
-import { authMiddleware, getActiveUser, setActiveUser, issueSessionToken, requireRole, verifyBootstrapToken, verifyWebhookSignature } from "./server/auth";
+import { authMiddleware, issueSessionToken, requireRole, verifyBootstrapToken, verifyWebhookSignature } from "./server/auth";
 import { streaming } from "./server/streaming";
 import { jobQueue } from "./server/queue";
 import { executeSandboxedCommand } from "./server/sandbox";
@@ -1877,15 +1877,9 @@ jobs:
 
 
 app.get("/api/auth/me", (req: any, res) => {
-  const user = req.user || getActiveUser();
-  const org = db.getOrganizations()[0];
-  const token = issueSessionToken(user.id);
-  res.json({
-    success: true,
-    user,
-    organization: org,
-    token,
-  });
+  if (!req.user) return res.status(401).json({ success: false, error: "Authentication required" });
+  const org = db.getOrganizations().find((item) => item.id === req.user.organizationId) || null;
+  res.json({ success: true, user: req.user, organization: org });
 });
 
 app.get("/api/auth/users", requireRole(["admin"]), (_req, res) => {
@@ -1896,14 +1890,8 @@ app.get("/api/auth/users", requireRole(["admin"]), (_req, res) => {
   });
 });
 
-app.post("/api/auth/switch", requireRole(["admin"]), (req, res) => {
-  const { userId } = req.body || {};
-  const user = setActiveUser(userId);
-  if (!user) {
-    return res.status(404).json({ success: false, error: "User not found" });
-  }
-  const token = issueSessionToken(user.id);
-  res.json({ success: true, user, token, message: `Switched active profile to ${user.name} (${user.role.toUpperCase()})` });
+app.post("/api/auth/switch", requireRole(["admin"]), (_req, res) => {
+  return res.status(410).json({ success: false, error: "Profile switching is disabled in production." });
 });
 
 app.get("/api/db/metrics", requireRole(["admin"]), (_req, res) => {
