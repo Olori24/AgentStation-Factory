@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
+import dns from 'dns/promises';
+import net from 'net';
 import { executeSandboxedCommand } from '../sandbox';
 import { db } from '../db';
 import { createMissionArtifactBundle } from '../artifacts';
@@ -47,7 +49,7 @@ function assertWorkspacePath(relPath: string): string {
   return target;
 }
 
-function assertSafeRemoteUrl(targetUrl: string): URL {
+export async function assertSafeRemoteUrl(targetUrl: string): Promise<URL> {
   const u = new URL(targetUrl);
   if (!["https:", "http:"].includes(u.protocol)) throw new Error("Only HTTP(S) URLs are allowed");
   const hostname = u.hostname.toLowerCase();
@@ -58,13 +60,23 @@ function assertSafeRemoteUrl(targetUrl: string): URL {
       hostname.endsWith(".internal") || hostname === "metadata.google.internal") {
     throw new Error("Private or metadata network targets are blocked");
   }
+  const resolved = await dns.lookup(u.hostname, { all: true });
+  for (const address of resolved) {
+    const ip = address.address;
+    const version = net.isIP(ip);
+    if ((version === 4 && (/^(10|127|169\.254)\./.test(ip) || /^192\.168\./.test(ip) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip))) ||
+        (version === 6 && (ip === "::1" || ip.toLowerCase().startsWith("fc") || ip.toLowerCase().startsWith("fd") || ip.toLowerCase().startsWith("fe80:")))) {
+      throw new Error("Resolved address is private or link-local");
+    }
+  }
   return u;
 }
 
 function fetchUrlText(targetUrl: string, timeoutMs = 10000): Promise<{ statusCode: number; text: string; headers: any }> {
   return new Promise((resolve, reject) => {
     try {
-      const urlObj = assertSafeRemoteUrl(targetUrl);
+      const urlObjPromise = assertSafeRemoteUrl(targetUrl);
+      void urlObjPromise.then((urlObj) => {
       const client = urlObj.protocol === 'https:' ? https : http;
       const req = client.get(
         targetUrl,
@@ -95,6 +107,7 @@ function fetchUrlText(targetUrl: string, timeoutMs = 10000): Promise<{ statusCod
         reject(new Error(`Request timed out after ${timeoutMs}ms`));
       });
       req.on('error', (err) => reject(err));
+      }).catch(reject);
     } catch (err: any) {
       reject(err);
     }
