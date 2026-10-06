@@ -35,23 +35,8 @@ export function decryptSecret(encryptedText: string): string {
   }
 }
 
-const activeSessions = new Map<string, { userId: string; expiresAt: number }>();
-let currentActiveUserId = 'user-bolaji-01';
-
 function sign(value: string): string {
   return crypto.createHmac('sha256', sessionSecret).update(value).digest('base64url');
-}
-
-export function getActiveUser(): UserRecord {
-  const user = db.getUserById(currentActiveUserId) || db.getUsers()[0];
-  if (!user) throw new Error('No application user is configured');
-  return user;
-}
-
-export function setActiveUser(userId: string): UserRecord | null {
-  const user = db.getUserById(userId);
-  if (user) currentActiveUserId = user.id;
-  return user || null;
 }
 
 export function issueSessionToken(userId: string): string {
@@ -60,7 +45,6 @@ export function issueSessionToken(userId: string): string {
   const expiresAt = Date.now() + SESSION_TTL_MS;
   const nonce = crypto.randomBytes(16).toString('base64url');
   const payload = Buffer.from(JSON.stringify({ sub: userId, exp: expiresAt, n: nonce })).toString('base64url');
-  activeSessions.set(nonce, { userId, expiresAt });
   return `as_sess_${payload}.${sign(payload)}`;
 }
 
@@ -76,8 +60,6 @@ export function verifySessionToken(token: string): UserRecord | null {
   try {
     const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { sub?: string; exp?: number; n?: string };
     if (!parsed.sub || !parsed.exp || !parsed.n || parsed.exp <= Date.now()) return null;
-    const active = activeSessions.get(parsed.n);
-    if (!active || active.userId !== parsed.sub || active.expiresAt <= Date.now()) return null;
     return db.getUserById(parsed.sub) || null;
   } catch {
     return null;
