@@ -35,6 +35,9 @@ export async function executeSandboxedCommand(
   const sandboxPath = path.join(BASE_SANDBOX_DIR, sandboxId);
   const requestedTimeout = Number(options.timeoutMs || 30000);
   const timeoutMs = Math.min(Math.max(Number.isFinite(requestedTimeout) ? requestedTimeout : 30000, 1000), 120000);
+  if (process.env.NODE_ENV === 'production' && process.env.TERMINAL_EXECUTION_ENABLED !== 'true') {
+    throw new Error('Production sandbox execution is disabled until the runtime is explicitly certified.');
+  }
   if (process.env.NODE_ENV === 'production' && process.env.SANDBOX_RUNTIME !== 'docker') {
     throw new Error('Production sandbox requires SANDBOX_RUNTIME=docker. Host shell execution is permanently disabled.');
   }
