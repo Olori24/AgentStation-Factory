@@ -1,395 +1,484 @@
+
 <div align="center">
+
+<img src="./docs/assets/agentstation-readme-hero.svg" alt="AgentStation Factory command deck" width="100%"/>
 
 # AgentStation Factory
 
-**Autonomous multi-agent AI workforce and artifact synthesis platform.**
+### Autonomous AI Operations Command Center
 
-[![Documentation standard](https://img.shields.io/badge/README-Premium%20Standard-111827?style=flat-square)](#documentation-standard)
-[![GitHub](https://img.shields.io/badge/GitHub-Olori24-181717?style=flat-square&logo=github)](https://github.com/Olori24)
+**Turn objectives into controlled missions. Coordinate specialist agents. Execute real tools. Verify outcomes. Deliver traceable artifacts.**
+
+<p>
+<a href="https://github.com/Olori24/AgentStation-Factory/actions"><img src="https://img.shields.io/github/actions/workflow/status/Olori24/AgentStation-Factory/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI"/></a>
+<img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"/>
+<img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=111827" alt="React"/>
+<img src="https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite"/>
+<img src="https://img.shields.io/badge/Node-22+-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node"/>
+</p>
+
+<p>
+<img src="https://img.shields.io/badge/PWA-Ready-5A0FC8?style=flat-square&logo=pwa&logoColor=white"/>
+<img src="https://img.shields.io/badge/PostgreSQL-Neon-00E699?style=flat-square&logo=postgresql&logoColor=07130f"/>
+<img src="https://img.shields.io/badge/WebSocket-Live-0F172A?style=flat-square"/>
+<img src="https://img.shields.io/badge/Security-Hardened-16A34A?style=flat-square"/>
+<img src="https://img.shields.io/badge/License-MIT-F59E0B?style=flat-square"/>
+</p>
+
+**Precision · Control · Observability · Human Oversight**
 
 </div>
 
-![AgentStation Factory architecture overview](./docs/assets/repo-hero.svg)
+---
 
-> **Repository status:** Active development unless the project-specific status below says otherwise.
+## ⚡ What is AgentStation?
 
-## Documentation standard
+AgentStation Factory is an **AI operations platform** built around a simple idea:
 
-This repository follows the premium README standard established for NSMS: clear positioning, visual orientation, architecture, security boundaries, setup, validation evidence, maturity tracking and explicit separation between shipped work and roadmap.
+> **AI should not stop at generating an answer. It should move an objective through planning, tools, execution, verification and delivery.**
 
-| Evidence label | Meaning |
+Instead of treating an agent as a chat window, AgentStation treats AI as a **digital workforce operating inside a controlled command environment**.
+
+The product is designed to feel like stepping onto the bridge of a powerful AI operations system:
+
+**Precise. Alive. Intelligent. Controlled.**
+
+---
+
+## 🛰️ The Mission Loop
+
+```
+┌──────────────────┐
+│   HUMAN INTENT   │
+│ Objective / Goal │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│  MISSION CONTROL │
+│ Plan → State     │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│ SPECIALIST SQUAD │
+│ Roles + Context  │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│ CONTROLLED TOOLS │
+│ Web / Files / QA │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│ EXECUTION LAYER  │
+│ Sandbox + Stream │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│   VERIFICATION   │
+│ Tests + Approval │
+└────────┬─────────┘
+         ▼
+┌──────────────────┐
+│ ARTIFACT DELIVERY│
+│ Code / Reports   │
+└──────────────────┘
+```
+
+Every stage has an operational boundary. The objective is not simply to make agents powerful.
+
+**The objective is to make agent power observable, bounded and controllable.**
+
+---
+
+## 🎛️ Command Deck
+
+The interface follows a premium, cinematic operations model rather than a generic SaaS dashboard.
+
+### Command
+- Command Center
+- Agents
+- Missions
+- Executions
+
+### Build
+- Agent Factory
+- Templates
+- Integrations
+
+### Operate
+- Activity
+- Approvals
+- Monitoring
+
+### System
+- Analytics
+- Settings
+- Security
+
+### Experience principles
+
+- **Jakob's Law:** familiar navigation and interaction patterns.
+- **Operational clarity:** state is visible without decorative noise.
+- **Cinematic depth:** hierarchy, motion and ambient feedback communicate system state.
+- **Trust layer:** who, what, when, why and result.
+- **Mobile-first:** responsive command surfaces and installable PWA experience.
+- **Reduced motion:** respect user accessibility preferences.
+- **Truthful status:** disabled capabilities are shown as disabled, never simulated as live.
+
+---
+
+## 🤖 Specialist Fleet
+
+| Specialist | Mission role |
 |---|---|
-| **IMPLEMENTED** | Present in the repository. |
-| **TESTED** | Supported by an executed test or CI result. |
-| **DEPLOYED** | A deployment target/configuration exists. |
-| **VERIFIED IN PRODUCTION** | Confirmed with production evidence. |
-| **MEASURED** | Backed by an actual measurement. |
-| **ROADMAP** | Planned work, not shipped capability. |
+| **Atlas** | Architecture, decomposition and technical strategy |
+| **Cypher** | Full-stack engineering and implementation |
+| **Sentinel** | QA, testing and verification |
+| **Vesper** | Research synthesis and executive documentation |
+| **Nova** | Motion, presentation and creative production |
+| **Hermes** | Market and technology intelligence |
+| **Nexus** | Data analysis and spreadsheet workflows |
+| **Sterling** | Business operations and outreach |
+| **Aegis** | Operations, compliance and final delivery |
+
+> Exact provider/model selection is configuration-dependent. The fleet represents the product's specialist-role architecture.
 
 ---
 
-## ⚡ Overview
+## 🛠️ Tooling Philosophy
 
-**AgentStation** is an autonomous multi-agent engineering and intelligence platform designed to function as a **digital workforce**. Rather than merely answering questions or generating isolated code snippets, AgentStation allows operators to state high-level objectives—from building complex full-stack web applications with automated test suites to conducting exhaustive market research, financial feasibility reports, and pitch presentations.
+AgentStation treats tools as **controlled capabilities**, not unrestricted superpowers.
 
-The platform autonomously:
-1. **Decomposes** high-level objectives into structured, dependency-aware subtasks.
-2. **Assigns** each phase to specialist agents with defined system prompts and tool access.
-3. **Executes** multi-step actions across an isolated sandbox and microVM environment.
-4. **Verifies** execution results through automated testing (PyTest, test runners, checksums).
-5. **Gauges Risk** with human-in-the-loop approval gates for sensitive or destructive operations.
-6. **Delivers** verified, production-ready deliverables: source code, interactive web applications, technical dossiers, and kinetic launch videos.
+Representative operations:
 
-> **Product Directive**: *"Manus-level capability, AgentStation identity."*  
-> AgentStation benchmarks the highest standard of autonomous task planning, multi-tool chaining, and microVM interaction while maintaining its own original design system, multi-agent coordination architecture, and artifact-first workflow.
+```
+web_search       web_fetch
+file_read        file_write
+file_patch       file_list
+code_execute     test_runner
+document_generate
+artifact_bundle
+```
+
+Risk is deliberately layered:
+
+```
+LOW
+  Inspect / read / research
+       ↓
+MEDIUM
+  Write / patch / test
+       ↓
+HIGH
+  Destructive or privileged operations
+       ↓
+HUMAN APPROVAL
+       ↓
+ALLOW  /  DENY
+```
+
+This model is reflected in server-side authorization, approval gates, bounded inputs, audit records and sandbox controls.
 
 ---
 
-## 🧠 Core Principles
+## 🔐 Security Posture
 
-AgentStation is built upon eight fundamental operational tenets:
+Security is part of the architecture.
 
-| Principle | Description |
+### Hardened controls
+
+- Signed, expiring sessions
+- HttpOnly + Secure + SameSite cookie protection
+- Server-side role authorization
+- Object/mission access checks
+- Bounded request and command sizes
+- Workspace traversal protection
+- Symlink escape detection
+- Recursive audit redaction
+- SSRF and DNS-rebinding defenses
+- Authenticated WebSocket upgrades
+- Terminal/sandbox fail-closed controls
+- Docker isolation requirements for production execution
+- No-network sandbox mode
+- Dropped capabilities and no-new-privileges
+- Non-root execution and resource limits
+- Gitleaks secret scanning
+- High-severity dependency audit
+- Static security regression tests
+- CSP and hardened response headers
+
+### Evidence
+
+The detailed security register is maintained in:
+
+**[Security Audit](./docs/SECURITY_AUDIT_2026-10-05.md)**
+
+Security language is intentionally evidence-based. **Hardening does not automatically equal production certification.**
+
+---
+
+## 🗄️ Persistence & Runtime
+
+The remediation architecture uses a **PostgreSQL compatibility bridge backed by Neon** for durable AgentStation state, with production configured to fail closed when required persistence configuration is unavailable.
+
+Runtime-sensitive capabilities remain explicit:
+
+| Capability | Policy |
 |---|---|
-| **1. Autonomous** | Executes end-to-end multi-step missions with minimal manual prompting. |
-| **2. Tool-Using** | Equips agents with real tools (sandbox bash, filesystem patchers, web scrapers, test runners). |
-| **3. Plan-First** | Deconstructs unstructured user prompts into discrete, trackable subtask checklists before execution. |
-| **4. State & Memory** | Maintains full execution lineage, mission checkpoints, and file manifests across sessions. |
-| **5. Continuous Verification** | Never considers an objective complete without passing automated test suites or assertion checks. |
-| **6. Self-Healing & Recovery** | Automatically retries failed subtasks with modified parameters or prompts for strategic pivots. |
-| **7. Human-in-the-Loop Safety** | Pauses execution and prompts the operator for approval on destructive commands (`rm`, `git push`, etc.). |
-| **8. Artifact-Centric** | Prioritizes tangible outputs: runnable code, live preview applications, verified zip bundles, and media. |
+| PostgreSQL persistence | Required in production |
+| Session secret | Required |
+| Encryption key | Required |
+| Bootstrap credential | Required |
+| Autonomous runtime | Explicitly enabled |
+| Terminal execution | Explicitly enabled |
+| Docker sandbox | Required before production execution |
+| Multi-instance JSONB concurrency | Not certified |
+
+This separation prevents the UI from claiming infrastructure capabilities that have not actually been verified.
 
 ---
 
-## 🔄 Autonomous Workflow
+## 📱 Installable PWA
+
+AgentStation includes a lightweight PWA layer for the web experience.
+
+**Included:**
+- Web App Manifest
+- Standalone display mode
+- Android/mobile metadata
+- iOS home-screen metadata
+- Service-worker registration
+- App-shell offline fallback
+- Static asset caching
+- API and WebSocket cache exclusion
+- Cache versioning and cleanup
+
+### Intended flow
 
 ```
-                        [ User Objective ]
-      "Research Nigerian real estate, analyze top 5 opportunities,
-          generate detailed report and prepare a presentation"
-                                 │
-                                 ▼
-                     ┌───────────────────────┐
-                     │   AGENTSTATION CORE   │
-                     │  Planning & Strategy  │
-                     └──────────┬────────────┘
-                                │
-               ┌────────────────┴────────────────┐
-               ▼                                 ▼
-      [ Subtask Decomposition ]         [ Specialist Dispatch ]
-      1. Market Intelligence            ➔ Hermes (Researcher)
-      2. Opportunity Matrix             ➔ Hermes (Researcher)
-      3. System Architecture            ➔ Atlas (Architect)
-      4. Code & Endpoint Implementation ➔ Cypher (Developer)
-      5. Sandbox PyTest Verification    ➔ Sentinel (QA Lead)
-      6. Executive Dossier Generation   ➔ Vesper (Creative)
-      7. Kinetic Presentation / Video   ➔ Nova (Producer)
-                                │
-                                ▼
-                     ┌───────────────────────┐
-                     │   SANDBOX EXECUTION   │
-                     │    & TOOL CALLING     │
-                     ├───────────────────────┤
-                     │ • web_search          │
-                     │ • file_write / patch  │
-                     │ • code_execute        │
-                     │ • test_runner (PyTest)│
-                     │ • artifact_bundle     │
-                     └──────────┬────────────┘
-                                │
-                                ▼
-                     ┌───────────────────────┐
-                     │  OPERATOR APPROVAL?   │
-                     │ (High-Risk Operation) │
-                     └──────┬─────────┬──────┘
-                   Approved │         │ Denied
-                            ▼         ▼
-                  [ Continue Run ]   [ Abort / Reroute ]
-                            │
-                            ▼
-                     ┌───────────────────────┐
-                     │  VERIFICATION ENGINE  │
-                     │  • Test Pass Check    │
-                     │  • SHA-256 Checksum   │
-                     └──────────┬────────────┘
-                                │
-                                ▼
-                  [ Final Artifact Delivery ]
-                  • Running Interactive Web App
-                  • Downloadable Codebase (.zip)
-                  • Technical Dossier (.md)
-                  • 60 FPS Kinetic Presentation
+Vercel URL
+   ↓
+Open AgentStation
+   ↓
+Install / Add to Home Screen
+   ↓
+AgentStation launches as an app
 ```
+
+The PWA does **not** fake offline backend functionality. Authenticated APIs, missions, WebSockets and server execution remain network-dependent.
 
 ---
 
-## 🖥️ Workstation Architecture
+## 🧰 Technology Stack
 
-AgentStation presents a high-density, 3-panel autonomous workspace modeled for mission oversight and direct interaction:
-
-```
-┌─────────────────┬─────────────────────────────┬────────────────────────────────────────┐
-│  PANEL 1: NAV   │     PANEL 2: CONVERSATION   │     PANEL 3: AGENTSTATION WORKSTATION   │
-│  & SQUAD RAIL   │       & SUBTASK STREAM      │              VIRTUAL SANDBOX           │
-├─────────────────┼─────────────────────────────┼────────────────────────────────────────┤
-│ • New Mission   │ • Real-time Task Objective  │ [Browser] [Editor] [Terminal] [Media]  │
-│ • Preset Cards  │ • Autonomous Plan Checklist │ ────────────────────────────────────── │
-│ • Fleet Status  │   [✓] 1. Intelligence Query │  • Live In-Browser Web App Runner      │
-│ • Tool Audit    │   [►] 2. Writing Data Schema│  • Multi-File Syntax-Highlighted IDE   │
-│ • DB Records    │   [ ] 3. PyTest Execution  │  • Interactive Terminal / Test Logs    │
-│ • Git Push Hub  │ • Tool Execution Badges     │  • 60 FPS Kinetic Video Canvas Engine  │
-│ • Model Select  │ • Operator Approval Card    │  • SHA-256 Verified Artifact Bundler   │
-│                 │ • Pause / Resume Controls   │                                        │
-└─────────────────┴─────────────────────────────┴────────────────────────────────────────┘
-```
-
-### 1. Left Control Rail (Panel 1)
-- **Fleet Roster**: Live health and activity status for each specialized agent.
-- **Mission History**: Searchable database of past autonomous runs with 1-click state restoration.
-- **AI Provider Switcher**: Toggle seamlessly between cloud LLMs (Google Gemini 2.5 Flash / Gemini Pro) and offline local models (Ollama: DeepSeek R1, Llama 3, CodeLlama).
-- **GitHub Hub**: One-click repository sync, branch creation, diff preview, and push auditing.
-
-### 2. Autonomous Conversation & Subtask Stream (Panel 2)
-- **Dynamic Task Plan**: Visual subtask tree tracking execution order, assigned specialist, and state (`pending`, `in_progress`, `completed`, `failed`).
-- **Tool Audit Pills**: Live feedback detailing parameters, execution time, and stdout/stderr for every tool invoked.
-- **Human-in-the-Loop Safeguards**: Embedded approval cards requiring explicit operator confirmation before executing potentially hazardous commands.
-- **Mission Controls**: Pause, Resume, or Cancel missions mid-flight.
-
-### 3. AgentStation Workstation / Sandbox (Panel 3)
-- **Live Workstation Browser**: Direct rendering of full-stack client code in an isolated iframe sandbox with error capture and viewport scaling.
-- **Interactive Spreadsheet Dataset Matrix**: Institutional tabular viewer with real-time column sorting, global text filtering, quick metric statistics, and 1-click CSV export.
-- **Executive Intelligence Dossier & Report Viewer**: Distraction-free markdown research room with typography scaling, estimated read times, table of contents navigation, and copy-to-clipboard actions.
-- **Outreach Campaign & Email Sequence Studio**: High-touch outreach manager with multi-touch cadences (Day 1, Day 4, Day 8), full email preview modal, personalized CTAs, and instant clipboard export.
-- **Multi-File Code IDE**: Full code explorer and editor with dirty state detection, syntax highlighting, and instant file creation.
-- **Sandbox Terminal & Test Runner**: Real-time streaming terminal displaying test outputs, PyTest assertion matrices, and system metrics.
-- **Kinetic Video Studio**: In-browser 60 FPS HTML5 canvas engine that synthesizes animated product storyboards, Web Audio synthesizer rhythms, and Web Speech API narration.
-- **Pipeline CI/CD Hub**: Live status monitor tracking linting, PyTest suites, Docker container builds, and security scans.
-- **Artifact Manager**: Download complete project bundles (.zip) with cryptographic SHA-256 verification hashes.
+| Layer | Technology |
+|---|---|
+| Frontend | React 19 + TypeScript |
+| Build | Vite 6 + esbuild |
+| Styling | Tailwind CSS + custom cinematic CSS |
+| Motion | Motion |
+| Icons | Lucide React |
+| Backend | Node.js + Express |
+| Real-time | WebSocket + SSE |
+| AI | Google GenAI integration |
+| Database | PostgreSQL / Neon |
+| Testing | TypeScript + Python verification |
+| Security | CSP + auth/RBAC + sandbox controls |
+| Delivery | Vercel-compatible frontend + Render runtime configuration |
+| App mode | PWA / Service Worker |
 
 ---
 
-## 🤖 The Specialist Agent Fleet
+## 🧪 Verification Pipeline
 
-AgentStation coordinates an ensemble of purpose-built agents, each possessing specialized domain knowledge:
+The repository CI is intentionally broader than "does it compile?"
 
-| Agent | Role & Title | Specialty & Capabilities | Model / Engine |
-|---|---|---|---|
-| **Atlas** | Lead Systems Architect | System decomposition, technical specifications, REST API contracts, and schema design. | Gemini 2.5 Flash |
-| **Cypher** | Senior Full-Stack Engineer | Production TypeScript, React 19, Express routing, robust error handling, and CLI tools. | Gemini 2.5 Flash / DeepSeek |
-| **Sentinel** | DevOps & QA Auditor | Test suite design, PyTest sandbox assertions, boundary condition auditing, and security checks. | Gemini 2.5 Flash |
-| **Vesper** | Creative & Research Director | Executive documentation, architecture diagrams, narrative synthesis, and market dossiers. | Gemini 2.5 Flash |
-| **Nova** | Motion & Video Producer | Kinetic typography, 60 FPS canvas animation, Web Audio soundtrack sequencing, and pitch decks. | Canvas Engine + Web Audio |
-| **Hermes** | Market & Tech Intelligence | Autonomous web scraping, competitor intelligence, opportunity benchmarking, and financial analysis. | Gemini 2.5 / Web Grounding |
-| **Nexus** | Lead Data Analyst & Spreadsheet Architect | Lead data normalization, financial modeling, interactive CSV/XLSX matrix generation, and summary metrics. | Gemini 2.5 / Data Engine |
-| **Sterling** | Business Operations & Outreach Specialist | Personalized cold outreach, decision-maker profiling, multi-touch email sequence cadences, and partnership angles. | Gemini 2.5 / Strategy Engine |
-| **Aegis** | Executive Assistant & Compliance Specialist | Autonomous workflow orchestration, regulatory title governance audits, and final deliverable packaging. | Gemini 2.5 / Operations Engine |
-
----
-
-## 🛠️ Tool Execution Engine
-
-Agents do not hallucinate outputs—they invoke deterministic tools inside a secure execution sandbox:
-
-```typescript
-// Built-in Agent Tools available to the orchestrator:
-export const TOOL_REGISTRY = {
-  web_search:         "Query real-time web search engines and synthesize cited summaries",
-  web_fetch:          "Fetch arbitrary webpage content and extract clean markdown/text",
-  file_read:          "Read file content from the isolated workspace directory",
-  file_write:         "Write new files or overwrite existing workspace artifacts",
-  file_patch:         "Apply targeted surgical diffs to existing codebase files",
-  file_list:          "List files and directories within the mission workspace",
-  code_execute:       "Execute bash scripts or node commands inside the protected sandbox",
-  test_runner:        "Run automated PyTest or unit test suites and parse assertion results",
-  document_generate:  "Compile formatted technical documentation, READMEs, and executive briefs",
-  artifact_bundle:    "Package generated codebase into a downloadable zip with SHA-256 checksum"
-};
+```
+DEPENDENCIES
+     ↓
+npm audit
+     ↓
+SECRET SCAN
+     ↓
+TYPE CHECK
+     ↓
+PRODUCTION BUILD
+     ↓
+STATIC SECURITY AUDIT
+     ↓
+TEST SUITE
+     ↓
+EVIDENCE
 ```
 
-### Safety & Risk Auditing
-Every tool call is evaluated by the **Risk Engine**:
-- **Low Risk** (`file_read`, `file_list`, `web_search`, `document_generate`): Auto-executed within milliseconds.
-- **Medium Risk** (`file_write`, `file_patch`, `test_runner`): Tracked in the audit log and sandboxed.
-- **High Risk** (`code_execute` with destructive flags, `git push`, environment alterations): Triggers an interactive **Operator Approval Card** in the UI, halting execution until explicitly authorized.
+The workflow verifies dependency safety, secret history, TypeScript, production compilation, security regressions and automated tests.
 
 ---
 
-## 🚀 Quickstart
+## 🚀 Quick Start
 
-### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **npm** or **pnpm**
-- *(Optional)* **Google Gemini API Key**: For cloud-accelerated reasoning ([Get a key](https://aistudio.google.com/))
-- *(Optional)* **Ollama**: For 100% offline, local LLM execution ([Install Ollama](https://ollama.ai/))
+### Requirements
 
-### 1. Clone the Repository
+- Node.js 22+
+- npm
+- PostgreSQL/Neon for production persistence
+- Provider credentials for capabilities you intend to enable
+
+### Install
+
 ```bash
 git clone https://github.com/Olori24/AgentStation-Factory.git
 cd AgentStation-Factory
+npm ci
+cp .env.example .env
 ```
 
-### 2. Install Dependencies
-```bash
-npm install
-```
+### Development
 
-### 3. Configure Environment
-Create a `.env` file in the root directory:
-```env
-# Server Port (Default: 3000)
-PORT=3000
-
-# Optional: Google Gemini API Key for autonomous agent reasoning
-GEMINI_API_KEY="your_gemini_api_key_here"
-
-# Optional: GitHub Personal Access Token (repo scope) for 1-click push
-GITHUB_TOKEN="your_github_token_here"
-```
-
-### 4. Start Development Server
 ```bash
 npm run dev
 ```
-Open your browser and navigate to `http://localhost:3000`.
 
-### 5. Build for Production
+### Type check
+
 ```bash
-# Compiles React 19 client and bundles Express backend with esbuild
-npm run build
+npm run lint
+```
 
-# Start the bundled production server
+### Build
+
+```bash
+npm run build
+```
+
+### Production
+
+```bash
 npm run start
 ```
 
----
+### Database migration
 
-## 📡 API Reference
+```bash
+npm run db:migrate
+```
 
-AgentStation exposes a full suite of REST and Server-Sent Event (SSE) endpoints:
-
-### Autonomous Task Orchestration
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/tasks/plan` | Decomposes a high-level prompt into an ordered subtask plan. |
-| `GET` | `/api/tasks/:id/subtasks` | Retrieves subtasks and live status for a mission. |
-| `POST` | `/api/tasks/:id/approve` | Submits operator approval or denial for a paused subtask. |
-| `GET` | `/api/approvals` | Lists pending and historical human-in-the-loop approvals. |
-| `GET` | `/api/tools` | Returns the registry of available agent tools. |
-
-### Mission & Execution
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/orchestrate` | Dispatches the multi-agent cluster to execute a prompt. |
-| `GET` | `/api/missions` | Returns historical mission runs with file manifests and metrics. |
-| `GET` | `/api/missions/:id` | Returns full state, logs, and artifacts for a specific mission. |
-| `GET` | `/api/artifacts/:id/download`| Downloads the verified `.zip` bundle for a mission. |
-
-### Real-Time Streaming
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/stream/events` | SSE stream for real-time agent thoughts, logs, and milestone ticks. |
-| `GET` | `/api/terminal/stream` | SSE stream capturing live terminal outputs and PyTest executions. |
-
-### GitHub Integration
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/github/status` | Fetches active branch, clean/dirty state, and recent commit history. |
-| `POST` | `/api/github/push` | Stages workspace files, commits, and pushes directly to GitHub. |
-| `POST` | `/api/github/branch` | Creates a new branch and checks out workspace tree. |
+**Never commit secrets to the repository.**
 
 ---
 
-## 🐙 GitHub Integration
-
-AgentStation includes a zero-friction Git management hub accessible directly from the navigation rail:
-- **One-Click Commit & Push**: Automatically serializes current workspace files, stages changes, generates conventional commit messages, and pushes to remote with live audit logging.
-- **Branch Management**: Create feature or release branches (`feat/`, `fix/`, `release/`) with automated stash/pop protection.
-- **Live Status Auditing**: Real-time display of uncommitted changes, active branch status, author credentials, and commit hashes.
-
----
-
-## 💡 Example Missions to Try
-
-Paste any of these high-level objectives into the AgentStation omnibox:
-
-1. **Market Intelligence & Strategy**:
-   > *"Research the Nigerian real estate market, identify the top five opportunities, analyze competitors, create a detailed report and prepare a presentation."*
-
-2. **Full-Stack Engineering**:
-   > *"Build an enterprise Kanban task manager with SQLite persistence, REST API, drag-and-drop board, and PyTest validation suite."*
-
-3. **High-Frequency Financial System**:
-   > *"Create a real-time cryptocurrency arbitrage terminal with live WebSocket ticker, risk calculators, and depth charts."*
-
-4. **Kinetic Marketing Campaign**:
-   > *"Generate a kinetic 1080p SaaS product launch video with punchy hook scenes, audio cues, and voiceover script."*
-
----
-
-## 📁 Repository Structure
+## 📂 Repository Architecture
 
 ```
-├── data/
-│   └── agentstation_relational_db.json # Durable database for missions, subtasks & audits
+AgentStation-Factory/
+│
+├── .github/workflows/       # CI + security verification
+├── db/migrations/           # PostgreSQL migrations
+├── docs/
+│   ├── assets/              # Product / README SVG artwork
+│   ├── PREMIUM_UI_UX_CINEMATIC_SPEC.md
+│   └── SECURITY_AUDIT_2026-10-05.md
+├── public/
+│   ├── manifest.webmanifest # PWA manifest
+│   ├── sw.js                # Service worker
+│   ├── icon.svg
+│   └── favicon.svg
+├── scripts/
+│   └── migrate.mjs          # Transactional migration runner
 ├── server/
-│   ├── orchestrator/
-│   │   └── index.ts          # Autonomous planning, decomposition & execution engine
-│   ├── tools/
-│   │   └── index.ts          # Tool registry, sandbox executors & permission guards
-│   ├── db.ts                 # Relational database interface & query helpers
-│   ├── streaming.ts          # Server-Sent Events (SSE) event broadcasters
-│   └── artifacts.ts          # File packager & SHA-256 checksum bundler
-├── server.ts                 # Main Express application, API routes & Vite middleware
+│   ├── orchestrator/        # Mission planning / execution
+│   ├── tools/               # Tool registry + security boundaries
+│   ├── auth.ts              # Authentication
+│   ├── db.ts                # Durable state layer
+│   ├── sandbox.ts            # Sandboxed execution
+│   └── terminalWs.ts         # Terminal WebSocket
 ├── src/
-│   ├── components/
-│   │   ├── ManusHeroPrompt.tsx        # AgentStation omnibox & objective input hub
-│   │   ├── ManusConversation.tsx      # Subtask checklist, objective breakdown & approval cards
-│   │   ├── ManusComputer.tsx          # Workstation sandbox container & tab routing
-│   │   ├── SpreadsheetViewer.tsx      # Interactive tabular spreadsheet & CSV export engine
-│   │   ├── DocumentViewer.tsx         # Executive intelligence dossier & markdown reader
-│   │   ├── OutreachCampaignViewer.tsx # 3-touch personalized email campaign viewer & copy triggers
-│   │   ├── ManusSidebar.tsx           # Navigation rail, fleet status & history
-│   │   ├── CodeWorkspace.tsx          # Multi-file code editor with live syntax engine
-│   │   ├── VideoStudio.tsx            # 60 FPS HTML5 canvas & Web Audio synth engine
-│   │   ├── GitHubModal.tsx            # Direct GitHub push & branch creation modal
-│   │   └── OllamaModal.tsx            # Local LLM selection & configuration modal
-│   ├── services/
-│   │   ├── plannerEngine.ts           # Autonomous objective decomposition & requirement planning
-│   │   ├── workstationArtifacts.ts    # Institutional dataset, dossier & campaign generators
-│   │   ├── softwareFactory.ts         # Deterministic full-stack application blueprints
-│   │   ├── agentRegistry.ts           # Specialist agent persona profiles & model configs
-│   │   ├── toolRegistry.ts            # Client-side deterministic tool mock & execution bus
-│   │   └── autonomousEngine.ts        # Client-side autonomous execution loop
-│   ├── data/
-│   │   ├── defaults.ts                # Default agent squad roster & system definitions
-│   │   └── sampleMissions.ts          # Pre-seeded blueprints (Lagos RE, Full-Stack, Crypto Arbitrage)
-│   ├── App.tsx                        # Top-level state engine & layout controller
-│   └── types.ts                       # TypeScript interfaces for agents, tools, tasks & artifacts
+│   ├── components/          # Command-deck UI
+│   ├── services/            # Client orchestration
+│   ├── data/                # Agent / mission definitions
+│   ├── App.tsx
+│   ├── index.css            # Premium visual system
+│   └── main.tsx             # App entry + PWA registration
+├── render.yaml
+├── vercel.json
 ├── package.json
-├── tsconfig.json
-├── vite.config.ts
 └── README.md
 ```
 
 ---
 
-## 🤝 Contributing
+## 📊 Engineering Maturity
 
-Contributions to AgentStation are enthusiastically welcomed! Whether you are adding new tools to `server/tools/`, introducing specialized agent personas, or enhancing the microVM workspace:
+| Surface | Evidence state |
+|---|---|
+| Command-deck UI | 🟢 Implemented |
+| Mission workflow | 🟢 Implemented |
+| Specialist fleet | 🟢 Implemented |
+| Auth + RBAC | 🟢 Hardened |
+| Tool boundaries | 🟢 Hardened |
+| PostgreSQL persistence bridge | 🟢 Implemented |
+| PWA shell | 🟢 Implemented |
+| CI security verification | 🟢 Tested |
+| Production sandbox isolation | 🟡 Runtime certification required |
+| Full relational tenant decomposition | 🟡 Hardening / roadmap |
+| Distributed rate limiting | 🟡 Roadmap |
+| Production certification | 🔴 Not claimed |
 
-1. Fork the Project.
-2. Create your Feature Branch (`git checkout -b feat/quantum-tool-executor`).
-3. Commit your Changes (`git commit -m 'feat: add quantum tool executor'`).
-4. Push to the Branch (`git push origin feat/quantum-tool-executor`).
-5. Open a Pull Request.
+**Green means shipped/tested. Yellow means remaining engineering or runtime work. Red means deliberately not certified.**
 
 ---
 
-## 📄 License
+## 🗺️ Roadmap
 
-Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information.
+- Deeper relational multi-tenant persistence
+- Production-grade artifact/object storage
+- Distributed rate limiting
+- Certified isolated execution runtimes
+- Expanded integrations
+- Richer monitoring and analytics
+- Autonomous recurring objectives with bounded controls
+- Stronger agent evaluation and reliability telemetry
+- More powerful mission templates
+- Deeper memory and state management
+
+Roadmap items are not presented as shipped capabilities until implemented and verified.
+
+---
+
+## 🤝 Contributing
+
+AgentStation is built around a few non-negotiables:
+
+**Security before convenience.  
+Evidence before claims.  
+Server-side authorization.  
+Observable execution.  
+Explicit operational boundaries.  
+Tests for meaningful behavior.  
+Intentional UX.**
+
+Create a branch, make the change, run the verification suite, and open a pull request with:
+
+- what changed
+- why it changed
+- security implications
+- tests performed
+- deployment/runtime implications
+
+---
+
+## 📜 License
+
+MIT. See [LICENSE](./LICENSE).
+
+---
 
 <div align="center">
-<sub>Engineered with precision for autonomous AI workflows. AgentStation © 2026.</sub>
+
+## AgentStation Factory
+
+**Build agents. Run missions. Verify outcomes. Ship with control.**
+
+<sub>Engineered for autonomous AI operations · 2026</sub>
+
 </div>
