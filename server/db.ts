@@ -437,6 +437,10 @@ class RelationalDatabase {
     return this.data.approvals;
   }
 
+  public getApprovalById(id: string): ApprovalRecord | undefined {
+    return this.data.approvals.find((a) => a.id === id);
+  }
+
   public getPendingApprovals(missionId?: string): ApprovalRecord[] {
     return this.data.approvals.filter((a) => a.status === 'pending' && (!missionId || a.missionId === missionId));
   }
