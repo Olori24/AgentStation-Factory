@@ -491,7 +491,7 @@ export class ToolExecutionEngine {
           const targetContent = input.targetContent;
           const replacementContent = input.replacementContent;
 
-          if (typeof targetContent !== 'string' || typeof replacementContent !== 'string' || Buffer.byteLength(replacementContent, 'utf8') > 2 * 1024 * 1024) throw new Error('Invalid patch payload');
+          if (typeof targetContent !== 'string' || typeof replacementContent !== 'string' || targetContent.length > 2 * 1024 * 1024 || Buffer.byteLength(replacementContent, 'utf8') > 2 * 1024 * 1024) throw new Error('Invalid patch payload');
           const targetPath = assertWorkspacePath(relPath);
 
           if (!fs.existsSync(targetPath)) {
