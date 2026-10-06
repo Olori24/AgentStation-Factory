@@ -38,6 +38,8 @@ export async function generateMissionBundle(
   for (const file of files) {
     const rawPath = String(file?.path || "");
     const safePath = path.posix.normalize(rawPath.replace(/\\/g, "/")).replace(/^\/+/, "");
+    const sensitivePath = /(^|\/)(\.env(?:\.|$)|\.git(?:\/|$)|.*\.(pem|key|crt|p12|pfx))$/i.test(safePath);
+    if (sensitivePath) throw new Error("Sensitive file cannot be included in an artifact");
     if (!safePath || safePath === "." || safePath.startsWith("../") || safePath.includes("/../")) {
       throw new Error("Invalid artifact file path");
     }
