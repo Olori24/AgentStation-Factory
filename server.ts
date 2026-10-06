@@ -3,7 +3,7 @@ import http from "http";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
@@ -28,6 +28,28 @@ import { runMiroFishSimulation } from "./server/simulationProvider";
 dotenv.config();
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+function publicError(status: number): string {
+  if (status === 400) return "Invalid request";
+  if (status === 401) return "Authentication required";
+  if (status === 403) return "Forbidden";
+  if (status === 404) return "Resource not found";
+  if (status === 409) return "Conflict";
+  if (status === 413) return "Payload too large";
+  if (status === 429) return "Rate limit exceeded";
+  return "Internal server error";
+}
+
+async function runGit(args: string[], token?: string) {
+  const env = { ...process.env };
+  if (token) {
+    env.GIT_CONFIG_COUNT = "1";
+    env.GIT_CONFIG_KEY_0 = "http.https://github.com/.extraheader";
+    env.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: bearer ${token}`;
+  }
+  return execFileAsync("git", args, { env, maxBuffer: 10 * 1024 * 1024 });
+}
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -2343,7 +2365,7 @@ app.post("/api/tasks/execute", requireRole(["admin","engineer"]), async (req, re
     };
     // Launch background execution loop
     AgentOrchestrator.executeMission(missionId, safeOptions).catch(() => {
-      console.error('[API Execute Error]:', err);
+      console.error('[API Execute Error]');
     });
 
     res.json({
