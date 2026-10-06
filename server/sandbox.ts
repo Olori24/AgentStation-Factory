@@ -73,19 +73,20 @@ export async function executeSandboxedCommand(
       } catch {}
     }
 
-    // Scrubbed environment variables (strip sensitive platform keys)
-    const scrubbedEnv: NodeJS.ProcessEnv = {
-      ...process.env,
-      PATH: process.env.PATH,
-      NODE_ENV: 'test',
-      CI: 'true',
-      PYTHONUNBUFFERED: '1',
-      // Block host tokens from sandbox process
-      GEMINI_API_KEY: 'PROTECTED_SANDBOX_STUB',
-      GITHUB_TOKEN: 'PROTECTED_SANDBOX_STUB',
-      ENCRYPTION_KEY: 'PROTECTED_SANDBOX_STUB',
-      ...Object.fromEntries(Object.entries(options.env || {}).filter(([key]) => !/^(GEMINI_API_KEY|GITHUB_TOKEN|ENCRYPTION_KEY|SESSION_SECRET|CRON_SECRET|AGENTIC_API_KEY|DATABASE_URL|POSTGRES_URL|NEON_DATABASE_URL)$/i.test(key))),
-    };
+    // Allowlist sandbox environment. Never inherit application secrets.
+    const allowedEnvKeys = new Set(['PATH', 'NODE_ENV', 'CI', 'PYTHONUNBUFFERED', 'LANG', 'LC_ALL', 'TZ']);
+    const scrubbedEnv: NodeJS.ProcessEnv = {};
+    for (const key of allowedEnvKeys) {
+      if (process.env[key]) scrubbedEnv[key] = process.env[key];
+    }
+    scrubbedEnv.NODE_ENV = 'test';
+    scrubbedEnv.CI = 'true';
+    scrubbedEnv.PYTHONUNBUFFERED = '1';
+    for (const [key, value] of Object.entries(options.env || {})) {
+      if (/^SANDBOX_[A-Z0-9_]+$/.test(key) && typeof value === 'string' && value.length <= 4096) {
+        scrubbedEnv[key] = value;
+      }
+    }
 
     return new Promise((resolve) => {
       let stdout = '';
@@ -113,6 +114,8 @@ export async function executeSandboxedCommand(
         '--pids-limit=128',
         '--memory=512m',
         '--cpus=1',
+        '--ipc=none',
+        '--ulimit', 'nofile=256:256',
         '--user', '65532:65532',
         '-v', sandboxPath + ':/workspace:rw',
         '-w', '/workspace',
@@ -141,8 +144,15 @@ export async function executeSandboxedCommand(
         }
       }, timeoutMs);
 
+      const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
       child.stdout.on('data', (chunk) => {
         const text = chunk.toString();
+        if (Buffer.byteLength(stdout, 'utf8') + Buffer.byteLength(text, 'utf8') > MAX_OUTPUT_BYTES) {
+          timedOut = true;
+          child.kill('SIGKILL');
+          stderr += '\n[SANDBOX OUTPUT LIMIT] stdout exceeded 2MB.';
+          return;
+        }
         stdout += text;
         options.onChunk?.(text, 'stdout');
         if (options.missionId) {
@@ -152,6 +162,12 @@ export async function executeSandboxedCommand(
 
       child.stderr.on('data', (chunk) => {
         const text = chunk.toString();
+        if (Buffer.byteLength(stderr, 'utf8') + Buffer.byteLength(text, 'utf8') > MAX_OUTPUT_BYTES) {
+          timedOut = true;
+          child.kill('SIGKILL');
+          stderr += '\n[SANDBOX OUTPUT LIMIT] stderr exceeded 2MB.';
+          return;
+        }
         stderr += text;
         options.onChunk?.(text, 'stderr');
         if (options.missionId) {
@@ -181,14 +197,15 @@ export async function executeSandboxedCommand(
         });
       });
 
-      child.on('error', (err) => {
+      child.on('error', () => {
         clearTimeout(timer);
         resolve({
           sandboxId,
           command,
           exitCode: 1,
           stdout,
-          stderr: `Process error: ${err.message}`,
+          stderr: 'Sandbox process failed to start.',
+
           durationMs: Date.now() - startTime,
           timedOut: false,
           isolatedPath: sandboxPath,
