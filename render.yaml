@@ -11,7 +11,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: AUTONOMY_ENABLED
-        value: "true"
+        value: "false"
       - key: AUTONOMY_TICK_MS
         value: "15000"
       - key: AUTONOMY_MAX_CONCURRENCY
@@ -20,6 +20,10 @@ services:
         value: /var/data
       - key: AGENTSTATION_WORKSPACE_DIR
         value: /var/workspace
+      - key: AGENTSTATION_STORAGE
+        value: postgres
+      - key: DATABASE_URL
+        sync: false
       - key: SANDBOX_RUNTIME
         value: "docker"
       - key: SANDBOX_IMAGE
