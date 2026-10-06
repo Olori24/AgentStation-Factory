@@ -242,8 +242,8 @@ const DEFAULT_ORG: OrganizationRecord = {
 const DEFAULT_USERS: UserRecord[] = [
   {
     id: 'user-bolaji-01',
-    email: 'bakande11@gmail.com',
-    name: 'Bolaji Akande',
+    email: process.env.AUTH_ADMIN_EMAIL?.trim() || 'admin@example.invalid',
+    name: process.env.AUTH_ADMIN_NAME?.trim() || 'AgentStation Administrator',
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     organizationId: DEFAULT_ORG.id,
