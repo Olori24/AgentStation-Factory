@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
+import dns from 'dns/promises';
+import net from 'net';
 import { executeSandboxedCommand } from '../sandbox';
 import { db } from '../db';
 import { createMissionArtifactBundle } from '../artifacts';
@@ -39,16 +41,94 @@ export interface ToolExecutionResponse {
 }
 
 // Helper: safe fetch text over HTTP/HTTPS
+function assertWorkspacePath(relPath: string): string {
+  if (typeof relPath !== "string" || !relPath.trim() || relPath.length > 500) {
+    throw new Error("Invalid workspace path");
+  }
+  const root = path.resolve(process.cwd(), "workspace");
+  const target = path.resolve(root, relPath);
+  const relative = path.relative(root, target);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Access denied: path outside workspace");
+  const segments = relative.split(path.sep);
+  if (segments.some((segment) => segment === ".git" || segment === "node_modules" || /^\.env(?:\.|$)/i.test(segment) || /\.(pem|key|crt|p12|pfx)$/i.test(segment))) {
+    throw new Error("Access denied: sensitive workspace path");
+  }
+  try {
+    const resolvedExisting = fs.realpathSync(target);
+    const resolvedRoot = fs.realpathSync(root);
+    const resolvedRelative = path.relative(resolvedRoot, resolvedExisting);
+    if (!resolvedRelative || resolvedRelative.startsWith("..") || path.isAbsolute(resolvedRelative)) {
+      throw new Error("Access denied: workspace symlink escape");
+    }
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") throw error;
+    const parent = path.dirname(target);
+    if (fs.existsSync(parent)) {
+      const resolvedRoot = fs.realpathSync(root);
+      const resolvedParent = fs.realpathSync(parent);
+      const resolvedRelative = path.relative(resolvedRoot, resolvedParent);
+      if (resolvedRelative.startsWith("..") || path.isAbsolute(resolvedRelative)) throw new Error("Access denied: workspace symlink escape");
+    }
+  }
+  return target;
+}
+
+function redactForAudit(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string") {
+    return value.replace(/(Bearer\s+)[^\s]+/gi, "$1[REDACTED]").replace(/(api[_-]?key|secret|password|token|authorization|cookie)\s*[:=]\s*["']?[^\s,"'}]+/gi, "$1=[REDACTED]");
+  }
+  if (Array.isArray(value)) return value.map(redactForAudit);
+  if (typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (/api[_-]?key|secret|password|token|authorization|cookie/i.test(key)) out[key] = "[REDACTED]";
+      else out[key] = redactForAudit(item);
+    }
+    return out;
+  }
+  return value;
+}
+
+async function resolveSafeRemoteUrl(targetUrl: string): Promise<{ url: URL; address: string }> {
+  const url = new URL(targetUrl);
+  if (!["https:", "http:"].includes(url.protocol)) throw new Error("Only HTTP(S) URLs are allowed");
+  const hostname = url.hostname.toLowerCase();
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "0.0.0.0" ||
+      hostname === "::1" || hostname === "[::1]" || /^127\./.test(hostname) ||
+      /^10\./.test(hostname) || /^192\.168\./.test(hostname) ||
+      /^169\.254\./.test(hostname) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname) ||
+      hostname.endsWith(".internal") || hostname === "metadata.google.internal") {
+    throw new Error("Private or metadata network targets are blocked");
+  }
+  const resolved = await dns.lookup(url.hostname, { all: true });
+  const safe = resolved.find((entry) => {
+    const ip = entry.address;
+    const version = net.isIP(ip);
+    return !((version === 4 && (/^(10|127|169\.254)\./.test(ip) || /^192\.168\./.test(ip) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip))) ||
+      (version === 6 && (ip === "::1" || ip.toLowerCase().startsWith("fc") || ip.toLowerCase().startsWith("fd") || ip.toLowerCase().startsWith("fe80:"))));
+  });
+  if (!safe) throw new Error("Resolved address is private or link-local");
+  return { url, address: safe.address };
+}
+
+export async function assertSafeRemoteUrl(targetUrl: string): Promise<URL> {
+  const { url } = await resolveSafeRemoteUrl(targetUrl);
+  return url;
+}
+
 function fetchUrlText(targetUrl: string, timeoutMs = 10000): Promise<{ statusCode: number; text: string; headers: any }> {
   return new Promise((resolve, reject) => {
     try {
-      const urlObj = new URL(targetUrl);
+      const safeTargetPromise = resolveSafeRemoteUrl(targetUrl);
+      void safeTargetPromise.then(({ url: urlObj, address }) => {
       const client = urlObj.protocol === 'https:' ? https : http;
       const req = client.get(
-        targetUrl,
+        urlObj,
         {
+          lookup: (_hostname, _options, callback) => callback(null, address, net.isIP(address)),
           headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; AgentStation-Bot/2.0; +https://agentstation.io)',
+            'User-Agent': 'Mozilla/5.0 (compatible; AgentStation-Bot/2.0)',
             Accept: 'text/html,application/json,text/plain,*/*',
           },
           timeout: timeoutMs,
@@ -73,6 +153,7 @@ function fetchUrlText(targetUrl: string, timeoutMs = 10000): Promise<{ statusCod
         reject(new Error(`Request timed out after ${timeoutMs}ms`));
       });
       req.on('error', (err) => reject(err));
+      }).catch(reject);
     } catch (err: any) {
       reject(err);
     }
@@ -244,7 +325,7 @@ export class ToolExecutionEngine {
 
     // Check sensitive action
     const sensitivity = this.isSensitiveAction(toolName, input);
-    if (sensitivity.isSensitive && !params.skipApprovalCheck) {
+    if (sensitivity.isSensitive) {
       const approval = db.createApproval({
         missionId,
         subtaskId,
@@ -344,7 +425,7 @@ export class ToolExecutionEngine {
 
         case 'web_fetch': {
           const targetUrl = input.url;
-          if (!targetUrl || !targetUrl.startsWith('http')) {
+          if (!targetUrl) {
             throw new Error('Invalid URL. Must start with http:// or https://');
           }
           const fetchRes = await fetchUrlText(targetUrl, 10000);
@@ -368,18 +449,10 @@ export class ToolExecutionEngine {
 
         case 'file_read': {
           const relPath = input.path;
-          const workspacePath = path.resolve(process.cwd(), 'workspace', relPath);
-          const projectPath = path.resolve(process.cwd(), relPath);
-
-          let filePath = workspacePath;
-          if (!fs.existsSync(workspacePath) && fs.existsSync(projectPath)) {
-            filePath = projectPath;
-          }
-
-          if (!fs.existsSync(filePath)) {
-            throw new Error(`File not found: ${relPath}`);
-          }
-
+          const filePath = assertWorkspacePath(relPath);
+          if (!fs.existsSync(filePath)) throw new Error('File not found');
+          const stat = await fs.promises.stat(filePath);
+          if (stat.size > 2 * 1024 * 1024) throw new Error('File exceeds 2MB limit');
           const content = await fs.promises.readFile(filePath, 'utf8');
           data = { path: relPath, sizeBytes: Buffer.byteLength(content, 'utf8'), content };
           break;
@@ -388,13 +461,8 @@ export class ToolExecutionEngine {
         case 'file_write': {
           const relPath = input.path;
           const content = input.content ?? '';
-          const workspaceDir = path.resolve(process.cwd(), 'workspace');
-          const targetPath = path.join(workspaceDir, relPath);
-
-          // Prevent directory traversal
-          if (!targetPath.startsWith(workspaceDir)) {
-            throw new Error(`Access denied: path outside workspace boundary`);
-          }
+          if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 2 * 1024 * 1024) throw new Error('File exceeds 2MB limit');
+          const targetPath = assertWorkspacePath(relPath);
 
           await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
           await fs.promises.writeFile(targetPath, content, 'utf8');
@@ -423,8 +491,8 @@ export class ToolExecutionEngine {
           const targetContent = input.targetContent;
           const replacementContent = input.replacementContent;
 
-          const workspaceDir = path.resolve(process.cwd(), 'workspace');
-          const targetPath = path.join(workspaceDir, relPath);
+          if (typeof targetContent !== 'string' || typeof replacementContent !== 'string' || targetContent.length > 2 * 1024 * 1024 || Buffer.byteLength(replacementContent, 'utf8') > 2 * 1024 * 1024) throw new Error('Invalid patch payload');
+          const targetPath = assertWorkspacePath(relPath);
 
           if (!fs.existsSync(targetPath)) {
             throw new Error(`Cannot patch: file ${relPath} does not exist`);
@@ -443,14 +511,17 @@ export class ToolExecutionEngine {
         }
 
         case 'file_list': {
-          const baseDir = path.resolve(process.cwd(), input.directory || 'workspace');
+          const requestedDir = String(input.directory || '');
+          const baseDir = requestedDir ? assertWorkspacePath(requestedDir) : path.resolve(process.cwd(), 'workspace');
           if (!fs.existsSync(baseDir)) {
             data = { directory: input.directory || 'workspace', files: [] };
             break;
           }
 
           const fileList: Array<{ name: string; path: string; isDirectory: boolean; sizeBytes?: number }> = [];
+          const MAX_ENTRIES = 2000;
           const readRecursive = (currentDir: string, relBase = '') => {
+            if (fileList.length >= MAX_ENTRIES) return;
             const entries = fs.readdirSync(currentDir, { withFileTypes: true });
             for (const entry of entries) {
               const rel = path.join(relBase, entry.name);
@@ -529,8 +600,8 @@ export class ToolExecutionEngine {
           const title = input.title;
           const content = input.content;
           const outputPath = input.outputPath || 'docs/REPORT.md';
-          const workspaceDir = path.resolve(process.cwd(), 'workspace');
-          const fullPath = path.join(workspaceDir, outputPath);
+          if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 2 * 1024 * 1024) throw new Error('Document exceeds 2MB limit');
+          const fullPath = assertWorkspacePath(outputPath);
 
           await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
           await fs.promises.writeFile(fullPath, content, 'utf8');
@@ -570,8 +641,8 @@ export class ToolExecutionEngine {
         subtaskId,
         agentRole,
         toolName,
-        inputParams: input,
-        outputResult: data,
+        inputParams: redactForAudit(input),
+        outputResult: redactForAudit(data),
         exitCode: exitCode ?? 0,
         status: 'success',
         durationMs,
@@ -591,8 +662,8 @@ export class ToolExecutionEngine {
         subtaskId,
         agentRole,
         toolName,
-        inputParams: input,
-        outputResult: { error: err.message },
+        inputParams: redactForAudit(input),
+        outputResult: { error: "Tool execution failed" },
         exitCode: 1,
         status: 'failed',
         durationMs,
@@ -603,15 +674,15 @@ export class ToolExecutionEngine {
         subtaskId,
         agentRole,
         errorType: `ToolExecutionError:${toolName}`,
-        message: err.message,
-        stack: err.stack,
+        message: typeof err?.message === 'string' ? redactForAudit(err.message) as string : "Tool execution failed",
+        stack: undefined,
         resolved: false,
       });
 
       return {
         success: false,
         toolName,
-        error: err.message,
+        error: "Tool execution failed",
         exitCode: 1,
         durationMs,
       };

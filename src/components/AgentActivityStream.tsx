@@ -116,7 +116,7 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
     : logs.filter((l) => l.role === selectedRole);
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+    <section aria-label="Mission activity" className="as-activity-stream flex flex-col h-full bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
       {/* Stream Header */}
       <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
         <div className="flex items-center gap-2">
@@ -124,9 +124,8 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
           <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
             Squad Activity Stream
           </span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
-            {logs.length} events
-          </span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">{logs.length} events</span>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${isExecuting ? "bg-blue-500/10 border-blue-500/25 text-blue-300" : "bg-slate-900 border-slate-700 text-slate-500"}`}>{isExecuting ? "LIVE" : "IDLE"}</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -181,17 +180,15 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
         )}
 
         {filteredLogs.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">
-            No agent logs for this filter.
-          </div>
+          <div className="flex flex-col items-center justify-center text-center py-16 px-6"><div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center mb-3"><Terminal className="w-4 h-4 text-slate-500" /></div><p className="text-sm font-semibold text-slate-300">No activity yet</p><p className="mt-1 max-w-xs text-xs leading-relaxed text-slate-500">Start a mission and this surface will show squad hand-offs, verification events, and outcomes.</p></div>
         ) : (
           filteredLogs.map((log) => {
             const roleStyle = ROLE_COLORS[log.role] || ROLE_COLORS.system;
 
             return (
-              <div
+              <article
                 key={log.id}
-                className="group relative pl-3 border-l-2 border-slate-800 hover:border-slate-700 transition-colors"
+                className="group relative pl-3 border-l-2 border-slate-800 hover:border-blue-500/50 transition-colors"
               >
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="text-[10px] text-slate-500">{log.timestamp}</span>
@@ -213,7 +210,7 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
                     {log.details}
                   </div>
                 )}
-              </div>
+              </article>
             );
           })
         )}
@@ -225,6 +222,6 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 };

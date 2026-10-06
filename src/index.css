@@ -1,1 +1,188 @@
 @import "tailwindcss";
+
+/* AgentStation premium visual system */
+:root{
+  color-scheme:dark;
+  --as-bg:#04060a;
+  --as-bg-soft:#070b12;
+  --as-panel:rgba(10,15,24,.78);
+  --as-panel-strong:rgba(12,18,29,.92);
+  --as-panel-muted:rgba(15,23,42,.62);
+  --as-border:rgba(148,163,184,.13);
+  --as-border-strong:rgba(148,163,184,.23);
+  --as-accent:#60a5fa;
+  --as-accent-strong:#3b82f6;
+  --as-cyan:#22d3ee;
+  --as-success:#34d399;
+  --as-warning:#fbbf24;
+  --as-danger:#fb7185;
+  --as-glow:rgba(59,130,246,.18);
+  --as-shadow:0 28px 100px rgba(0,0,0,.38);
+}
+html,body,#root{min-height:100%}
+html{background:var(--as-bg)}
+body{
+  margin:0;
+  background:
+    radial-gradient(circle at 50% -12%,rgba(37,99,235,.15),transparent 34rem),
+    radial-gradient(circle at 90% 25%,rgba(124,58,237,.08),transparent 28rem),
+    radial-gradient(circle at 8% 72%,rgba(6,182,212,.045),transparent 26rem),
+    var(--as-bg);
+  color:#f8fafc;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+button,input,textarea{font:inherit}
+button{-webkit-tap-highlight-color:transparent}
+::selection{background:rgba(96,165,250,.28);color:#fff}
+.as-cinematic-shell{
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  background:
+    linear-gradient(rgba(255,255,255,.016) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.016) 1px,transparent 1px),
+    radial-gradient(circle at 50% 0%,rgba(59,130,246,.11),transparent 42rem);
+  background-size:48px 48px,48px 48px,auto;
+}
+.as-cinematic-shell::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  z-index:-1;
+  background:
+    radial-gradient(circle at 50% 35%,transparent 20%,rgba(0,0,0,.22) 72%,rgba(0,0,0,.5) 100%),
+    linear-gradient(180deg,rgba(255,255,255,.018),transparent 22%);
+}
+.as-cinematic-shell::after{
+  content:"";
+  position:absolute;
+  width:42rem;
+  height:42rem;
+  left:50%;
+  top:7rem;
+  transform:translateX(-50%);
+  border-radius:999px;
+  pointer-events:none;
+  z-index:-1;
+  background:radial-gradient(circle,rgba(59,130,246,.055),transparent 68%);
+  filter:blur(12px);
+}
+.as-glass{
+  background:linear-gradient(145deg,rgba(15,23,42,.82),rgba(8,12,20,.72));
+  border:1px solid var(--as-border);
+  box-shadow:var(--as-shadow);
+  backdrop-filter:blur(22px) saturate(125%);
+  -webkit-backdrop-filter:blur(22px) saturate(125%);
+}
+.as-glass:hover{border-color:var(--as-border-strong)}
+.as-hero-glow{
+  box-shadow:
+    0 0 0 1px rgba(96,165,250,.075),
+    0 30px 100px rgba(0,0,0,.44),
+    0 0 90px var(--as-glow);
+}
+.as-hero-glow:focus-within{
+  box-shadow:
+    0 0 0 1px rgba(96,165,250,.25),
+    0 30px 110px rgba(0,0,0,.48),
+    0 0 110px rgba(59,130,246,.20);
+}
+.as-shimmer{
+  background:linear-gradient(110deg,#f8fafc 15%,#bfdbfe 38%,#60a5fa 52%,#f8fafc 72%);
+  background-size:220% 100%;
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+  animation:as-shimmer 8s ease-in-out infinite;
+}
+@keyframes as-shimmer{0%,100%{background-position:100% 0}50%{background-position:0 0}}
+.as-status-live{
+  box-shadow:0 0 0 1px rgba(52,211,153,.12),0 0 24px rgba(52,211,153,.08);
+}
+.as-command-kbd{
+  border:1px solid rgba(148,163,184,.18);
+  background:rgba(2,6,23,.68);
+  box-shadow:inset 0 1px rgba(255,255,255,.04);
+}
+.as-focus-ring:focus-visible{outline:2px solid var(--as-accent);outline-offset:3px}
+.as-interactive{
+  transition:transform 180ms ease,border-color 180ms ease,background-color 180ms ease,box-shadow 180ms ease,color 180ms ease;
+}
+.as-interactive:hover{transform:translateY(-1px)}
+.as-interactive:active{transform:translateY(0)}
+.as-divider{height:1px;background:linear-gradient(90deg,transparent,var(--as-border-strong),transparent)}
+.as-noise{position:relative}
+.as-noise::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  opacity:.025;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+  mix-blend-mode:soft-light;
+}
+
+/* Existing command-center components: elevate hierarchy without changing behavior. */
+.as-cinematic-shell h1{
+  text-wrap:balance;
+  max-width:900px;
+  filter:drop-shadow(0 18px 50px rgba(37,99,235,.13));
+}
+.as-cinematic-shell form textarea{
+  min-height:132px;
+  caret-color:var(--as-accent);
+}
+.as-cinematic-shell form textarea::placeholder{opacity:.7}
+.as-cinematic-shell form button[type="submit"]{
+  min-height:44px;
+  border:1px solid rgba(255,255,255,.75);
+  box-shadow:0 10px 35px rgba(255,255,255,.08),0 0 0 1px rgba(96,165,250,.08);
+}
+.as-cinematic-shell form button[type="submit"]:not(:disabled):hover{
+  transform:translateY(-1px);
+  box-shadow:0 14px 45px rgba(255,255,255,.13),0 0 30px rgba(96,165,250,.12);
+}
+.as-cinematic-shell form button[type="submit"]:disabled{filter:saturate(.7)}
+.as-cinematic-shell .snap-start{
+  transition:transform 180ms ease,border-color 180ms ease,background-color 180ms ease,box-shadow 180ms ease;
+}
+.as-cinematic-shell .snap-start:hover{
+  transform:translateY(-2px);
+  box-shadow:0 18px 45px rgba(0,0,0,.22);
+}
+.as-cinematic-shell .snap-start:focus-visible{
+  outline:2px solid var(--as-accent);
+  outline-offset:3px;
+}
+@media (prefers-reduced-motion:reduce){
+  .as-shimmer{animation:none}
+  .as-interactive,.as-cinematic-shell .snap-start{transition:none}
+  .as-interactive:hover,.as-cinematic-shell .snap-start:hover{transform:none}
+}
+@media (max-width:640px){
+  .as-cinematic-shell{background-size:36px 36px,36px 36px,auto}
+  .as-cinematic-shell form textarea{min-height:116px}
+  .as-cinematic-shell h1{font-size:2.35rem}
+}
+
+
+/* Mission command surface: premium hierarchy and operational affordance. */
+.as-command-surface{position:relative;isolation:isolate}
+.as-command-surface::before{content:"";position:absolute;inset:-1px;border-radius:1.1rem;pointer-events:none;background:linear-gradient(120deg,rgba(96,165,250,.12),transparent 35%,rgba(34,211,238,.06) 70%,transparent);opacity:.8;z-index:-1}
+.as-command-panel{box-shadow:0 30px 90px rgba(0,0,0,.38),inset 0 1px rgba(255,255,255,.025)}
+.as-command-panel input{letter-spacing:-.01em}
+.as-command-panel input:focus-visible{outline:none}
+.as-command-panel button:focus-visible,.as-command-surface button:focus-visible{outline:2px solid var(--as-accent);outline-offset:3px}
+.as-command-surface [aria-label="Mission presets"] button{transition:transform 160ms ease,border-color 160ms ease,background-color 160ms ease,box-shadow 160ms ease}
+.as-command-surface [aria-label="Mission presets"] button:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.2)}
+@media (prefers-reduced-motion:reduce){.as-command-surface [aria-label="Mission presets"] button{transition:none}.as-command-surface [aria-label="Mission presets"] button:hover{transform:none}}
+
+
+/* Command-center chrome: quieter framing, clearer operational states. */
+.as-topbar{box-shadow:0 12px 50px rgba(0,0,0,.22),inset 0 -1px rgba(255,255,255,.02)}
+.as-topbar button,.as-sidebar button{outline-offset:3px}
+.as-sidebar{box-shadow:12px 0 50px rgba(0,0,0,.16)}
+.as-sidebar input:focus-visible{outline:2px solid var(--as-accent);outline-offset:1px}

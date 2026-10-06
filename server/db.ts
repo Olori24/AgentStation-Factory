@@ -185,6 +185,50 @@ export interface DatabaseSchema {
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'agentstation_relational_db.json');
+const STORAGE_BACKEND = (process.env.AGENTSTATION_STORAGE || (process.env.NODE_ENV === 'production' ? 'postgres' : 'json')).trim().toLowerCase();
+const DATABASE_URL = (process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || '').trim();
+let postgresSql: any = null;
+let postgresReady = false;
+let postgresLoadPromise: Promise<void> | null = null;
+
+async function getPostgresSql() {
+  if (postgresSql) return postgresSql;
+  if (!DATABASE_URL) throw new Error('DATABASE_URL is required for PostgreSQL storage');
+  const neon = await import('@neondatabase/serverless');
+  postgresSql = neon.neon(DATABASE_URL);
+  return postgresSql;
+}
+
+async function loadPostgresState(target: DatabaseSchema): Promise<void> {
+  const sql = await getPostgresSql();
+  const organizationId = DEFAULT_ORG.id;
+  const rows = await sql.transaction([
+    sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+    sql`SELECT version, data FROM agentstation_state WHERE organization_id = ${organizationId} LIMIT 1`,
+  ]);
+  const row = rows[1]?.[0];
+  if (row?.data && typeof row.data === 'object') {
+    Object.assign(target, row.data);
+    target.version = Number(row.version || target.version);
+  } else {
+    await persistPostgresState(target);
+  }
+  postgresReady = true;
+}
+
+async function persistPostgresState(source: DatabaseSchema): Promise<void> {
+  const sql = await getPostgresSql();
+  const organizationId = DEFAULT_ORG.id;
+  const snapshot = JSON.stringify(source);
+  await sql.transaction([
+    sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+    sql`INSERT INTO agentstation_state (organization_id, version, data, updated_at)
+         VALUES (${organizationId}, ${source.version}, ${snapshot}::jsonb, now())
+         ON CONFLICT (organization_id)
+         DO UPDATE SET version = EXCLUDED.version, data = EXCLUDED.data, updated_at = now()`,
+  ]);
+  postgresReady = true;
+}
 
 const DEFAULT_ORG: OrganizationRecord = {
   id: 'org-station-01',
@@ -197,9 +241,9 @@ const DEFAULT_ORG: OrganizationRecord = {
 
 const DEFAULT_USERS: UserRecord[] = [
   {
-    id: 'user-bolaji-01',
-    email: 'bakande11@gmail.com',
-    name: 'Bolaji Akande',
+    id: 'user-admin-01',
+    email: process.env.AUTH_ADMIN_EMAIL?.trim() || 'admin@example.invalid',
+    name: process.env.AUTH_ADMIN_NAME?.trim() || 'AgentStation Administrator',
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     organizationId: DEFAULT_ORG.id,
@@ -253,11 +297,23 @@ class RelationalDatabase {
   private saveTimeout: NodeJS.Timeout | null = null;
 
   constructor() {
+    if (process.env.NODE_ENV === 'production' && STORAGE_BACKEND !== 'postgres') {
+      throw new Error('Production startup blocked: AGENTSTATION_STORAGE must be postgres');
+    }
+    if (process.env.NODE_ENV === 'production' && !DATABASE_URL) {
+      throw new Error('Production startup blocked: DATABASE_URL is required');
+    }
     this.init();
   }
 
   private async init() {
     try {
+      if (STORAGE_BACKEND === 'postgres') {
+        postgresLoadPromise = loadPostgresState(this.data);
+        await postgresLoadPromise;
+        this.isLoaded = true;
+        return;
+      }
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
@@ -287,6 +343,10 @@ class RelationalDatabase {
   }
 
   public saveImmediately() {
+    if (STORAGE_BACKEND === 'postgres') {
+      void persistPostgresState(this.data).catch((err) => console.error('[DB] PostgreSQL persistence failed:', err instanceof Error ? err.message : 'unknown error'));
+      return;
+    }
     try {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -330,6 +390,19 @@ class RelationalDatabase {
   public getMissionById(id: string): DbMissionRecord | undefined {
     return this.data.missions.find((m) => m.id === id);
   }
+  public getMissionsForUser(user: UserRecord, limit = 100): DbMissionRecord[] {
+    return this.data.missions
+      .filter((m) => user.role === 'admin' || (m.organizationId === user.organizationId && m.userId === user.id))
+      .slice(0, limit);
+  }
+
+  public canAccessMission(user: UserRecord, missionId: string): boolean {
+    const mission = this.getMissionById(missionId);
+    if (!mission) return false;
+    if (user.role === 'admin') return mission.organizationId === user.organizationId;
+    return mission.organizationId === user.organizationId && mission.userId === user.id;
+  }
+
 
   public upsertMission(mission: DbMissionRecord): DbMissionRecord {
     const idx = this.data.missions.findIndex((m) => m.id === mission.id);
@@ -422,6 +495,10 @@ class RelationalDatabase {
       return this.data.approvals.filter((a) => a.missionId === missionId);
     }
     return this.data.approvals;
+  }
+
+  public getApprovalById(id: string): ApprovalRecord | undefined {
+    return this.data.approvals.find((a) => a.id === id);
   }
 
   public getPendingApprovals(missionId?: string): ApprovalRecord[] {
@@ -579,6 +656,17 @@ class RelationalDatabase {
 
   public getSnapshot(): DatabaseSchema {
     return JSON.parse(JSON.stringify(this.data));
+  }
+
+  public isPostgresReady(): boolean {
+    return STORAGE_BACKEND === 'postgres' && postgresReady;
+  }
+
+  public async ready(): Promise<void> {
+    if (postgresLoadPromise) await postgresLoadPromise;
+    if (process.env.NODE_ENV === 'production' && !this.isPostgresReady()) {
+      throw new Error('Production database is not ready');
+    }
   }
 }
 

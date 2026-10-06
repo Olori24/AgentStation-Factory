@@ -27,10 +27,10 @@ export const SquadBar: React.FC<SquadBarProps> = ({
   isExecuting,
 }) => {
   return (
-    <div className="w-full bg-slate-900/60 border-y border-slate-800/80 px-4 lg:px-8 py-3">
+    <section aria-label="Agent squad status" className="as-squad-bar w-full bg-slate-950/55 border-y border-slate-800/70 px-4 lg:px-8 py-2.5">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-fit">
-          <span>Active Squad:</span>
+          <span>Agent Squad</span><span className="text-[9px] font-mono text-slate-600">CONTROL DECK</span>
         </div>
 
         <div className="flex items-center gap-3 min-w-max">
@@ -41,6 +41,7 @@ export const SquadBar: React.FC<SquadBarProps> = ({
             return (
               <div
                 key={agent.id}
+                aria-current={isActive ? "step" : undefined}
                 className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg border transition-all ${
                   isActive
                     ? 'bg-blue-500/10 border-blue-500 text-blue-300 shadow-sm shadow-blue-500/20 animate-pulse'
@@ -63,7 +64,7 @@ export const SquadBar: React.FC<SquadBarProps> = ({
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-500 font-mono">
-                    {isActive ? 'Computing step...' : agent.roleTitle}
+                    {isActive ? 'Working now' : agent.status === 'completed' ? 'Ready' : agent.roleTitle}
                   </span>
                 </div>
               </div>
@@ -71,6 +72,6 @@ export const SquadBar: React.FC<SquadBarProps> = ({
           })}
         </div>
       </div>
-    </div>
+    </section>
   );
 };

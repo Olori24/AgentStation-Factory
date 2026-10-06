@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { executeSandboxedCommand, SandboxExecutionResult } from './sandbox';
 import { streaming } from './streaming';
 import { db } from './db';
+import { verifySessionToken } from './auth';
 
 export interface TerminalWsMessage {
   type:
@@ -28,18 +29,29 @@ class TerminalWebSocketService {
   private wss: WebSocketServer | null = null;
   private clients: Set<WebSocket> = new Set();
   private clientMissionMap: Map<WebSocket, string> = new Map();
+  private clientUsers: Map<WebSocket, import('./db').UserRecord> = new Map();
+  private activeExecutions = new Set<WebSocket>();
 
   public init(httpServer: http.Server) {
     if (this.wss) return;
 
-    this.wss = new WebSocketServer({ noServer: true });
+    this.wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 
     httpServer.on('upgrade', (request, socket, head) => {
       try {
         const url = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
         if (url.pathname === '/ws/terminal' || url.pathname === '/ws') {
+          const cookieHeader = String(request.headers.cookie || '');
+          const cookiePart = cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith('as_session='));
+          const token = cookiePart ? decodeURIComponent(cookiePart.slice('as_session='.length)) : '';
+          const user = verifySessionToken(token);
+          if (!user) {
+            socket.write('HTTP/1.1 401 Unauthorized\\r\\nConnection: close\\r\\n\\r\\n');
+            socket.destroy();
+            return;
+          }
           this.wss?.handleUpgrade(request, socket, head, (ws) => {
-            this.wss?.emit('connection', ws, request);
+            this.wss?.emit('connection', ws, request, user);
           });
         }
       } catch (err) {
@@ -48,8 +60,9 @@ class TerminalWebSocketService {
       }
     });
 
-    this.wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+    this.wss.on('connection', (ws: WebSocket, req: http.IncomingMessage, user: import('./db').UserRecord) => {
       this.clients.add(ws);
+      this.clientUsers.set(ws, user);
 
       // Send initial handshake confirmation
       const welcome: TerminalWsMessage = {
@@ -68,20 +81,31 @@ class TerminalWebSocketService {
           if (parsed.type === 'ping') {
             this.sendSafe(ws, { type: 'pong', timestamp: new Date().toISOString() });
           } else if (parsed.type === 'subscribe') {
-            if (parsed.missionId) {
-              this.clientMissionMap.set(ws, parsed.missionId);
-            }
+            const missionId = typeof parsed.missionId === 'string' ? parsed.missionId.trim() : '';
+            const user = this.clientUsers.get(ws);
+            if (!user || !missionId || !db.canAccessMission(user, missionId)) throw new Error('Mission access denied');
+            this.clientMissionMap.set(ws, missionId);
           } else if (parsed.type === 'execute') {
-            // Execute command requested directly via WebSocket
+            if (process.env.TERMINAL_EXECUTION_ENABLED !== "true") throw new Error("Terminal execution is disabled in this environment");
             const { command, missionId, files, timeoutMs } = parsed;
-            if (command) {
+            const user = this.clientUsers.get(ws);
+            if (!user || !['admin', 'engineer'].includes(user.role)) throw new Error('Terminal execution is not permitted');
+            if (typeof missionId !== 'string' || !missionId.trim() || !db.canAccessMission(user, missionId)) throw new Error('Mission access denied');
+            if (typeof command !== 'string' || command.length > 20000) throw new Error('Invalid command');
+            if (!Array.isArray(files) || files.length > 200 || files.some((f: any) => typeof f?.content !== 'string' || String(f?.path || f?.name || '').length > 300)) throw new Error('Invalid sandbox files');
+            if (files.reduce((sum: number, f: any) => sum + Buffer.byteLength(f.content, 'utf8'), 0) > 20 * 1024 * 1024) throw new Error('Sandbox payload too large');
+            if (this.activeExecutions.has(ws)) throw new Error('A terminal execution is already active');
+            this.activeExecutions.add(ws);
+            try {
               await this.runAndStreamCommand(command, { missionId, files, timeoutMs });
+            } finally {
+              this.activeExecutions.delete(ws);
             }
           }
         } catch (err: any) {
           this.sendSafe(ws, {
             type: 'terminal_error',
-            text: `WebSocket message parse error: ${err.message}`,
+            text: 'WebSocket request rejected.',
             timestamp: new Date().toISOString(),
           });
         }
@@ -90,6 +114,10 @@ class TerminalWebSocketService {
       ws.on('close', () => {
         this.clients.delete(ws);
         this.clientMissionMap.delete(ws);
+        this.clientUsers.delete(ws);
+        this.activeExecutions.delete(ws);
+        this.clientUsers.delete(ws);
+        this.activeExecutions.delete(ws);
       });
 
       ws.on('error', () => {
@@ -123,11 +151,8 @@ class TerminalWebSocketService {
     for (const ws of this.clients) {
       if (ws.readyState === WebSocket.OPEN) {
         // If channel specified and client has a specific mission subscription
-        if (channelMissionId) {
-          const subscribed = this.clientMissionMap.get(ws);
-          if (subscribed && subscribed !== channelMissionId) {
-            continue;
-          }
+        if (channelMissionId && this.clientMissionMap.get(ws) !== channelMissionId) {
+          continue;
         }
         try {
           ws.send(payload);

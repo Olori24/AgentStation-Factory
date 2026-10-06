@@ -309,11 +309,11 @@ export function AutonomyCommandCenter({
               <div className="flex items-center gap-2">
                 <h2 className="font-bold text-white text-base">Autonomy & Multi-Agent Command Center</h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  24/7 RUNTIME ONLINE
+                  {runtime?.enabled ? "RUNTIME ENABLED" : "RUNTIME STANDBY"}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Recurring autonomous goals • 7 Institutional Objective Templates • Bounded Parallel Specialist Fabric
+                Recurring goals • objective templates • bounded specialist dispatch
               </p>
             </div>
           </div>
@@ -338,7 +338,7 @@ export function AutonomyCommandCenter({
         {/* KPI Strip */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 px-4 lg:px-6 py-3 border-b border-slate-800 bg-slate-950/90 shrink-0">
           {[
-            ['Autonomy Engine', runtime?.running !== false ? 'ONLINE' : 'STANDBY', 'emerald', Activity],
+            ['Autonomy Engine', runtime?.enabled ? (runtime.running ? 'RUNNING' : 'READY') : 'STANDBY', 'emerald', Activity],
             ['Active 24/7 Goals', String(runtime?.activeGoals ?? active), 'blue', Bot],
             ['Fabric Agent Tasks', String(agentTasks.length), 'cyan', Layers],
             [

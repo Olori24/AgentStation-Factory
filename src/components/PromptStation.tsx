@@ -31,8 +31,8 @@ export const PromptStation: React.FC<PromptStationProps> = ({
   return (
     <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 pt-6 pb-2">
       {/* Search / Command Form */}
-      <form onSubmit={handleSubmit} className="relative">
-        <div className="relative rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl focus-within:border-blue-500/80 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all p-2 sm:p-2.5">
+      <form onSubmit={handleSubmit} className="relative as-command-surface as-hero-glow">
+        <div className="relative rounded-2xl bg-slate-900/90 border border-slate-800 shadow-2xl focus-within:border-blue-500/80 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all p-2 sm:p-2.5 as-command-panel">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="flex-1 flex items-center gap-3 px-3">
               <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
@@ -40,6 +40,7 @@ export const PromptStation: React.FC<PromptStationProps> = ({
               </div>
               <input
                 type="text"
+                aria-label="Mission objective"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="What should the agent squad build? (e.g. Build an encryption CLI and make a launch teaser video)..."
@@ -51,7 +52,8 @@ export const PromptStation: React.FC<PromptStationProps> = ({
             <button
               type="submit"
               disabled={!prompt.trim() || isExecuting}
-              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              aria-label={isExecuting ? "Squad is executing the mission" : "Execute mission"}
+              className="as-interactive as-focus-ring flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             >
               {isExecuting ? (
                 <>
@@ -84,14 +86,14 @@ export const PromptStation: React.FC<PromptStationProps> = ({
               </span>
             </div>
             <div className="font-mono text-slate-500">
-              Synced to <span className="text-blue-400">Olori24/AgentStation:main</span>
+              Workspace <span className="text-blue-400">Olori24/AgentStation-Factory:main</span>
             </div>
           </div>
         </div>
       </form>
 
       {/* Preset Pills */}
-      <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+      <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin" aria-label="Mission presets">
         {onOpenOnboarding && (
           <button
             onClick={onOpenOnboarding}

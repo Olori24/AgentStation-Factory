@@ -1,0 +1,26 @@
+{
+  "name": "AgentStation Factory",
+  "short_name": "AgentStation",
+  "description": "AI operations command center for building, executing, monitoring, and controlling autonomous agent missions.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "categories": ["business", "developer", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

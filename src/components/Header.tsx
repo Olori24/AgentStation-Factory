@@ -32,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
   ciStatus,
 }) => {
   return (
-    <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+    <header className="as-topbar border-b border-slate-800/80 bg-slate-950/75 backdrop-blur-xl sticky top-0 z-40 px-4 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
       {/* Brand & Status */}
       <div className="flex items-center gap-3">
         <AgentStationLogo
@@ -54,10 +54,13 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Center cluster status */}
-      <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs font-mono">
+      <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-xs font-mono as-status-live">
         <Radio className={`w-3.5 h-3.5 ${isExecuting ? 'text-amber-400 animate-spin' : 'text-emerald-400'}`} />
-        <span className="text-slate-300">
-          {isExecuting ? 'Squad Active: Synthesizing Mission...' : 'Cluster: 5 Agents Synchronized'}
+        <span className="text-slate-200 font-semibold">
+          {isExecuting ? 'Squad Active' : 'Command Center Ready'}
+        </span>
+        <span className="text-slate-500 hidden xl:inline">
+          {isExecuting ? 'Synthesizing mission' : '5 specialists synchronized'}
         </span>
         <span className="w-1.5 h-1.5 rounded-full bg-slate-700"></span>
         <span className="text-slate-400">Gemini 2.5 + Ollama Bridge</span>
@@ -92,13 +95,13 @@ export const Header: React.FC<HeaderProps> = ({
         {onOpenFullStack && (
           <button
             onClick={onOpenFullStack}
-            title="Full-Stack Operations Center (DB, Auth RBAC, Real-time SSE, Job Queue, Sandbox, Artifacts)"
+            title="Open the Full-Stack Operations Center"
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 hover:text-indigo-200 transition shadow-sm"
           >
             <Server className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">Full-Stack Ops</span>
+            <span className="hidden sm:inline">Ops Center</span>
             <span className="sm:hidden">Ops</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse hidden sm:inline"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-500 hidden sm:inline"></span>
           </button>
         )}
 
@@ -162,7 +165,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onNewMission}
           disabled={isExecuting}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/20 transition disabled:opacity-50"
+          className="as-interactive as-focus-ring flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/20 transition disabled:opacity-50"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>New Mission</span>
