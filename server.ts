@@ -2523,7 +2523,8 @@ app.get("/api/files/download", async (req: any, res) => {
     if (!db.canAccessMission(req.user, missionId)) return res.status(403).send("Forbidden");
     const workspaceDir = path.resolve(process.cwd(), "workspace");
     const target = path.join(workspaceDir, relPath);
-    if (!target.startsWith(workspaceDir) || !fs.existsSync(target)) {
+    const relativeTarget = path.relative(workspaceDir, target);
+    if (relativeTarget.startsWith("..") || path.isAbsolute(relativeTarget) || !fs.existsSync(target)) {
       return res.status(404).send("File not found");
     }
     res.download(target);
@@ -2657,7 +2658,8 @@ app.post("/api/files/delete", requireRole(["admin","engineer"]), async (req, res
     const workspaceDir = path.resolve(process.cwd(), "workspace");
     const safeRel = String(relPath).replace(/^[\\\/]+/, "");
     const target = path.resolve(workspaceDir, safeRel);
-    if (!target.startsWith(workspaceDir)) {
+    const relativeTarget = path.relative(workspaceDir, target);
+    if (relativeTarget.startsWith("..") || path.isAbsolute(relativeTarget)) {
       return res.status(403).json({ success: false, error: "Access denied" });
     }
     if (fs.existsSync(target)) {
