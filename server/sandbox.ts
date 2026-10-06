@@ -126,7 +126,7 @@ export async function executeSandboxedCommand(
       const child = spawn('docker', dockerArgs, {
         cwd: process.cwd(),
         env: {
-          PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+          ...scrubbedEnv,
           DOCKER_CONFIG: '/nonexistent',
           HOME: '/tmp',
         },
