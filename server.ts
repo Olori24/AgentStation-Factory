@@ -2382,6 +2382,8 @@ app.post("/api/tasks/execute", requireRole(["admin","engineer"]), async (req, re
         logs: [],
         gitBranch: 'main',
         gitCommitMessage: `feat: autonomous execution for "${prompt.slice(0, 40)}"`,
+        userId: req.user.id,
+        organizationId: req.user.organizationId,
       });
     }
 
