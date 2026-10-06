@@ -69,7 +69,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
         <div className="flex flex-col items-center gap-3">
           <button
             onClick={onToggleOpen}
-            title="Expand Sidebar"
+            title="Expand navigation"
             className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition"
           >
             <PanelLeft className="w-5 h-5" />
@@ -136,7 +136,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   return (
     <aside
       aria-label="AgentStation navigation"
-      className={`w-[min(20rem,88vw)] lg:w-64 bg-slate-950 border-r border-slate-800/80 flex flex-col justify-between shrink-0 select-none h-full min-h-0 text-slate-200 font-sans transition-transform duration-200 ${
+      className={`as-sidebar w-[min(20rem,88vw)] lg:w-64 bg-slate-950/95 border-r border-slate-800/80 flex flex-col justify-between shrink-0 select-none h-full min-h-0 text-slate-200 font-sans transition-transform duration-200 ${
         isMobile ? 'fixed inset-y-0 left-0 z-[90] lg:static lg:z-auto shadow-2xl lg:shadow-none' : ''
       } ${isMobile && !isOpen ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}`}
     >
@@ -160,7 +160,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
 
           <button
             onClick={onToggleOpen}
-            title="Collapse Sidebar"
+            title="Collapse navigation"
             className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-850 transition"
           >
             <PanelLeftClose className="w-4 h-4" />
@@ -199,7 +199,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Filter mission history..."
+            placeholder="Search missions..."
             aria-label="Search recent tasks"
             className="w-full py-2 pl-8 pr-2.5 text-xs bg-slate-900/90 text-slate-200 placeholder-slate-500 rounded-lg border border-slate-800/80 focus:outline-none focus:border-blue-500 transition"
           />
@@ -209,7 +209,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
       {/* Task History List */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 scrollbar-thin min-h-0">
         <div className="px-2 py-1 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold flex items-center justify-between">
-          <span>Mission Workspace</span>
+          <span>Recent missions</span>
           <span>{filteredMissions.length}</span>
         </div>
 
@@ -324,7 +324,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
         >
           <div className="flex items-center gap-2">
             <Github className="w-3.5 h-3.5 text-slate-400" />
-            <span className="truncate">Olori24/AgentStation</span>
+            <span className="truncate">Olori24/AgentStation-Factory</span>
           </div>
           <ExternalLink className="w-3 h-3 text-slate-500" />
         </button>
