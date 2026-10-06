@@ -139,3 +139,13 @@ def test_sandbox_secret_allowlist():
     assert "--cap-drop=ALL" in sandbox
     assert "--ipc=none" in sandbox
     assert "MAX_OUTPUT_BYTES" in sandbox
+
+
+def test_workspace_tool_boundaries_and_audit_redaction():
+    tools = read("server/tools/index.ts")
+    artifacts = read("server/artifacts.ts")
+    assert "Sensitive workspace path" in tools
+    assert "File exceeds 2MB limit" in tools
+    assert "redactForAudit" in tools
+    assert "projectPath" not in tools
+    assert "Sensitive file cannot be included in an artifact" in artifacts
