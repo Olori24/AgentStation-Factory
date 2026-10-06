@@ -49,10 +49,10 @@ function assertWorkspacePath(relPath: string): string {
   return target;
 }
 
-export async function assertSafeRemoteUrl(targetUrl: string): Promise<URL> {
-  const u = new URL(targetUrl);
-  if (!["https:", "http:"].includes(u.protocol)) throw new Error("Only HTTP(S) URLs are allowed");
-  const hostname = u.hostname.toLowerCase();
+async function resolveSafeRemoteUrl(targetUrl: string): Promise<{ url: URL; address: string }> {
+  const url = new URL(targetUrl);
+  if (!["https:", "http:"].includes(url.protocol)) throw new Error("Only HTTP(S) URLs are allowed");
+  const hostname = url.hostname.toLowerCase();
   if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "0.0.0.0" ||
       hostname === "::1" || hostname === "[::1]" || /^127\./.test(hostname) ||
       /^10\./.test(hostname) || /^192\.168\./.test(hostname) ||
@@ -60,29 +60,34 @@ export async function assertSafeRemoteUrl(targetUrl: string): Promise<URL> {
       hostname.endsWith(".internal") || hostname === "metadata.google.internal") {
     throw new Error("Private or metadata network targets are blocked");
   }
-  const resolved = await dns.lookup(u.hostname, { all: true });
-  for (const address of resolved) {
-    const ip = address.address;
+  const resolved = await dns.lookup(url.hostname, { all: true });
+  const safe = resolved.find((entry) => {
+    const ip = entry.address;
     const version = net.isIP(ip);
-    if ((version === 4 && (/^(10|127|169\.254)\./.test(ip) || /^192\.168\./.test(ip) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip))) ||
-        (version === 6 && (ip === "::1" || ip.toLowerCase().startsWith("fc") || ip.toLowerCase().startsWith("fd") || ip.toLowerCase().startsWith("fe80:")))) {
-      throw new Error("Resolved address is private or link-local");
-    }
-  }
-  return u;
+    return !((version === 4 && (/^(10|127|169\.254)\./.test(ip) || /^192\.168\./.test(ip) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip))) ||
+      (version === 6 && (ip === "::1" || ip.toLowerCase().startsWith("fc") || ip.toLowerCase().startsWith("fd") || ip.toLowerCase().startsWith("fe80:"))));
+  });
+  if (!safe) throw new Error("Resolved address is private or link-local");
+  return { url, address: safe.address };
+}
+
+export async function assertSafeRemoteUrl(targetUrl: string): Promise<URL> {
+  const { url } = await resolveSafeRemoteUrl(targetUrl);
+  return url;
 }
 
 function fetchUrlText(targetUrl: string, timeoutMs = 10000): Promise<{ statusCode: number; text: string; headers: any }> {
   return new Promise((resolve, reject) => {
     try {
-      const urlObjPromise = assertSafeRemoteUrl(targetUrl);
-      void urlObjPromise.then((urlObj) => {
+      const safeTargetPromise = resolveSafeRemoteUrl(targetUrl);
+      void safeTargetPromise.then(({ url: urlObj, address }) => {
       const client = urlObj.protocol === 'https:' ? https : http;
       const req = client.get(
-        targetUrl,
+        urlObj,
         {
+          lookup: (_hostname, _options, callback) => callback(null, address, net.isIP(address)),
           headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; AgentStation-Bot/2.0; +https://agentstation.io)',
+            'User-Agent': 'Mozilla/5.0 (compatible; AgentStation-Bot/2.0)',
             Accept: 'text/html,application/json,text/plain,*/*',
           },
           timeout: timeoutMs,
