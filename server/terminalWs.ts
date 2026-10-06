@@ -86,6 +86,7 @@ class TerminalWebSocketService {
             if (!user || !missionId || !db.canAccessMission(user, missionId)) throw new Error('Mission access denied');
             this.clientMissionMap.set(ws, missionId);
           } else if (parsed.type === 'execute') {
+            if (process.env.TERMINAL_EXECUTION_ENABLED !== "true") throw new Error("Terminal execution is disabled in this environment");
             const { command, missionId, files, timeoutMs } = parsed;
             const user = this.clientUsers.get(ws);
             if (!user || !['admin', 'engineer'].includes(user.role)) throw new Error('Terminal execution is not permitted');
