@@ -27,10 +27,10 @@ export const SquadBar: React.FC<SquadBarProps> = ({
   isExecuting,
 }) => {
   return (
-    <section aria-label="Agent squad status" className="w-full bg-slate-950/55 border-y border-slate-800/70 px-4 lg:px-8 py-2.5">
+    <section aria-label="Agent squad status" className="as-squad-bar w-full bg-slate-950/55 border-y border-slate-800/70 px-4 lg:px-8 py-2.5">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-fit">
-          <span>Agent Squad</span>
+          <span>Agent Squad</span><span className="text-[9px] font-mono text-slate-600">CONTROL DECK</span>
         </div>
 
         <div className="flex items-center gap-3 min-w-max">
