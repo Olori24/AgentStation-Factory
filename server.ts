@@ -24,7 +24,6 @@ import { getAgentRouterConfigStatus, agentRouterWallet, agentRouterUsage } from 
 import { listObjectiveTemplates, getObjectiveTemplate, instantiateObjectiveTemplate } from "./server/objectiveTemplates";
 import { listSkills, getSkill, resolveSkills } from "./server/skillRegistry";
 import { runMiroFishSimulation } from "./server/simulationProvider";
-import { listCompanies, createCompany, listMissions, createMission, getMission, startMission } from "./server/companyControlPlane";
 
 dotenv.config();
 
@@ -2164,43 +2163,27 @@ app.post("/api/simulations/mirofish", requireRole(["admin","engineer"]), async (
     res.status(unavailable ? 503 : 400).json({ success: false, simulated: true, error: message });
   }
 });
-app.get("/api/companies", async (req, res) => {
-  const x = await listCompanies(req.user);
-  if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
-  res.json({ success: true, companies: x });
+app.get("/api/companies", requireRole(["admin"]), (_req, res) => {
+  return res.status(410).json({ success: false, error: "Company control-plane storage is disabled until its PostgreSQL schema is provisioned." });
 });
-app.post("/api/companies", requireRole(["admin"]), async (req, res) => {
-  try {
-    const x = await createCompany(req.body || {}, req.user);
-    if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
-    res.status(201).json({ success: true, company: x });
-  } catch (e: any) {
-    res.status(400).json({ success: false, error: e.message });
+app.post("/api/companies", requireRole(["admin"]), (_req, res) => {
+  return res.status(410).json({ success: false, error: "Company control-plane storage is disabled until its PostgreSQL schema is provisioned." });
+});
+
+app.get("/api/missions/:id", (req: any, res) => {
+  const mission = db.getMissionById(String(req.params.id || ""));
+  if (!mission || !db.canAccessMission(req.user, mission.id)) {
+    return res.status(404).json({ success: false, error: "Mission not found" });
   }
+  res.json({ success: true, mission });
 });
-app.get("/api/missions", async (req, res) => {
-  const x = await listMissions(req.user, typeof req.query.companyId === "string" ? req.query.companyId : undefined);
-  if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
-  res.json({ success: true, missions: x });
-});
-app.post("/api/missions", requireRole(["admin","engineer"]), async (req, res) => {
-  try {
-    const x = await createMission(req.body || {}, req.user);
-    if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
-    res.status(201).json({ success: true, mission: x });
-  } catch (e: any) {
-    res.status(400).json({ success: false, error: e.message });
-  }
-});
-app.get("/api/missions/:id", async (req, res) => {
-  const x = await getMission(req.params.id, req.user);
-  if (!x) return res.status(404).json({ success: false, error: "Mission not found" });
-  res.json({ success: true, mission: x });
-});
-app.post("/api/missions/:id/start", requireRole(["admin","engineer"]), async (req, res) => {
-  const x = await startMission(req.params.id, req.user);
-  if (!x) return res.status(404).json({ success: false, error: "Mission not found" });
-  res.json({ success: true, mission: x });
+
+app.post("/api/missions/:id/start", requireRole(["admin","engineer"]), (req: any, res) => {
+  const id = String(req.params.id || "");
+  const mission = db.getMissionById(id);
+  if (!mission || !db.canAccessMission(req.user, id)) return res.status(404).json({ success: false, error: "Mission not found" });
+  const updated = db.upsertMission({ ...mission, status: "running", currentStage: "running", updatedAt: new Date().toISOString() });
+  res.json({ success: true, mission: updated });
 });
 
 app.get("/api/objectives/templates", (_req, res) => {
