@@ -65,7 +65,8 @@ def test_browser_auth_is_cookie_based_and_server_owned():
 def test_tenant_ownership_and_rls_migration_exist():
     migration_runner = read("scripts/migrate.mjs")
     db = read("server/db.ts")
-    assert "db/migrations" in migration_runner
+    assert "migrationsDir" in migration_runner
+    assert "db", "migrations" in migration_runner
     assert "schema_migrations" in migration_runner
     assert "agentstation_state" in db
     assert "set_config('app.organization_id'" in db
