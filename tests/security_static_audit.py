@@ -108,3 +108,34 @@ def test_ssrf_defense_includes_dns_resolution():
     tools = read("server/tools/index.ts")
     assert "dns.lookup" in tools
     assert "Resolved address is private or link-local" in tools
+
+
+def test_production_storage_is_fail_closed():
+    db = read("server/db.ts")
+    assert "AGENTSTATION_STORAGE" in db
+    assert "Production startup blocked: AGENTSTATION_STORAGE must be postgres" in db
+    assert "Production startup blocked: DATABASE_URL is required" in db
+    assert "agentstation_state" in db
+
+def test_no_legacy_file_mission_store():
+    server = read("server.ts")
+    assert "missions_store.json" not in server
+    assert "ensureMissionsStore" not in server
+    assert "saveMissionsStore" not in server
+
+def test_websocket_isolation():
+    ws = read("server/terminalWs.ts")
+    assert "clientUsers" in ws
+    assert "db.canAccessMission(user, missionId)" in ws
+    assert "Terminal execution is not permitted" in ws
+    assert "this.clientMissionMap.get(ws) !== channelMissionId" in ws
+    assert "as_session=" in ws
+
+def test_sandbox_secret_allowlist():
+    sandbox = read("server/sandbox.ts")
+    assert "Allowlist sandbox environment" in sandbox
+    assert "...process.env" not in sandbox
+    assert "--network=none" in sandbox
+    assert "--cap-drop=ALL" in sandbox
+    assert "--ipc=none" in sandbox
+    assert "MAX_OUTPUT_BYTES" in sandbox
