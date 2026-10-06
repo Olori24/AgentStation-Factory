@@ -473,7 +473,7 @@ Respond ONLY with valid raw JSON (no markdown formatting, no code fences):
       streaming.emitToMission(missionId, {
         type: 'error',
         missionId,
-        message: `Execution terminated: ${err.message}`,
+        message: 'Execution terminated. Review server logs for details.',
       });
     } finally {
       activeControllers.delete(missionId);
