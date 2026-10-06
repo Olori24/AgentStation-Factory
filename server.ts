@@ -1732,7 +1732,7 @@ app.post("/api/github/webhook", async (req: any, res) => {
   }
 });
 
-app.get("/api/github/webhooks", (_req, res) => {
+app.get("/api/github/webhooks", requireRole(["admin","engineer"]), (_req, res) => {
   res.json({
     success: true,
     count: recentWebhooks.length,
@@ -1740,7 +1740,7 @@ app.get("/api/github/webhooks", (_req, res) => {
   });
 });
 
-app.post("/api/github/simulate-webhook", async (req, res) => {
+app.post("/api/github/simulate-webhook", requireRole(["admin"]), async (req, res) => {
   const { eventType = "issues" } = req.body || {};
   let mockPayload: any = {};
 
@@ -1939,7 +1939,7 @@ app.post("/api/auth/switch", requireRole(["admin"]), (req, res) => {
   res.json({ success: true, user, token, message: `Switched active profile to ${user.name} (${user.role.toUpperCase()})` });
 });
 
-app.get("/api/db/metrics", (_req, res) => {
+app.get("/api/db/metrics", requireRole(["admin"]), (_req, res) => {
   res.json({
     success: true,
     metrics: db.getMetrics(),
@@ -1956,12 +1956,12 @@ app.get("/api/db/snapshot", requireRole(["admin"]), (_req, res) => {
 // ==========================================
 // Phase 2: Real-time Streaming (SSE) Engine
 // ==========================================
-app.get("/api/stream/events", (req, res) => {
+app.get("/api/stream/events", requireRole(["admin","engineer","reviewer"]), (req, res) => {
   const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   streaming.registerClient(clientId, res);
 });
 
-app.post("/api/stream/test-emit", (req, res) => {
+app.post("/api/stream/test-emit", requireRole(["admin"]), (req, res) => {
   const { agent = "Atlas", thought = "Real-time squad telemetry active." } = req.body || {};
   streaming.streamAgentThought("test-channel", agent, thought);
   res.json({ success: true, broadcastedTo: streaming.getConnectedClientCount() });
@@ -2016,7 +2016,7 @@ jobQueue.registerWorker("github_sync", async (job, updateProgress) => {
   return { pushed: true, targetRepo: "Olori24/AgentStation" };
 });
 
-app.get("/api/jobs", (_req, res) => {
+app.get("/api/jobs", requireRole(["admin"]), (_req, res) => {
   res.json({
     success: true,
     stats: jobQueue.getStats(),
@@ -2024,7 +2024,7 @@ app.get("/api/jobs", (_req, res) => {
   });
 });
 
-app.get("/api/jobs/:id", (req, res) => {
+app.get("/api/jobs/:id", requireRole(["admin"]), (req, res) => {
   const job = jobQueue.getJob(req.params.id);
   if (!job) {
     return res.status(404).json({ success: false, error: "Job not found" });
@@ -2100,7 +2100,7 @@ app.post("/api/artifacts/bundle", requireRole(["admin","engineer"]), async (req,
   }
 });
 
-app.get("/api/artifacts", (req, res) => {
+app.get("/api/artifacts", requireRole(["admin","engineer","reviewer"]), (req, res) => {
   const missionId = req.query.missionId as string | undefined;
   if (missionId && !db.canAccessMission(req.user, missionId)) return res.status(403).json({ success: false, error: "Forbidden" });
   if (!missionId && req.user.role !== "admin") return res.status(403).json({ success: false, error: "missionId is required" });
@@ -2108,7 +2108,7 @@ app.get("/api/artifacts", (req, res) => {
   res.json({ success: true, count: list.length, artifacts: list });
 });
 
-app.get("/api/artifacts/download/:id", (req, res) => {
+app.get("/api/artifacts/download/:id", requireRole(["admin","engineer","reviewer"]), (req, res) => {
   const artifact = getArtifact(req.params.id);
   if (!artifact) {
     return res.status(404).send("Artifact not found");
@@ -2122,11 +2122,11 @@ app.get("/api/artifacts/download/:id", (req, res) => {
 // ==========================================
 // Persistent 24/7 Autonomy Control Plane
 // ==========================================
-app.get("/api/agentrouter/status", (_req, res) => {
+app.get("/api/agentrouter/status", requireRole(["admin","engineer","reviewer"]), (_req, res) => {
   res.json({ success: true, provider: "agentrouter", ...getAgentRouterConfigStatus() });
 });
 
-app.get("/api/agentrouter/wallet", async (_req, res) => {
+app.get("/api/agentrouter/wallet", requireRole(["admin"]), async (_req, res) => {
   try {
     const wallet = await agentRouterWallet();
     res.json({ success: true, wallet });
@@ -2135,7 +2135,7 @@ app.get("/api/agentrouter/wallet", async (_req, res) => {
   }
 });
 
-app.get("/api/agentrouter/usage", async (req, res) => {
+app.get("/api/agentrouter/usage", requireRole(["admin"]), async (req, res) => {
   try {
     const limit = Number(req.query.limit || 20);
     const usage = await agentRouterUsage(Number.isFinite(limit) ? limit : 20);
@@ -2163,8 +2163,8 @@ app.get("/api/autonomy/heartbeat", async (req, res) => {
   }
 });
 
-app.get("/api/autonomy/status", async (_req, res) => res.json({ success: true, status: await autonomy.status() }));
-app.get("/api/autonomy/goals", async (_req, res) => res.json({ success: true, goals: await autonomy.list() }));
+app.get("/api/autonomy/status", requireRole(["admin"]), async (_req, res) => res.json({ success: true, status: await autonomy.status() }));
+app.get("/api/autonomy/goals", requireRole(["admin"]), async (_req, res) => res.json({ success: true, goals: await autonomy.list() }));
 app.post("/api/autonomy/goals", requireRole(["admin"]), async (req, res) => {
   try { res.status(201).json({ success: true, goal: await autonomy.create(req.body || {}) }); }
   catch (err:any) { res.status(400).json({ success:false, error:err.message }); }
@@ -2196,7 +2196,7 @@ app.post("/api/skills/resolve", (req, res) => {
   const x = resolveSkills(ids);
   res.status(x.missing.length ? 400 : 200).json({ success: x.missing.length === 0, ...x });
 });
-app.post("/api/simulations/mirofish", async (req, res) => {
+app.post("/api/simulations/mirofish", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const result = await runMiroFishSimulation(req.body || {});
     res.json({ success: true, ...result });
@@ -2225,7 +2225,7 @@ app.get("/api/missions", async (req, res) => {
   if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
   res.json({ success: true, missions: x });
 });
-app.post("/api/missions", async (req, res) => {
+app.post("/api/missions", requireRole(["admin","engineer"]), async (req, res) => {
   try {
     const x = await createMission(req.body || {}, req.user);
     if (!x) return res.status(503).json({ success: false, error: "Durable database unavailable" });
@@ -2255,7 +2255,7 @@ app.get("/api/objectives/templates/:id", (req, res) => {
   res.json({ success: true, template });
 });
 
-app.post("/api/objectives/instantiate", (req, res) => {
+app.post("/api/objectives/instantiate", requireRole(["admin","engineer","reviewer"]), (req, res) => {
   try {
     const { templateId, variables = {} } = req.body || {};
     const instantiated = instantiateObjectiveTemplate(String(templateId || ""), variables);
@@ -2265,12 +2265,12 @@ app.post("/api/objectives/instantiate", (req, res) => {
   }
 });
 
-app.get("/api/agents", async (_req, res) => {
+app.get("/api/agents", requireRole(["admin","engineer","reviewer"]), async (_req, res) => {
   const durable = await listDurableAgents();
   res.json({ success: true, agents: durable || await listAgents() });
 });
 
-app.get("/api/agents/tasks", async (req, res) => {
+app.get("/api/agents/tasks", requireRole(["admin","engineer","reviewer"]), async (req, res) => {
   const missionId = typeof req.query.missionId === "string" ? req.query.missionId : undefined;
   const durable = await listDurableTasks(missionId);
   res.json({ success: true, tasks: durable || await listTasks(missionId) });
@@ -2464,7 +2464,7 @@ app.post("/api/tasks/:id/approve", requireRole(["admin"]), (req, res) => {
 });
 
 // Tool Registry: list all available tools & schema
-app.get("/api/tools", (_req, res) => {
+app.get("/api/tools", requireRole(["admin","engineer","reviewer"]), (_req, res) => {
   res.json({
     success: true,
     count: TOOL_DEFINITIONS.length,
