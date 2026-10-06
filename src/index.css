@@ -167,3 +167,15 @@ button{-webkit-tap-highlight-color:transparent}
   .as-cinematic-shell form textarea{min-height:116px}
   .as-cinematic-shell h1{font-size:2.35rem}
 }
+
+
+/* Mission command surface: premium hierarchy and operational affordance. */
+.as-command-surface{position:relative;isolation:isolate}
+.as-command-surface::before{content:"";position:absolute;inset:-1px;border-radius:1.1rem;pointer-events:none;background:linear-gradient(120deg,rgba(96,165,250,.12),transparent 35%,rgba(34,211,238,.06) 70%,transparent);opacity:.8;z-index:-1}
+.as-command-panel{box-shadow:0 30px 90px rgba(0,0,0,.38),inset 0 1px rgba(255,255,255,.025)}
+.as-command-panel input{letter-spacing:-.01em}
+.as-command-panel input:focus-visible{outline:none}
+.as-command-panel button:focus-visible,.as-command-surface button:focus-visible{outline:2px solid var(--as-accent);outline-offset:3px}
+.as-command-surface [aria-label="Mission presets"] button{transition:transform 160ms ease,border-color 160ms ease,background-color 160ms ease,box-shadow 160ms ease}
+.as-command-surface [aria-label="Mission presets"] button:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.2)}
+@media (prefers-reduced-motion:reduce){.as-command-surface [aria-label="Mission presets"] button{transition:none}.as-command-surface [aria-label="Mission presets"] button:hover{transform:none}}
