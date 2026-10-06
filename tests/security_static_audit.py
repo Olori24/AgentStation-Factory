@@ -73,3 +73,38 @@ def test_tenant_ownership_and_rls_migration_exist():
     assert "canAccessMission" in db
     assert "owner_user_id" in company
     assert "organization_id" in company
+
+
+def test_sensitive_read_and_mutation_routes_are_not_public():
+    server = read("server.ts")
+    assert 'app.get("/api/db/metrics", requireRole(["admin"])' in server
+    assert 'app.get("/api/jobs", requireRole(["admin"])' in server
+    assert 'app.get("/api/agentrouter/wallet", requireRole(["admin"])' in server
+    assert 'app.get("/api/agentrouter/usage", requireRole(["admin"])' in server
+    assert 'app.get("/api/autonomy/status", requireRole(["admin"])' in server
+    assert 'app.post("/api/simulations/mirofish", requireRole(["admin","engineer"])' in server
+    assert 'app.post("/api/missions", requireRole(["admin","engineer"])' in server
+    assert 'app.post("/api/agents/run", requireRole(["admin","engineer"])' in server
+    assert 'app.post("/api/tools/execute", requireRole(["admin","engineer"])' in server
+
+def test_session_token_is_never_returned_by_profile_endpoints():
+    server = read("server.ts")
+    assert 'organization: org,\n    token,' not in server
+    assert 'res.json({ success: true, user, token' not in server
+    assert 'Profile switching is disabled in production' in server
+
+def test_object_ownership_and_path_safety_are_enforced():
+    server = read("server.ts")
+    db = read("server/db.ts")
+    artifacts = read("server/artifacts.ts")
+    assert "getApprovalById" in db
+    assert "db.canAccessMission(req.user, approval.missionId)" in server
+    assert "path.relative(workspaceDir, target)" in server
+    assert 'relativeTarget.startsWith("..")' in server
+    assert "zip-slip-safe" in artifacts
+    assert "Artifact payload too large" in artifacts
+
+def test_ssrf_defense_includes_dns_resolution():
+    tools = read("server/tools/index.ts")
+    assert "dns.lookup" in tools
+    assert "Resolved address is private or link-local" in tools
