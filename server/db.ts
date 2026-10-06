@@ -661,6 +661,13 @@ class RelationalDatabase {
   public isPostgresReady(): boolean {
     return STORAGE_BACKEND === 'postgres' && postgresReady;
   }
+
+  public async ready(): Promise<void> {
+    if (postgresLoadPromise) await postgresLoadPromise;
+    if (process.env.NODE_ENV === 'production' && !this.isPostgresReady()) {
+      throw new Error('Production database is not ready');
+    }
+  }
 }
 
 export const db = new RelationalDatabase();
