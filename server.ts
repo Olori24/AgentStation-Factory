@@ -15,7 +15,7 @@ import { executeSandboxedCommand } from "./server/sandbox";
 import { generateMissionBundle, getArtifact, listArtifacts } from "./server/artifacts";
 import { terminalWs } from "./server/terminalWs";
 import { AgentOrchestrator } from "./server/orchestrator";
-import { ToolExecutionEngine, TOOL_DEFINITIONS } from "./server/tools";
+import { ToolExecutionEngine, TOOL_DEFINITIONS, assertSafeRemoteUrl } from "./server/tools";
 import { growthRouter } from "./server/growthFactory";
 import { autonomy } from "./server/autonomy";
 import { listAgents, listTasks, dispatchAgents } from "./server/multiAgent";
@@ -870,25 +870,22 @@ app.post("/api/github/create-pr", requireRole(["admin","engineer"]), async (req,
 });
 
 // Check Ollama status
-app.post("/api/ollama/status", async (req, res) => {
-  const { url = "http://localhost:11434" } = req.body || {};
+app.post("/api/ollama/status", async (_req, res) => {
+  const configuredUrl = (process.env.OLLAMA_URL || "").trim();
+  if (!configuredUrl) return res.status(503).json({ online: false, reason: "Ollama is not configured." });
   try {
+    const safeUrl = await assertSafeRemoteUrl(configuredUrl);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
-    const response = await fetch(`${url}/api/tags`, {
-      signal: controller.signal,
-    });
+    const response = await fetch(new URL("/api/tags", safeUrl).toString(), { signal: controller.signal });
     clearTimeout(timeout);
     if (response.ok) {
       const data = await response.json();
-      return res.json({ online: true, models: data.models || [] });
+      return res.json({ online: true, models: Array.isArray(data.models) ? data.models : [] });
     }
     return res.json({ online: false, reason: `HTTP ${response.status}` });
   } catch (err: any) {
-    return res.json({
-      online: false,
-      reason: err.name === "AbortError" ? "Connection timeout" : err.message || "Unreachable",
-    });
+    return res.json({ online: false, reason: err?.name === "AbortError" ? "Connection timeout" : "Unreachable" });
   }
 });
 
