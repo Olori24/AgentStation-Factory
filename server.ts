@@ -1928,6 +1928,7 @@ app.post("/api/stream/test-emit", requireRole(["admin"]), (req, res) => {
 // Phase 3: Background Queue Workers & Jobs API
 // ==========================================
 jobQueue.registerWorker("sandbox_test", async (job, updateProgress) => {
+  if (process.env.TERMINAL_EXECUTION_ENABLED !== "true") throw new Error("Sandbox execution is disabled in this environment.");
   updateProgress(20, "Mounting isolated sandbox filesystem...");
   const payload = (job.payload || {}) as any;
   const { command = "python3 tests/test_mission_sandbox.py", missionId, files, timeoutMs } = payload;
