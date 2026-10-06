@@ -86,6 +86,9 @@ The product is designed to feel like stepping onto the bridge of a powerful AI o
 
 Every stage has an operational boundary. The objective is not simply to make agents powerful.
 
+<p align="center"><img src="./docs/assets/agentstation-mission-architecture.svg" alt="AgentStation mission architecture" width="100%"/></p>
+
+
 **The objective is to make agent power observable, bounded and controllable.**
 
 ---
@@ -214,6 +217,9 @@ The detailed security register is maintained in:
 **[Security Audit](./docs/SECURITY_AUDIT_2026-10-05.md)**
 
 Security language is intentionally evidence-based. **Hardening does not automatically equal production certification.**
+
+<p align="center"><img src="./docs/assets/agentstation-security-model.svg" alt="AgentStation security boundary model" width="100%"/></p>
+
 
 ---
 
