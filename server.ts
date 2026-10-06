@@ -92,6 +92,12 @@ app.use((req, res, next) => {
   if (!req.path.startsWith("/api/")) return next();
   const key = req.ip || req.socket.remoteAddress || "unknown";
   const now = Date.now();
+  if (rateState.size > 10000) {
+    for (const [entryKey, entry] of rateState) {
+      if (entry.resetAt <= now) rateState.delete(entryKey);
+    }
+    if (rateState.size > 10000) return res.status(429).json({ success: false, error: "Rate limit exceeded" });
+  }
   const current = rateState.get(key);
   const windowMs = 60_000;
   const limit = req.path === "/api/auth/bootstrap" ? 10 : 180;
