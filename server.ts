@@ -66,11 +66,6 @@ app.post("/api/auth/bootstrap", (req, res) => {
   res.json({ success: true, user });
 });
 
-app.get("/api/auth/me", (req: any, res) => {
-  if (!req.user) return res.status(401).json({ success: false, error: "Authentication required" });
-  res.json({ success: true, user: req.user });
-});
-
 app.post("/api/auth/logout", (req, res) => {
   res.clearCookie("as_session", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/" });
   res.status(204).end();
