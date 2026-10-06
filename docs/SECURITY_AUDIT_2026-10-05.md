@@ -1,152 +1,256 @@
-# AgentStation Factory — Pre-Deployment Security Audit
+# AgentStation Factory — Final Pre-Deployment Security Audit
 
-**Audit date:** 2026-10-05  
-**Repository:** 'Olori24/AgentStation-Factory'  
-**Audited ref:** 'security/pre-deployment-audit-2026-10-05'  
-**Baseline commit:** '3c4f532ea2ad533cc5923ca42e0aa6e2ca8f9bba'  
-**Method:** Manual source review, configuration review, Git-history review, security regression tests, and CI verification.
+**Audit date:** 2026-10-06  
+**Repository:** Olori24/AgentStation-Factory  
+**Baseline:** main `3c4f532ea2ad533cc5923ca42e0aa6e2ca8f9bba`  
+**Remediation branch:** security/final-predeploy-hardening-2026-10-06  
+**PR:** #34  
+**Method:** Repository source/configuration review, route/authorization review, database/schema review, Git-history review, dependency/CI review, secret-pattern review, and security regression coverage review.
 
-This audit follows the supplied Pre-Deployment Security Audit Template, including authentication/authorization, data access, secrets, input/output security, API security, dependency/repository hygiene, logging/incident readiness, and deployment review.
+## Decision
 
-## Executive result
+**NOT APPROVED FOR public production deployment yet.**
 
-**Current status: SECURITY REMEDIATION COMPLETE; DEPLOYMENT CERTIFICATION PENDING INFRASTRUCTURE VERIFICATION.**
+The remediation work closes multiple critical application-layer vulnerabilities. The remaining blockers are architectural/runtime issues that cannot be honestly certified from source review alone.
 
-The remediation branch fixes several critical classes of vulnerabilities, but two architectural blockers remain:
+### Blocking risks
 
-1. **Sandbox runtime now fails closed and requires Docker.** Host shell execution has been removed from the production path. Commands run with no network, read-only root, dropped capabilities, no-new-privileges, PID/memory/CPU limits, non-root UID, and a dedicated sandbox image. Deployment must provide this Docker runtime; a Vercel serverless runtime cannot be treated as certified for this execution path.
-2. **Per-user/tenant object authorization is now enforced server-side.** Mission/task/file operations are scoped to the authenticated user's organization and ownership; durable company-control-plane records have owner/organization columns and an RLS migration.
-3. **Frontend authentication is now integrated.** The application gates the UI behind server-issued HttpOnly, Secure, SameSite=Strict session cookies and never stores the bootstrap token in browser storage.
+1. **Production persistence is still JSON-file based for the main application database.** The PostgreSQL RLS migration covers only the durable company-control-plane tables, while missions, approvals, settings, files, logs and jobs still use `data/agentstation_relational_db.json`. RLS therefore does not protect the majority of application records.
+2. **Sandbox isolation is code-hardened but runtime-unverified.** Production requires `SANDBOX_RUNTIME=docker`; the repository does not contain proof that the selected production platform supplies this isolation boundary.
+3. **Vercel is not certified for the full workload.** The app uses WebSockets, local filesystem persistence, background workers and Docker sandbox execution. The latest Vercel status for this remediation line is failure/resource provisioning, so Vercel cannot be treated as the certified runtime.
+4. **GitHub token handling remains a hardening item.** Some Git operations still construct authenticated remote URLs using `GITHUB_TOKEN`. This keeps the credential out of source code but can expose it to process/diagnostic surfaces. Replace URL credentials with a credential helper or GitHub API before public deployment.
 
 ## Findings register
 
-| ID | Severity | Area | Finding | Remediation | Status |
-|---|---|---|---|---|---|
-| SEC-001 | Critical | Authentication | Authentication middleware previously failed open to a default active user. | Replaced with signed, expiring session validation; unauthenticated requests now return 401. Added controlled bootstrap-token login. | Fixed |
-| SEC-002 | Critical | Authorization | High-risk APIs were reachable without authentication/role enforcement. | Added server-side role gates to Git operations, sandbox/terminal execution, tool execution, approvals, autonomy controls, file mutations, and mission mutations. | Fixed |
-| SEC-003 | Critical | Command execution | Sandbox was a host bash process, not a security isolation boundary. | Replaced with hardened Docker execution; production requires SANDBOX_RUNTIME=docker. | Fixed in code; runtime certification pending |
-| SEC-004 | High | WebSocket | Terminal WebSocket upgrade had no authentication. | Added session-token validation during upgrade, payload cap, and command-size validation. | Fixed |
-| SEC-005 | High | SSRF | Web fetch tool accepted arbitrary HTTP(S) destinations, including private/metadata networks. | Added URL validation blocking localhost, RFC1918, link-local, metadata and internal targets. | Fixed |
-| SEC-006 | High | Filesystem | Tool file reads could fall back to the whole project directory; several path checks used weak prefix logic. | Restricted tool filesystem access to workspace and added canonical relative-path boundary checks. | Fixed |
-| SEC-007 | High | Approval bypass | Client-controlled skipApprovalCheck could bypass sensitive-action approval. | Sensitive actions always require approval regardless of client flag. | Fixed |
-| SEC-008 | High | Webhooks | GitHub webhook endpoint did not verify a signature. | Added HMAC SHA-256 verification with GITHUB_WEBHOOK_SECRET. | Fixed |
-| SEC-009 | High | Secrets | Production encryption/session secrets had unsafe defaults; historical source contained a hard-coded encryption secret. | Removed hard-coded fallback; production requires ENCRYPTION_KEY and SESSION_SECRET. Historical exposure must be treated as a reason to rotate any secrets protected with the old key. | Fixed in current source; rotate if previously used |
-| SEC-010 | High | Object authorization | Mission/company/workspace access was not consistently scoped to authenticated ownership. | Added server-side mission/task/file ownership checks and durable company/missions tenant columns/RLS migration. | Fixed in code; migration/runtime verification pending |
-| SEC-011 | High | Frontend auth | Existing frontend API calls were not integrated with fail-closed authentication. | Added secure operator sign-in and HttpOnly session cookie; browser never receives or stores the bootstrap token. | Fixed |
-| SEC-012 | Medium | Database | Neon/PostgreSQL schema contains multi-tenant concepts but does not currently demonstrate RLS policies for application records. | Add and test PostgreSQL RLS or equivalent server-side ownership enforcement for every tenant-owned table. | Open |
-| SEC-013 | Medium | Storage | Local JSON persistence and filesystem workspace are not suitable as the sole production data layer for a horizontally scaled/serverless deployment. | Use durable PostgreSQL/object storage and explicit backup/restore procedures. | Open |
-| SEC-014 | Medium | Rate limiting | Original API surface lacked abuse controls. | Added process-local API rate limiting. Production should use a shared/distributed limiter for multiple instances. | Partially fixed |
-| SEC-015 | Medium | Dependencies | Dependency vulnerability audit is now a CI gate. | npm audit --audit-level=high passes on the latest remediation head; qs was pinned to 6.16.0. | Fixed / verified |
-| SEC-016 | Low | Dev server | Vite development configuration allows all hosts. | Development-only configuration should be restricted for shared environments; do not expose the Vite dev server publicly. | Open |
-| SEC-017 | Medium | Deployment | The repository contains both Vercel and Render deployment configurations with materially different runtime characteristics. | Select one production runtime and certify its environment, storage, WebSocket behavior, and background-worker model. Latest Vercel deployment for the remediation head reports BUILD_FAILED / Resource provisioning failed, so deployment is not certified. | Open — deployment blocker |
+### SEC-001 — Critical — Authentication fail-open
 
-## Controls reviewed
+- **Affected:** `server/auth.ts`, `server.ts`
+- **Risk:** A default active user would turn missing authentication into implicit identity.
+- **Fix:** Authentication middleware now validates a signed, expiring session and returns 401 when invalid. Production requires `SESSION_SECRET`.
+- **Verification:** Unauthenticated protected API requests must return 401.
+- **Status:** Fixed.
 
-### A. Authentication and authorization
+### SEC-002 — Critical — Privileged route authorization
 
-- Admin routes: server-side role gates added to privileged operations.
-- Server-side permissions: no longer dependent on hidden frontend controls.
-- Session validation: signed, expiring bearer sessions with server-side active-session tracking.
-- Bootstrap: requires AUTH_BOOTSTRAP_TOKEN.
-- Password authentication/email verification: **not implemented**.
-- Token browser storage: no evidence of application code storing the session token in localStorage/sessionStorage; frontend integration remains incomplete.
-- Privilege escalation: /api/auth/switch and user enumeration are now admin-only.
-- WebSocket authentication: enforced during upgrade.
+- **Affected:** Git operations, sandbox, terminal, tools, jobs, autonomy, simulation, agent execution, mission mutation routes.
+- **Risk:** Authentication alone is insufficient for administrative operations.
+- **Fix:** Server-side `requireRole([...])` gates were added to privileged routes.
+- **Verification:** Authenticated reviewer/normal user receives 403 from admin/engineer-only routes.
+- **Status:** Fixed in remediation branch.
 
-### B. Database and data access
+### SEC-003 — Critical — Command execution isolation
 
-- Parameterized Neon SQL is used in server/companyControlPlane.ts.
-- Tenant ownership is not consistently enforced across all records.
-- PostgreSQL RLS is not present in the supplied migrations.
-- Local JSON database remains present and should not be treated as a production-grade multi-instance database.
-- Sensitive records require an explicit ownership model before public launch.
+- **Affected:** `server/sandbox.ts`, `server/terminalWs.ts`
+- **Risk:** Host-shell execution can become full server compromise.
+- **Fix:** Production fails closed unless Docker sandbox runtime is selected; sandbox uses no network, read-only root, dropped capabilities, no-new-privileges, non-root execution and resource limits.
+- **Verification:** Production execution without Docker returns a controlled failure; sandbox cannot reach host filesystem/network.
+- **Status:** Code fixed; runtime certification open.
 
-### C. Secrets and configuration
+### SEC-004 — High — WebSocket authentication
 
-- Production now requires ENCRYPTION_KEY and SESSION_SECRET.
-- Production configuration explicitly disables host shell execution.
-- .env.example contains placeholders rather than credentials.
-- Git history review found the original hard-coded encryption secret in the initial server/auth.ts commit. This is not evidence that an external API credential was leaked, but it is cryptographic key material and must be considered compromised if it was ever used to encrypt real secrets.
-- Historical .env, .env.local, .pem, .key, and credentials path-history queries returned no commits.
+- **Affected:** `server/terminalWs.ts`
+- **Risk:** An unauthenticated terminal socket could become a command-execution bypass.
+- **Fix:** Session validation is performed during upgrade; payload and command sizes are bounded.
+- **Verification:** Invalid/missing session rejects the socket.
+- **Status:** Fixed.
 
-### D. Input, output and web security
+### SEC-005 — High — SSRF and DNS rebinding
 
-Implemented:
-- Security response headers.
-- Request body size limit.
-- SSRF blocking for private/metadata network targets.
-- Workspace path canonicalization.
-- GitHub webhook HMAC verification.
-- WebSocket payload limit and command-size validation.
+- **Affected:** `server/tools/index.ts`, Ollama execution path.
+- **Risk:** User-controlled URLs could target localhost, cloud metadata or private networks.
+- **Fix:** HTTP(S)-only validation, private/link-local/metadata blocking, DNS resolution checks, and client-controlled Ollama URLs removed from production configuration.
+- **Verification:** localhost, RFC1918, link-local, metadata and DNS-to-private targets are rejected.
+- **Status:** Fixed in code; live network testing still required.
 
-Remaining:
-- A production-grade CSP should be validated against the actual deployed frontend.
-- File upload/content validation is not a major first-class feature in the current API, but any future upload endpoint must enforce type/size/content checks.
+### SEC-006 — High — Filesystem traversal
 
-### E. API and endpoint security
+- **Affected:** `server.ts`, `server/tools/index.ts`, file APIs.
+- **Risk:** Prefix checks can be bypassed by sibling paths such as `workspace-evil`.
+- **Fix:** `path.resolve()` plus `path.relative()` boundary checks.
+- **Verification:** `../secret`, absolute paths and sibling-prefix paths are rejected.
+- **Status:** Fixed in remediation branch.
 
-High-risk mutation endpoints now require authenticated roles. The remaining key gap is object-level authorization: authentication proves who the caller is, but not every endpoint currently proves that the caller owns the requested mission/company/workspace resource.
+### SEC-007 — High — Approval bypass
 
-### F. Dependencies and repository hygiene
+- **Affected:** `server/tools/index.ts`, `/api/tasks/:id/approve`.
+- **Risk:** A client flag must never bypass a server-side approval policy.
+- **Fix:** Sensitive actions ignore client attempts to skip approval; approval resolution is tied to the authenticated mission owner/organization.
+- **Verification:** `skipApprovalCheck=true` cannot execute a sensitive action without required approval.
+- **Status:** Fixed.
 
-- Root CI now runs npm audit --audit-level=high.
-- Type checking/build remain required.
-- Static security regression tests were added at tests/security_static_audit.py.
-- No tracked environment/private-key files were found through the targeted Git-history path checks.
+### SEC-008 — High — Webhook authenticity
 
-### G. Logging and incident readiness
+- **Affected:** `/api/github/webhook`
+- **Risk:** Forged GitHub requests could trigger automation.
+- **Fix:** HMAC SHA-256 verification using `GITHUB_WEBHOOK_SECRET`.
+- **Verification:** Forged signature returns 401; valid signature is accepted.
+- **Status:** Fixed.
 
-- Authentication and authorization failures return safe generic messages.
-- Sensitive values should continue to be excluded from logs.
-- Credential rotation is required for any historical secret exposure.
-- Backup/restore and incident-response procedures are not yet demonstrated for the complete production architecture.
+### SEC-009 — High — Historical cryptographic secret
 
-### H. Final deployment review
+- **Affected:** Git history / previous `server/auth.ts`.
+- **Risk:** A hard-coded encryption secret existed historically. If used for real encrypted data, it must be considered compromised.
+- **Fix:** Production now requires `ENCRYPTION_KEY`; unsafe historical fallback removed.
+- **Verification:** Scan all reachable history and rotate any real secret protected by the old key.
+- **Status:** Current source fixed; historical rotation remains operational work.
 
-The final deployment gate remains red until:
-- true sandbox isolation is deployed;
-- per-user/tenant authorization is complete and tested;
-- frontend authentication is integrated;
-- database/storage production architecture is certified;
-- CI passes dependency audit, lint, build and security regression tests;
-- production smoke tests are completed.
+### SEC-010 — High — Object-level authorization
 
-## Required verification scenarios
+- **Affected:** missions, tasks, files, approvals, artifacts.
+- **Risk:** A valid user could access another user's resource by changing an ID.
+- **Fix:** Mission ownership is checked server-side; task creation records authenticated owner/org; approvals and artifact access are tied to mission access.
+- **Verification:** Cross-user/cross-tenant ID substitution returns 403/404.
+- **Status:** Application-layer protections materially improved; durable database/RLS blocker remains.
 
-| Test | Expected |
-|---|---|
-| Unauthenticated request to protected API | 401 |
-| Normal user invokes admin-only operation | 403 |
-| Client sets skipApprovalCheck=true for sensitive action | Approval still required |
-| WebSocket connects without valid session | 401 / connection rejected |
-| Forged GitHub webhook | 401 |
-| Web fetch to localhost/private/metadata address | Rejected |
-| Workspace path ../secret | Rejected |
-| Production host-shell execution without explicit unsafe override | Rejected |
-| Production API error | No credentials/stack traces exposed |
-| High dependency vulnerability | CI fails |
+### SEC-011 — High — Auth token exposure
 
-## Required pre-deployment actions
+- **Affected:** `/api/auth/me`, `/api/auth/switch`.
+- **Risk:** Returning session tokens in JSON makes browser extensions, logs, debugging tools and accidental client persistence more likely to capture credentials.
+- **Fix:** Session remains an HttpOnly cookie; auth endpoints no longer return session tokens; profile switching is disabled.
+- **Verification:** Auth responses contain no session token.
+- **Status:** Fixed.
 
-1. Build and deploy the hardened sandbox image and configure SANDBOX_RUNTIME=docker with:
-   - no host filesystem access;
-   - no host credentials;
-   - restricted/no network by default;
-   - CPU/memory/PID/time limits;
-   - ephemeral filesystem;
-   - non-root execution;
-   - controlled artifact egress.
-2. Apply and verify migration 005_tenant_security.sql in the production database.
-3. Complete authenticated cross-tenant integration tests for missions, companies, tasks and files.
-4. Run and pass dependency audit, type check, build and all security regression tests.
-6. Rotate any real credentials that were ever protected by the historical hard-coded encryption key.
-7. Establish production backup/restore and incident-response procedures.
-8. Certify one production runtime instead of treating Vercel and Render as interchangeable deployment targets.
+### SEC-012 — High — Database/RLS architecture mismatch
 
-## Overall decision
+- **Affected:** `server/db.ts`, `db/migrations/005_tenant_security.sql`.
+- **Risk:** PostgreSQL RLS cannot protect records that are actually stored in a local JSON file.
+- **Fix required:** Move tenant-owned application records to the production PostgreSQL database, enable RLS on every applicable table, and set transaction-local user/org context from the authenticated server identity.
+- **Verification:** Direct SQL tests prove cross-tenant SELECT/INSERT/UPDATE/DELETE isolation.
+- **Status:** **Open / deployment blocker.**
 
-**NOT APPROVED FOR DEPLOYMENT**
+### SEC-013 — High — Local filesystem persistence
 
-The remediation branch materially improves the security posture and closes several critical vulnerabilities, but the remaining sandbox, tenant authorization, and authentication-integration gaps are sufficient to block public production launch.
+- **Affected:** `data/agentstation_relational_db.json`, `data/artifacts`, `workspace`.
+- **Risk:** Local state is not reliable or isolated across horizontally scaled/serverless instances and can expose sensitive artifacts.
+- **Fix required:** PostgreSQL for durable records and object storage for artifacts/workspaces with least-privilege credentials and explicit retention.
+- **Verification:** Restart/second-instance/restore tests preserve only authorized data.
+- **Status:** Open.
 
-This audit intentionally records unresolved risks rather than treating a clean-looking build as proof of security.
+### SEC-014 — Medium — Process-local rate limiting
+
+- **Affected:** API rate limiter in `server.ts`.
+- **Risk:** A process-local map does not provide consistent limits across multiple instances.
+- **Fix required:** Shared Redis/edge/API-gateway limiter in production.
+- **Verification:** Multiple instances share the same quota and return 429 consistently.
+- **Status:** Partially fixed.
+
+### SEC-015 — Medium — Dependency security
+
+- **Affected:** `package.json`, CI.
+- **Risk:** Known vulnerable dependencies can become an exploitable supply-chain path.
+- **Fix:** CI runs `npm audit --audit-level=high`; `qs` is pinned to 6.16.0.
+- **Verification:** CI dependency audit passes on the exact deployment commit.
+- **Status:** Previous remediation CI passed; current PR #34 has not yet produced a GitHub Actions run, so final verification is pending.
+
+### SEC-016 — Medium — GitHub credential handling
+
+- **Affected:** Git fetch/push code in `server.ts`.
+- **Risk:** Token-in-URL credentials can leak through process arguments, diagnostics or accidental logging.
+- **Fix required:** Use a short-lived credential helper/environment-only authentication or GitHub API operations.
+- **Verification:** Process list, Git config, remote URL and logs contain no token.
+- **Status:** Open.
+
+### SEC-017 — Medium — Error disclosure
+
+- **Affected:** API catch blocks.
+- **Risk:** Returning raw `err.message` can disclose infrastructure details.
+- **Fix required:** Return stable public error codes/messages and log detailed errors only server-side with secrets/redaction.
+- **Verification:** Production 4xx/5xx responses contain no stack traces, tokens, SQL, file paths or provider credentials.
+- **Status:** Partially fixed; further normalization required.
+
+### SEC-018 — Medium — File/artifact upload safety
+
+- **Affected:** artifact bundling and file APIs.
+- **Risk:** Zip-slip, oversized content and uncontrolled workspace writes can exhaust or escape intended storage.
+- **Fix:** Artifact count/size caps, normalized zip paths, workspace boundary checks and bounded request body.
+- **Verification:** traversal archive entries and oversized bundles are rejected.
+- **Status:** Fixed in remediation branch; live storage tests pending.
+
+### SEC-019 — Medium — Financial/provider information
+
+- **Affected:** AgentRouter wallet/usage endpoints.
+- **Risk:** Provider balance/usage can be commercially sensitive.
+- **Fix:** Admin-only authorization.
+- **Verification:** Non-admin receives 403.
+- **Status:** Fixed.
+
+### SEC-020 — Medium — Admin observability endpoints
+
+- **Affected:** database metrics, jobs, webhook history, stream test emitter.
+- **Risk:** Operational data can reveal sensitive mission state.
+- **Fix:** Admin/appropriate-role gates.
+- **Verification:** Reviewer cannot read admin-only telemetry or emit test events.
+- **Status:** Fixed in remediation branch.
+
+### SEC-021 — Low — Browser localStorage
+
+- **Affected:** `src/App.tsx`
+- **Risk:** Mission history/provider/model preferences in localStorage can expose non-auth application data to same-origin XSS.
+- **Important:** This is **not** an authentication-token storage finding; the session token is not stored there.
+- **Fix required:** Prefer server-backed history and minimize sensitive client persistence.
+- **Status:** Low / open.
+
+### SEC-022 — Low — Development Vite host configuration
+
+- **Affected:** Vite dev-server configuration.
+- **Risk:** Broad host allowance is unsafe if a development server is exposed publicly.
+- **Fix required:** Restrict allowed hosts or bind development only to localhost.
+- **Status:** Open; must never expose the dev server publicly.
+
+### SEC-023 — High — Production runtime incompatibility
+
+- **Affected:** `vercel.json`, `render.yaml`, WebSocket server, local disk, Docker sandbox.
+- **Risk:** Treating Vercel and Render as interchangeable can result in a deployment that silently lacks required execution/storage guarantees.
+- **Fix required:** Select one certified production runtime and verify WebSocket/background-worker/container/storage behavior.
+- **Status:** Open / deployment blocker. Current Vercel status is failing.
+
+## Control-by-control conclusion
+
+| # | Control | Result |
+|---|---|---|
+| 1 | Admin authentication/authorization | Fixed in application layer |
+| 2 | Server-side permissions | Fixed for reviewed privileged routes |
+| 3 | Own-record access | Improved; durable DB blocker remains |
+| 4 | RLS | Partially implemented for PostgreSQL control-plane; not covering JSON database |
+| 5 | Email verification | Not implemented; bootstrap-token auth is used instead of password/email auth |
+| 6 | Password hashing | N/A because password authentication is not implemented |
+| 7 | Token browser storage | Session is HttpOnly cookie; token no longer returned by auth API |
+| 8 | Server-side secrets | Current source uses server-side env variables |
+| 9 | Env exposure | `.env*` ignored; public example contains placeholders |
+| 10 | Secrets removed from GitHub | Current tree clean; historical key exposure documented |
+| 11 | Git-history secret review | Targeted history review found historical encryption-key material; no evidence of committed live API tokens from the reviewed patterns |
+| 12 | Sensitive logs/errors | Mostly redacted; raw provider/infrastructure error handling remains |
+| 13 | Parameterized DB queries | Neon company-control-plane queries use parameters; JSON DB has no SQL injection surface |
+| 14 | Server validation | Basic validation present; schema-level validation should be expanded |
+| 15 | XSS | React rendering is used; CSP added; no known `dangerouslySetInnerHTML` path identified in reviewed app code |
+| 16 | File uploads | Bounded and traversal-safe in remediation branch |
+| 17 | Webhook signatures | HMAC verification implemented |
+| 18 | Rate limits | Present but process-local |
+| 19 | Security headers | X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS and CSP implemented |
+| 20 | Least privilege storage | Not fully certified because production storage architecture is unresolved |
+| 21 | API authentication/authorization | Broad authentication middleware plus route-level roles; object-level checks added where reviewed |
+| 22 | Production debug errors | No debug mode intentionally enabled; error normalization remains incomplete |
+| 23 | Dependencies | CI audit gate present; final PR verification pending |
+| 24 | Unused packages/routes | No complete dead-code proof was established; do not claim removal is complete |
+| 25 | Exposed files/secrets/config | `.env*` ignored and current placeholders are safe; historical cryptographic material requires rotation decision |
+
+## Required pre-deployment verification
+
+1. Migrate all tenant-owned application state from JSON persistence to PostgreSQL.
+2. Apply and test RLS for every applicable tenant-owned table.
+3. Set RLS session context from authenticated server identity; never trust client-supplied org/user values.
+4. Deploy and independently test the Docker sandbox boundary.
+5. Choose and certify one production runtime.
+6. Replace Git token-in-URL authentication.
+7. Run the full CI suite on PR #34 and record the exact green commit.
+8. Run authenticated cross-tenant integration tests.
+9. Run unauthenticated/role-negative API tests.
+10. Run production smoke tests with secrets redacted.
+11. Rotate any real credentials ever encrypted with the historical hard-coded key.
+12. Establish backup/restore and incident-response procedures.
+
+## Final verdict
+
+**The application is not yet certified secure for public production.**
+
+The application-layer remediation is substantially stronger, and the final hardening branch closes several concrete vulnerabilities. However, the JSON-vs-PostgreSQL/RLS mismatch, unverified Docker isolation, runtime incompatibility, and remaining Git credential handling prevent an honest green security sign-off.
