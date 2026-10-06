@@ -40,6 +40,7 @@ export const PromptStation: React.FC<PromptStationProps> = ({
               </div>
               <input
                 type="text"
+                aria-label="Mission objective"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="What should the agent squad build? (e.g. Build an encryption CLI and make a launch teaser video)..."
@@ -51,7 +52,8 @@ export const PromptStation: React.FC<PromptStationProps> = ({
             <button
               type="submit"
               disabled={!prompt.trim() || isExecuting}
-              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              aria-label={isExecuting ? "Squad is executing the mission" : "Execute mission"}
+              className="as-interactive as-focus-ring flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             >
               {isExecuting ? (
                 <>
@@ -84,7 +86,7 @@ export const PromptStation: React.FC<PromptStationProps> = ({
               </span>
             </div>
             <div className="font-mono text-slate-500">
-              Synced to <span className="text-blue-400">Olori24/AgentStation:main</span>
+              Workspace <span className="text-blue-400">Olori24/AgentStation-Factory:main</span>
             </div>
           </div>
         </div>
