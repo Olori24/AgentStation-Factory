@@ -116,11 +116,11 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
     : logs.filter((l) => l.role === selectedRole);
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+    <div className="flex flex-col h-full bg-black/20 border border-white/10 rounded-xl overflow-hidden shadow-inner">
       {/* Stream Header */}
-      <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
+      <div className="px-3 sm:px-4 py-3 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
         <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <div className={`w-2 h-2 rounded-full ${isExecuting ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400'}`} />
           <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
             Squad Activity Stream
           </span>
@@ -147,7 +147,7 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
               aria-label="Filter activity by agent"
               value={selectedRole}
               onChange={(e) => setSelectedRole(e.target.value)}
-              className="bg-slate-800 text-slate-300 text-[11px] rounded-md pl-6 pr-2 py-1 border border-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
+              className="as-focus-ring bg-black/20 text-slate-300 text-[11px] rounded-lg pl-6 pr-2 py-1.5 border border-white/10 focus:border-blue-400/60 cursor-pointer"
             >
               <option value="all">All Agents</option>
               <option value="architect">Atlas (Architect)</option>
@@ -161,7 +161,7 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
           <button
             onClick={handleCopyLogs}
             title="Copy all logs"
-            className="p-1.5 rounded-md text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition"
+            className="as-focus-ring p-1.5 rounded-lg text-slate-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/5 transition"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
@@ -172,7 +172,7 @@ export const AgentActivityStream: React.FC<AgentActivityStreamProps> = ({
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="relative flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs scrollbar-thin"
+        className="relative flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 font-mono text-xs scrollbar-thin"
       >
         {!autoScroll && logs.length > filteredLogs.length && (
           <div className="sticky top-0 z-10 mb-2 text-[10px] text-slate-500 bg-slate-900/95 rounded-md px-2 py-1 border border-slate-800">
