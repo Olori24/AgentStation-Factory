@@ -410,16 +410,16 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
   const breadcrumbParts = (currentFile.path || currentFile.name).split('/');
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+    <div className="flex flex-col h-full bg-black/20 border border-white/10 rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl">
       {/* File Navigation Tabs & Action Bar */}
-      <div className="bg-slate-950/80 border-b border-slate-800 px-3 pt-2 flex items-center justify-between gap-2 overflow-x-auto scrollbar-thin">
+      <div className="bg-black/30 border-b border-white/10 px-2.5 sm:px-3 pt-2 flex items-center justify-between gap-2 overflow-x-auto scrollbar-thin">
         <div className="flex items-center gap-1 min-w-max">
           {(activeTab === 'editor' || activeTab === 'diff') && (
             <button
               type="button"
               onClick={() => setIsExplorerOpen(!isExplorerOpen)}
               title={isExplorerOpen ? 'Hide File Explorer' : 'Show File Explorer'}
-              className="p-1.5 mb-1 mr-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              className="as-focus-ring p-1.5 mb-1 mr-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition"
             >
               {isExplorerOpen ? <PanelLeftClose className="w-3.5 h-3.5" /> : <PanelLeft className="w-3.5 h-3.5" />}
             </button>
@@ -439,8 +439,8 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
                   }}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-t-lg text-xs font-mono transition border-t border-x ${
                     isActive
-                      ? 'bg-slate-900 border-slate-700 text-blue-400 font-semibold shadow-sm'
-                      : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+                      ? 'bg-white/[0.06] border-white/10 text-blue-300 font-semibold shadow-sm'
+                      : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100 hover:bg-white/[0.03]'
                   }`}
                 >
                   <FileCode className="w-3.5 h-3.5 text-slate-400" />
@@ -481,7 +481,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
             <button
               onClick={() => setIsAddingFile(!isAddingFile)}
               title="Add new file"
-              className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 text-xs transition ml-1"
+              className="as-focus-ring p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] text-xs transition ml-1"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -490,12 +490,12 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
 
         {/* Action icons & Mode Tabs */}
         <div className="flex items-center gap-1 pb-1 shrink-0">
-          <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+          <div className="flex items-center p-0.5 rounded-xl bg-black/30 border border-white/10 text-xs">
             <button
               onClick={() => setActiveTab('preview')}
               className={`px-2 py-1 rounded flex items-center gap-1 font-mono transition ${
                 activeTab === 'preview'
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? 'bg-white text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -507,7 +507,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
               onClick={() => setActiveTab('editor')}
               className={`px-2 py-1 rounded flex items-center gap-1 font-mono transition ${
                 activeTab === 'editor'
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? 'bg-white text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -519,7 +519,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
               onClick={() => setActiveTab('terminal')}
               className={`px-2 py-1 rounded flex items-center gap-1 font-mono transition ${
                 activeTab === 'terminal'
-                  ? 'bg-amber-600 text-white shadow-sm'
+                  ? 'bg-white text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -531,7 +531,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
               onClick={() => setActiveTab('video')}
               className={`px-2 py-1 rounded flex items-center gap-1 font-mono transition ${
                 activeTab === 'video'
-                  ? 'bg-purple-600 text-white shadow-sm'
+                  ? 'bg-white text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -543,7 +543,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
               onClick={() => setActiveTab('diff')}
               className={`px-2 py-1 rounded flex items-center gap-1 font-mono transition ${
                 activeTab === 'diff'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-white text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -560,7 +560,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
           <button
             onClick={handleCopyCode}
             title="Copy current file content"
-            className="p-1.5 rounded-md text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition"
+            className="as-focus-ring p-1.5 rounded-lg text-slate-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/5 transition"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
@@ -576,7 +576,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
           <button
             onClick={handleDownloadZip}
             title="Download all workspace files as .ZIP"
-            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-600/90 hover:bg-blue-500 text-white shadow-sm transition"
+            className="as-focus-ring flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-950 hover:bg-blue-50 shadow-lg transition"
           >
             <FileArchive className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Export ZIP</span>
@@ -588,7 +588,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
       {isAddingFile && (
         <form
           onSubmit={handleCreateFileSubmit}
-          className="px-4 py-2 bg-slate-950 border-b border-slate-800 flex items-center gap-2"
+          className="px-3 sm:px-4 py-2.5 bg-black/20 border-b border-white/10 flex items-center gap-2"
         >
           <span className="text-xs text-slate-400 font-mono">New file path:</span>
           <input
@@ -597,7 +597,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
             onChange={(e) => setNewFileName(e.target.value)}
             placeholder="e.g. src/utils.py, public/styles.css"
             autoFocus
-            className="px-2.5 py-1 text-xs rounded bg-slate-900 border border-slate-700 text-slate-100 font-mono focus:outline-none focus:border-blue-500"
+            className="as-focus-ring px-2.5 py-1.5 text-xs rounded-lg bg-black/20 border border-white/10 text-slate-100 font-mono focus:border-blue-400/60"
           />
           <button
             type="submit"
