@@ -389,8 +389,8 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
     <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-xl">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <div class="flex items-center gap-2">
-          <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span class="font-bold text-sm text-slate-200">Sandbox Preview: ${currentFile?.name || 'Code Engine'}</span>
+          <span class="h-2.5 w-2.5 rounded-full bg-slate-500"></span>
+          <span class="font-bold text-sm text-slate-200">Code Preview: ${currentFile?.name || 'Code Engine'}</span>
         </div>
         <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-900/50 border border-blue-700/50 text-blue-300 uppercase">${currentFile?.language || 'code'}</span>
       </div>
