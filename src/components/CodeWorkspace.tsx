@@ -126,13 +126,15 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
     content: '# AgentStation Workspace\n\nNo files currently loaded in workspace.',
   };
 
+  // Missing execution data must never be presented as successful verification.
+  const hasExecutionResult = Boolean(execution);
   const safeExecution = execution || {
-    command: 'pytest -v tests/',
-    stdout: 'Execution environment ready. All unit tests verified.',
-    testsPassed: 4,
+    command: '',
+    stdout: 'No execution result is available yet. Run verification to produce evidence.',
+    testsPassed: 0,
     testsFailed: 0,
-    durationMs: 75,
-    exitCode: 0,
+    durationMs: 0,
+    exitCode: -1,
   };
 
   const displayOutput =
@@ -393,14 +395,14 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
         <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-900/50 border border-blue-700/50 text-blue-300 uppercase">${currentFile?.language || 'code'}</span>
       </div>
       <p class="text-xs text-slate-400 mt-2">
-        This file is verified in the sandboxed test runner. Below is the active runtime artifact:
+        ${hasExecutionResult ? 'Execution result available. Review the actual run output before relying on this artifact.' : 'Preview only. This file has not been verified by a test run.'}
       </p>
       <div class="mt-3 p-3 rounded-lg bg-slate-950 font-mono text-xs text-slate-300 overflow-x-auto max-h-72 border border-slate-800">
         <pre>${escapedCode}</pre>
       </div>
     </div>
-    <div class="p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-      <span>✓ PyTest sandbox validation status: <strong>${safeExecution.testsPassed} assertions passed</strong> (0 errors)</span>
+    <div class="p-3 rounded-lg ${hasExecutionResult && safeExecution.exitCode === 0 ? 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-300' : 'bg-amber-950/30 border border-amber-500/30 text-amber-200'} text-xs flex items-center gap-2">
+      <span>${hasExecutionResult ? (safeExecution.exitCode === 0 ? '✓' : '⚠') : '○'} ${hasExecutionResult ? 'Execution evidence' : 'Not verified'}: <strong>${hasExecutionResult ? `${safeExecution.testsPassed} passed, ${safeExecution.testsFailed} failed` : 'No test results recorded'}</strong></span>
     </div>
   </div>
 </body>
@@ -1184,17 +1186,23 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
               )}
             </div>
             <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
-              <span className="text-emerald-400 flex items-center gap-1">
-                <CheckCircle className="w-3 h-3" />
-                {safeExecution.testsPassed} Passed
-              </span>
-              {safeExecution.testsFailed > 0 && (
-                <span className="text-rose-400 flex items-center gap-1">
-                  {safeExecution.testsFailed} Failed
-                </span>
+              {hasExecutionResult ? (
+                <>
+                  <span className={safeExecution.exitCode === 0 ? "text-emerald-400 flex items-center gap-1" : "text-amber-300 flex items-center gap-1"}>
+                    {safeExecution.exitCode === 0 ? <CheckCircle className="w-3 h-3" /> : <Radio className="w-3 h-3" />}
+                    {safeExecution.testsPassed} Passed
+                  </span>
+                  {safeExecution.testsFailed > 0 && (
+                    <span className="text-rose-400 flex items-center gap-1">
+                      {safeExecution.testsFailed} Failed
+                    </span>
+                  )}
+                  <span>Duration: {safeExecution.durationMs}ms</span>
+                  <span>Exit Code: {safeExecution.exitCode}</span>
+                </>
+              ) : (
+                <span className="text-amber-300">Not verified · run tests to record evidence</span>
               )}
-              <span>Duration: {safeExecution.durationMs}ms</span>
-              <span>Exit Code: {safeExecution.exitCode ?? 0}</span>
               {onClearTerminal && (
                 <button
                   type="button"
