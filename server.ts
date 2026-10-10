@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import http from "http";
 import path from "path";
 import fs from "fs";
@@ -70,6 +71,84 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { (req as any).rawBody = Buffer.from(buf); } }));
 
 
+function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")): string {
+  const digest = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `scrypt${salt}${digest}`;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  const [algorithm, salt, digest] = stored.split("$");
+  if (algorithm !== "scrypt" || !salt || !digest || !/^[a-f0-9]{128}$/i.test(digest)) return false;
+  const expected = Buffer.from(digest, "hex");
+  const actual = crypto.scryptSync(password, salt, expected.length);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+function publicUser(user: any) {
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  return safeUser;
+}
+
+function issueAuthCookie(res: any, userId: string) {
+  const token = issueSessionToken(userId);
+  res.cookie("as_session", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 60 * 60 * 1000,
+    path: "/",
+  });
+  res.setHeader("Cache-Control", "no-store");
+}
+
+app.post("/api/auth/signup", (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (name.length < 2 || name.length > 80) return res.status(400).json({ success: false, error: "Enter your name (2–80 characters)." });
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, error: "Enter a valid email address." });
+  if (password.length < 10 || password.length > 128) return res.status(400).json({ success: false, error: "Your password must be between 10 and 128 characters." });
+  if (db.getUserByEmail(email)) return res.status(409).json({ success: false, error: "An account with this email already exists. Please sign in instead." });
+
+  const now = new Date().toISOString();
+  const userId = `user-${crypto.randomUUID()}`;
+  const organizationId = `org-${crypto.randomUUID()}`;
+  const organization = {
+    id: organizationId,
+    name: `${name}'s Workspace`,
+    slug: `workspace-${crypto.randomBytes(6).toString("hex")}`,
+    tier: "starter" as const,
+    quotaRemaining: 100,
+    createdAt: now,
+  };
+  const user = {
+    id: userId,
+    email,
+    name,
+    passwordHash: hashPassword(password),
+    role: "engineer" as const,
+    avatar: "",
+    organizationId,
+    createdAt: now,
+  };
+  db.addOrganization(organization);
+  db.addUser(user);
+  issueAuthCookie(res, user.id);
+  return res.status(201).json({ success: true, user: publicUser(user), organization });
+});
+
+app.post("/api/auth/login", (req, res) => {
+  const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (email.length > 254 || !email || password.length > 128 || !password) return res.status(400).json({ success: false, error: "Enter your email address and password." });
+  const user = db.getUserByEmail(email);
+  if (!user?.passwordHash || !verifyPassword(password, user.passwordHash)) {
+    return res.status(401).json({ success: false, error: "Email or password is incorrect. If you are new here, create an account first." });
+  }
+  issueAuthCookie(res, user.id);
+  return res.json({ success: true, user: publicUser(user) });
+});
+
 app.post("/api/auth/bootstrap", (req, res) => {
   const bootstrapToken = String(req.body?.bootstrapToken || "");
   if (!verifyBootstrapToken(bootstrapToken)) return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
@@ -94,7 +173,7 @@ app.post("/api/auth/logout", (req, res) => {
 });
 
 app.use("/api", (req, res, next) => {
-  if (req.path === "/health" || req.path === "/auth/bootstrap" || req.path === "/github/webhook" || req.path === "/autonomy/heartbeat") return next();
+  if (req.path === "/health" || req.path === "/auth/signup" || req.path === "/auth/login" || req.path === "/auth/bootstrap" || req.path === "/github/webhook" || req.path === "/autonomy/heartbeat") return next();
   return authMiddleware(req as any, res, next);
 });
 app.use("/api/growth", growthRouter);
@@ -122,7 +201,7 @@ app.use((req, res, next) => {
   }
   const current = rateState.get(key);
   const windowMs = 60_000;
-  const limit = req.path === "/api/auth/bootstrap" ? 10 : 180;
+  const limit = ["/api/auth/signup", "/api/auth/login", "/api/auth/bootstrap"].includes(req.path) ? 10 : 180;
   if (!current || current.resetAt <= now) rateState.set(key, { count: 1, resetAt: now + windowMs });
   else if (current.count >= limit) return res.status(429).json({ success: false, error: "Rate limit exceeded" });
   else current.count++;
@@ -1907,13 +1986,13 @@ app.get("/api/auth/me", (req: any, res) => {
   if (!req.user) return res.status(401).json({ success: false, error: "Authentication required" });
   const org = db.getOrganizations().find((item) => item.id === req.user.organizationId) || null;
   res.setHeader("Cache-Control", "no-store");
-  res.json({ success: true, user: req.user, organization: org });
+  res.json({ success: true, user: publicUser(req.user), organization: org });
 });
 
 app.get("/api/auth/users", requireRole(["admin"]), (_req, res) => {
   res.json({
     success: true,
-    users: db.getUsers(),
+    users: db.getUsers().map(publicUser),
     organizations: db.getOrganizations(),
   });
 });
