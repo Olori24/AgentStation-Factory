@@ -59,7 +59,11 @@ def test_browser_auth_is_cookie_based_and_server_owned():
     assert 'sameSite: "strict"' in server
     assert "api/auth/me" in app
     assert "credentials: 'include'" in app
-    assert "bootstrapToken" in app
+    assert 'app.post("/api/auth/signup"' in server
+    assert 'app.post("/api/auth/login"' in server
+    assert "Create account" in app
+    assert "Sign in to AgentStation" in app
+    assert "bootstrapToken" not in app
     assert "SESSION_COOKIE" in auth
 
 def test_tenant_ownership_and_rls_migration_exist():
