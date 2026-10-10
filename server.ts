@@ -102,15 +102,38 @@ function issueAuthCookie(res: any, userId: string) {
 }
 
 const authAttemptState = new Map<string, { count: number; resetAt: number }>();
+const AUTH_RATE_WINDOW_MS = 60_000;
+const AUTH_RATE_LIMIT = 10;
+// Serverless instances are short-lived, but an instance can still receive many
+// distinct client keys. Bound this best-effort in-memory limiter to avoid
+// unbounded growth; this is not a substitute for a shared production rate limiter.
+const AUTH_RATE_MAX_KEYS = 10_000;
+let lastAuthRateSweepAt = 0;
+
 function authRateLimit(req: any, res: any, next: any) {
   const key = `${req.ip || req.socket.remoteAddress || "unknown"}:${req.path}`;
   const now = Date.now();
+
+  if (now - lastAuthRateSweepAt >= AUTH_RATE_WINDOW_MS) {
+    for (const [storedKey, entry] of authAttemptState) {
+      if (entry.resetAt <= now) authAttemptState.delete(storedKey);
+    }
+    lastAuthRateSweepAt = now;
+  }
+
   const current = authAttemptState.get(key);
   if (!current || current.resetAt <= now) {
-    authAttemptState.set(key, { count: 1, resetAt: now + 60_000 });
+    // Evict the oldest entry if an attacker cycles through client addresses.
+    if (authAttemptState.size >= AUTH_RATE_MAX_KEYS) {
+      const oldestKey = authAttemptState.keys().next().value;
+      if (oldestKey !== undefined) authAttemptState.delete(oldestKey);
+    }
+    authAttemptState.set(key, { count: 1, resetAt: now + AUTH_RATE_WINDOW_MS });
     return next();
   }
-  if (current.count >= 10) return res.status(429).json({ success: false, error: "Too many attempts. Please wait a minute and try again." });
+  if (current.count >= AUTH_RATE_LIMIT) {
+    return res.status(429).json({ success: false, error: "Too many attempts. Please wait a minute and try again." });
+  }
   current.count++;
   return next();
 }
