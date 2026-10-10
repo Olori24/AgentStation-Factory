@@ -18,6 +18,7 @@ import {
   ArrowRight,
   Layers,
   X,
+  Palette,
 } from 'lucide-react';
 import { SquadMission } from '../types';
 import { WorkstationTab } from './ManusComputer';
@@ -32,6 +33,7 @@ interface CommandPaletteProps {
   onSelectTab: (tab: WorkstationTab) => void;
   onOpenAutonomy: () => void;
   onOpenGrowthFactory: () => void;
+  onOpenGradientStudio: () => void;
   onOpenFullStack: () => void;
   onOpenGitHub: () => void;
   onOpenOllama: () => void;
@@ -57,6 +59,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onSelectTab,
   onOpenAutonomy,
   onOpenGrowthFactory,
+  onOpenGradientStudio,
   onOpenFullStack,
   onOpenGitHub,
   onOpenOllama,
@@ -106,6 +109,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         icon: <Film className="w-4 h-4 text-cyan-400" />,
         onSelect: () => {
           onOpenGrowthFactory();
+          onClose();
+        },
+      },
+      {
+        id: 'act-gradient-studio',
+        group: 'Quick Actions',
+        title: 'Gradient Studio — Free Premium Prompt Vault',
+        subtitle: 'Explore original presets, tune colours and motion, and export prompts or CSS',
+        icon: <Palette className="w-4 h-4 text-violet-300" />,
+        onSelect: () => {
+          onOpenGradientStudio();
           onClose();
         },
       },
