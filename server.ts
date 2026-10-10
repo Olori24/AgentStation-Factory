@@ -73,7 +73,7 @@ app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { (req as any).
 
 function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")): string {
   const digest = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `scrypt${salt}${digest}`;
+  return ["scrypt", salt, digest].join("$");
 }
 
 function verifyPassword(password: string, stored: string): boolean {
