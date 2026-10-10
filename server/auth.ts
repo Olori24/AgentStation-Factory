@@ -76,16 +76,36 @@ declare global {
 
 export interface AuthenticatedRequest extends Request { user?: UserRecord; }
 
-export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+/**
+ * Wait for the backing store before resolving a session. In Vercel serverless
+ * instances the app can receive an authenticated request while Neon state is
+ * still loading; checking the in-memory user list first falsely rejects valid
+ * sessions. A storage failure is a service error, not an invalid credential.
+ */
+export async function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    await db.ready();
+  } catch {
+    return res.status(503).json({
+      success: false,
+      error: 'Authentication service is temporarily unavailable. Please try again shortly.',
+    });
+  }
+
   const authHeader = String(req.headers.authorization || '');
   const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   const cookieHeader = String(req.headers.cookie || '');
   const cookie = cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`));
-  const cookieToken = cookie ? decodeURIComponent(cookie.slice(SESSION_COOKIE.length + 1)) : '';
+  let cookieToken = '';
+  try {
+    cookieToken = cookie ? decodeURIComponent(cookie.slice(SESSION_COOKIE.length + 1)) : '';
+  } catch {
+    return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+  }
   const user = verifySessionToken(bearer || cookieToken);
   if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
   req.user = user;
-  next();
+  return next();
 }
 
 export function requireRole(allowedRoles: Array<'admin' | 'engineer' | 'reviewer'>) {

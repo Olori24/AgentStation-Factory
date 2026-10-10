@@ -178,9 +178,15 @@ app.post("/api/auth/login", authRateLimit, async (req, res) => {
   return res.json({ success: true, user: publicUser(user) });
 });
 
-app.post("/api/auth/bootstrap", (req, res) => {
-  const bootstrapToken = String(req.body?.bootstrapToken || "");
-  if (!verifyBootstrapToken(bootstrapToken)) return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
+app.post("/api/auth/bootstrap", async (req, res) => {
+  if (!verifyBootstrapToken(String(req.body?.bootstrapToken || ""))) {
+    return res.status(401).json({ success: false, error: "Invalid bootstrap credentials" });
+  }
+  try {
+    await db.ready();
+  } catch {
+    return res.status(503).json({ success: false, error: "Authentication service is temporarily unavailable. Please try again shortly." });
+  }
   const userId = String(process.env.AUTH_BOOTSTRAP_USER_ID || "");
   const user = db.getUserById(userId);
   if (!user) return res.status(404).json({ success: false, error: "User not found" });
@@ -193,7 +199,7 @@ app.post("/api/auth/bootstrap", (req, res) => {
     path: "/",
   });
   res.setHeader("Cache-Control", "no-store");
-  res.json({ success: true, user });
+  res.json({ success: true, user: publicUser(user) });
 });
 
 app.post("/api/auth/logout", (req, res) => {
