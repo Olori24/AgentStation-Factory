@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { X, Copy, Check, WandSparkles, Palette, Code2, Bookmark, BookmarkCheck, Download, RotateCcw } from 'lucide-react';
+import { X, Copy, Check, WandSparkles, Palette, Code2, Bookmark, BookmarkCheck, Download, RotateCcw, Paintbrush, Undo2 } from 'lucide-react';
 
 type GradientPreset = {
   id: string;
@@ -31,6 +31,7 @@ export const GradientStudio: React.FC<{ onClose: () => void; onToast?: (message:
   const [speed, setSpeed] = useState(PRESETS[0].speed);
   const [tab, setTab] = useState<StudioTab>('presets');
   const [copied, setCopied] = useState('');
+  const [applied, setApplied] = useState(false);
   const [saved, setSaved] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('agentstation_gradient_favorites_v1') || '[]'); }
     catch { return []; }
@@ -68,6 +69,28 @@ export const GradientStudio: React.FC<{ onClose: () => void; onToast?: (message:
     setColors([...preset.colors]);
     setAngle(preset.angle);
     setSpeed(preset.speed);
+  };
+
+  const applyToAgentStation = () => {
+    const background = `radial-gradient(ellipse at 18% 20%, ${colors[0]}38 0%, transparent 48%), radial-gradient(ellipse at 82% 72%, ${colors[1]}2b 0%, transparent 46%), linear-gradient(${angle}deg, #04060a 0%, ${colors[2]} 100%)`;
+    const selection = { id: activeId, colors, angle, speed, background };
+    try {
+      localStorage.setItem('agentstation_applied_gradient_v1', JSON.stringify(selection));
+      document.documentElement.style.setProperty('--as-user-gradient', background);
+      setApplied(true);
+      onToast?.('Gradient applied to AgentStation and saved on this device.');
+    } catch {
+      document.documentElement.style.setProperty('--as-user-gradient', background);
+      setApplied(true);
+      onToast?.('Gradient applied for this session. Browser storage was unavailable.');
+    }
+  };
+
+  const resetAgentStationGradient = () => {
+    document.documentElement.style.removeProperty('--as-user-gradient');
+    try { localStorage.removeItem('agentstation_applied_gradient_v1'); } catch {}
+    setApplied(false);
+    onToast?.('AgentStation background restored to its default theme.');
   };
 
   const notifyCopy = async (kind: string, value: string) => {
@@ -126,7 +149,8 @@ export const GradientStudio: React.FC<{ onClose: () => void; onToast?: (message:
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div><p className="text-sm font-semibold text-white">{PRESETS.find((item) => item.id === activeId)?.name || 'Custom gradient'}</p><p className="mt-0.5 text-xs text-slate-400">{PRESETS.find((item) => item.id === activeId)?.description || 'Custom gradient recipe'}</p></div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={applyToAgentStation} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-violet-500 px-3 text-xs font-bold text-white hover:bg-violet-400"><Paintbrush className="h-4 w-4"/>{applied ? 'Applied to AgentStation' : 'Apply to AgentStation'}</button>
                 <button type="button" onClick={toggleSaved} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 px-3 text-xs font-semibold text-slate-200 hover:bg-white/5">{saved.includes(activeId) ? <BookmarkCheck className="h-4 w-4 text-amber-300"/> : <Bookmark className="h-4 w-4"/>}{saved.includes(activeId) ? 'Saved' : 'Save preset'}</button>
                 <button type="button" onClick={() => void notifyCopy('css', css)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-3 text-xs font-bold text-slate-950 hover:bg-slate-200">{copied === 'css' ? <Check className="h-4 w-4"/> : <Copy className="h-4 w-4"/>}Copy CSS</button>
               </div>
@@ -161,7 +185,7 @@ export const GradientStudio: React.FC<{ onClose: () => void; onToast?: (message:
 
             {tab === 'css' && <div className="mt-4 flex min-h-0 flex-col gap-3"><div className="flex items-center gap-2 text-xs text-cyan-300"><Code2 className="h-4 w-4"/>Framework-free CSS export</div><textarea readOnly value={css} className="min-h-[260px] w-full flex-1 resize-y rounded-xl border border-white/10 bg-black/30 p-4 font-mono text-xs leading-5 text-slate-200 outline-none sm:min-h-[340px]"/><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => void notifyCopy('css', css)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cyan-400 px-3 text-sm font-bold text-slate-950 hover:bg-cyan-300">{copied === 'css' ? <Check className="h-4 w-4"/> : <Copy className="h-4 w-4"/>}Copy CSS</button><button type="button" onClick={exportCss} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 px-3 text-sm font-semibold text-slate-200 hover:bg-white/5"><Download className="h-4 w-4"/>Download .css</button></div></div>}
 
-            <div className="mt-auto pt-5"><div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[.04] p-3"><p className="text-xs font-semibold text-emerald-300">Built for real projects</p><p className="mt-1 text-[11px] leading-5 text-slate-400">No API key, subscription, WebGL dependency or third-party prompt extraction. Preset favorites stay in this browser.</p></div><button type="button" onClick={() => { applyPreset(PRESETS[0]); setTab('presets'); setQuery(''); }} className="mt-3 inline-flex min-h-10 items-center gap-2 text-xs text-slate-500 hover:text-slate-200"><RotateCcw className="h-3.5 w-3.5"/>Reset studio</button></div>
+            <div className="mt-auto pt-5"><div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[.04] p-3"><p className="text-xs font-semibold text-emerald-300">Built for real projects</p><p className="mt-1 text-[11px] leading-5 text-slate-400">Apply a recipe to AgentStation itself. Your selected atmosphere is saved in this browser and restored on the next visit.</p></div><div className="mt-3 flex flex-wrap gap-3"><button type="button" onClick={() => { applyPreset(PRESETS[0]); setTab('presets'); setQuery(''); }} className="inline-flex min-h-10 items-center gap-2 text-xs text-slate-400 hover:text-white"><RotateCcw className="h-3.5 w-3.5"/>Reset studio controls</button><button type="button" onClick={resetAgentStationGradient} className="inline-flex min-h-10 items-center gap-2 text-xs text-slate-500 hover:text-slate-200"><Undo2 className="h-3.5 w-3.5"/>Reset app background</button></div></div>
           </section>
         </div>
       </div>
