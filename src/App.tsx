@@ -13,6 +13,7 @@ import {
   Cpu,
   ArrowLeft,
   Zap,
+  Palette,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { SquadBar } from './components/SquadBar';
@@ -31,6 +32,7 @@ import { ManusSidebar } from './components/ManusSidebar';
 import { ManusConversation } from './components/ManusConversation';
 import { ManusComputer, WorkstationTab } from './components/ManusComputer';
 import { GrowthFactoryModal } from './components/GrowthFactoryModal';
+import { GradientStudio } from './components/GradientStudio';
 import { AutonomyCommandCenter } from './components/AutonomyCommandCenter';
 import { CommandPalette } from './components/CommandPalette';
 import { DEFAULT_AGENTS, INITIAL_MISSION, GITHUB_REPO_INFO } from './data/defaults';
@@ -86,6 +88,7 @@ function AgentStationApp() {
   const [ciStatus, setCiStatus] = useState<CiStatusInfo | null>(null);
   const [isFullStackModalOpen, setIsFullStackModalOpen] = useState(false);
   const [isGrowthFactoryOpen, setIsGrowthFactoryOpen] = useState(false);
+  const [isGradientStudioOpen, setIsGradientStudioOpen] = useState(false);
   const [isAutonomyOpen, setIsAutonomyOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
@@ -759,6 +762,14 @@ function AgentStationApp() {
               >
                 <Film className="w-4 h-4" />
               </button>
+              <button
+                type="button"
+                onClick={() => setIsGradientStudioOpen(true)}
+                aria-label="Open Gradient Studio"
+                className="w-10 h-10 rounded-xl border border-violet-900/60 bg-violet-950/40 flex items-center justify-center text-violet-300"
+              >
+                <Palette className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
@@ -908,6 +919,8 @@ function AgentStationApp() {
           </div>
         )}
       </div>
+
+      {isGradientStudioOpen && <GradientStudio onClose={() => setIsGradientStudioOpen(false)} onToast={showToast} />}
 
       <AutonomyCommandCenter
         isOpen={isAutonomyOpen}
@@ -1193,6 +1206,7 @@ function AgentStationApp() {
         }}
         onOpenAutonomy={() => setIsAutonomyOpen(true)}
         onOpenGrowthFactory={() => setIsGrowthFactoryOpen(true)}
+        onOpenGradientStudio={() => setIsGradientStudioOpen(true)}
         onOpenFullStack={() => setIsFullStackModalOpen(true)}
         onOpenGitHub={() => setIsGitHubModalOpen(true)}
         onOpenOllama={() => setIsOllamaModalOpen(true)}
