@@ -101,7 +101,21 @@ function issueAuthCookie(res: any, userId: string) {
   res.setHeader("Cache-Control", "no-store");
 }
 
-app.post("/api/auth/signup", (req, res) => {
+const authAttemptState = new Map<string, { count: number; resetAt: number }>();
+function authRateLimit(req: any, res: any, next: any) {
+  const key = `${req.ip || req.socket.remoteAddress || "unknown"}:${req.path}`;
+  const now = Date.now();
+  const current = authAttemptState.get(key);
+  if (!current || current.resetAt <= now) {
+    authAttemptState.set(key, { count: 1, resetAt: now + 60_000 });
+    return next();
+  }
+  if (current.count >= 10) return res.status(429).json({ success: false, error: "Too many attempts. Please wait a minute and try again." });
+  current.count++;
+  return next();
+}
+
+app.post("/api/auth/signup", authRateLimit, (req, res) => {
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
@@ -137,7 +151,7 @@ app.post("/api/auth/signup", (req, res) => {
   return res.status(201).json({ success: true, user: publicUser(user), organization });
 });
 
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", authRateLimit, (req, res) => {
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
   if (email.length > 254 || !email || password.length > 128 || !password) return res.status(400).json({ success: false, error: "Enter your email address and password." });
@@ -2011,7 +2025,7 @@ app.get("/api/db/metrics", requireRole(["admin"]), (_req, res) => {
 app.get("/api/db/snapshot", requireRole(["admin"]), (_req, res) => {
   res.json({
     success: true,
-    snapshot: db.getSnapshot(),
+    snapshot: { ...db.getSnapshot(), users: db.getSnapshot().users.map(publicUser) },
   });
 });
 
