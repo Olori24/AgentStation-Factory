@@ -338,7 +338,16 @@ class RelationalDatabase {
       }
       this.isLoaded = true;
     } catch (err: any) {
-      console.warn('[DB] Failed to load database file, using in-memory defaults:', err.message);
+      if (STORAGE_BACKEND === 'postgres') {
+        // Allow the next request to retry a transient Neon connection failure.
+        // Keeping the rejected promise would permanently poison this warm
+        // serverless instance even after the database becomes reachable again.
+        postgresReady = false;
+        postgresLoadPromise = null;
+        console.error('[DB] PostgreSQL initialization failed; a later request may retry:', err instanceof Error ? err.message : 'unknown error');
+      } else {
+        console.warn('[DB] Failed to load database file, using in-memory defaults:', err.message);
+      }
       this.isLoaded = true;
     }
   }
@@ -687,7 +696,24 @@ class RelationalDatabase {
   }
 
   public async ready(): Promise<void> {
-    if (postgresLoadPromise) await postgresLoadPromise;
+    if (STORAGE_BACKEND === 'postgres') {
+      if (!postgresReady && !postgresLoadPromise) {
+        postgresLoadPromise = loadPostgresState(this.data);
+      }
+      if (postgresLoadPromise) {
+        try {
+          await postgresLoadPromise;
+        } catch (err) {
+          // Clear failed initialization so a subsequent request can retry.
+          postgresLoadPromise = null;
+          postgresReady = false;
+          throw err;
+        }
+      }
+    } else if (postgresLoadPromise) {
+      await postgresLoadPromise;
+    }
+
     if (process.env.NODE_ENV === 'production' && !this.isPostgresReady()) {
       throw new Error('Production database is not ready');
     }
