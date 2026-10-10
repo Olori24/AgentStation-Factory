@@ -366,6 +366,19 @@ class RelationalDatabase {
     }, 500);
   }
 
+  /**
+   * Persist the current state before returning from request handlers.
+   * Serverless runtimes may suspend the process before a debounced save runs.
+   */
+  public async flush(): Promise<void> {
+    if (postgresLoadPromise) await postgresLoadPromise;
+    if (STORAGE_BACKEND === 'postgres') {
+      await persistPostgresState(this.data);
+      return;
+    }
+    this.saveImmediately();
+  }
+
   // --- Users & Orgs ---
   public getUsers(): UserRecord[] {
     return this.data.users;
