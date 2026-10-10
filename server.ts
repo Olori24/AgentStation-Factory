@@ -115,7 +115,12 @@ function authRateLimit(req: any, res: any, next: any) {
   return next();
 }
 
-app.post("/api/auth/signup", authRateLimit, (req, res) => {
+app.post("/api/auth/signup", authRateLimit, async (req, res) => {
+  try {
+    await db.ready();
+  } catch {
+    return res.status(503).json({ success: false, error: "Authentication service is temporarily unavailable. Please try again shortly." });
+  }
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
@@ -147,11 +152,21 @@ app.post("/api/auth/signup", authRateLimit, (req, res) => {
   };
   db.addOrganization(organization);
   db.addUser(user);
+  try {
+    await db.flush();
+  } catch {
+    return res.status(503).json({ success: false, error: "We could not save your account right now. Please try again shortly." });
+  }
   issueAuthCookie(res, user.id);
   return res.status(201).json({ success: true, user: publicUser(user), organization });
 });
 
-app.post("/api/auth/login", authRateLimit, (req, res) => {
+app.post("/api/auth/login", authRateLimit, async (req, res) => {
+  try {
+    await db.ready();
+  } catch {
+    return res.status(503).json({ success: false, error: "Authentication service is temporarily unavailable. Please try again shortly." });
+  }
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
   if (email.length > 254 || !email || password.length > 128 || !password) return res.status(400).json({ success: false, error: "Enter your email address and password." });
