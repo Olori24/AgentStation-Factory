@@ -186,3 +186,20 @@ button{-webkit-tap-highlight-color:transparent}
 .as-topbar button,.as-sidebar button{outline-offset:3px}
 .as-sidebar{box-shadow:12px 0 50px rgba(0,0,0,.16)}
 .as-sidebar input:focus-visible{outline:2px solid var(--as-accent);outline-offset:1px}
+
+
+/* AgentStation Gradient Studio — lightweight CSS-only gradient preview. */
+.gradient-studio-preview {
+  animation-name: gradient-studio-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+@keyframes gradient-studio-float {
+  from { background-position: 0% 0%; transform: scale(1); }
+  to { background-position: 100% 100%; transform: scale(1.035); }
+}
+.gradient-studio-shell input[type="range"] { min-height: 24px; cursor: pointer; }
+.gradient-studio-shell input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.gradient-studio-shell input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(255,255,255,.2); border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) { .gradient-studio-preview { animation: none; } }
