@@ -1283,65 +1283,81 @@ function AgentStationApp() {
 export default function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
-  const [bootstrapToken, setBootstrapToken] = useState('');
+  const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
+    fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
       .then((res) => setAuthenticated(res.ok))
       .catch(() => setAuthenticated(false))
       .finally(() => setAuthChecking(false));
   }, []);
 
-  const handleBootstrapLogin = async () => {
+  const handleAuth = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setAuthError(null);
-    if (!bootstrapToken.trim()) {
-      setAuthError('Enter the administrator bootstrap token.');
+    if (authMode === 'signup' && password !== confirmPassword) {
+      setAuthError('Your passwords do not match.');
       return;
     }
+    setAuthBusy(true);
     try {
-      const res = await fetch('/api/auth/bootstrap', {
+      const res = await fetch(authMode === 'signup' ? '/api/auth/signup' : '/api/auth/login', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bootstrapToken: bootstrapToken.trim() }),
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Authentication failed');
+      if (!res.ok) throw new Error(data.error || 'We could not authenticate your account.');
       setAuthenticated(true);
-      setBootstrapToken('');
+      setPassword('');
+      setConfirmPassword('');
     } catch (err: any) {
-      setAuthError(err?.message || 'Authentication failed');
+      setAuthError(err?.message || 'Something went wrong. Please try again.');
+    } finally {
+      setAuthBusy(false);
     }
   };
 
   if (authChecking) {
-    return <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center text-sm">Securing AgentStation…</div>;
+    return <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center text-sm">Preparing your secure workspace…</div>;
   }
 
   if (!authenticated) {
+    const isSignup = authMode === 'signup';
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center"><Bot className="w-5 h-5" /></div>
-            <div><h1 className="text-lg font-bold">AgentStation</h1><p className="text-xs text-slate-400">Secure operator sign-in</p></div>
+      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 shadow-lg shadow-blue-950/50"><Bot className="h-6 w-6" /></div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-blue-300">Your AI workspace</p>
+            <h1 className="text-3xl font-bold tracking-tight">Welcome to AgentStation</h1>
+            <p className="mt-2 text-sm text-slate-400">{isSignup ? 'Create your account to start building with AI.' : 'Sign in to continue to your workspace.'}</p>
           </div>
-          <label className="block text-xs font-semibold text-slate-300 mb-2">Bootstrap token</label>
-          <input
-            type="password"
-            value={bootstrapToken}
-            onChange={(e) => setBootstrapToken(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') void handleBootstrapLogin(); }}
-            autoComplete="current-password"
-            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-blue-500"
-            placeholder="Enter your server-issued bootstrap token"
-          />
-          {authError && <p className="mt-3 text-xs text-red-400">{authError}</p>}
-          <button type="button" onClick={() => void handleBootstrapLogin()} className="mt-4 w-full rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-3 text-sm font-semibold">Sign in securely</button>
-          <p className="mt-4 text-[11px] leading-5 text-slate-500">The token is sent only to the server. It is never stored in browser storage or returned to the page.</p>
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-2xl sm:p-7">
+            <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1">
+              <button type="button" onClick={() => { setAuthMode('signup'); setAuthError(null); }} className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${isSignup ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Create account</button>
+              <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${!isSignup ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Sign in</button>
+            </div>
+            <form onSubmit={(event) => void handleAuth(event)} className="space-y-4">
+              {isSignup && <div><label htmlFor="signup-name" className="mb-1.5 block text-sm font-medium text-slate-300">Your name</label><input id="signup-name" type="text" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" maxLength={80} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder="Enter your name" /></div>}
+              <div><label htmlFor="signup-email" className="mb-1.5 block text-sm font-medium text-slate-300">Email address</label><input id="signup-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" maxLength={254} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder="you@example.com" /></div>
+              <div><label htmlFor="signup-password" className="mb-1.5 block text-sm font-medium text-slate-300">Password</label><input id="signup-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={10} maxLength={128} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder={isSignup ? 'At least 10 characters' : 'Enter your password'} /></div>
+              {isSignup && <div><label htmlFor="signup-confirm-password" className="mb-1.5 block text-sm font-medium text-slate-300">Confirm password</label><input id="signup-confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={10} maxLength={128} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder="Enter the same password again" /></div>}
+              {authError && <p role="alert" className="rounded-lg border border-red-900/70 bg-red-950/40 px-3 py-2.5 text-sm text-red-300">{authError}</p>}
+              <button type="submit" disabled={authBusy} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{authBusy ? 'Please wait…' : isSignup ? 'Create my account' : 'Sign in to AgentStation'}</button>
+            </form>
+            <p className="mt-5 text-center text-xs leading-5 text-slate-500">{isSignup ? 'Your password is securely hashed and never stored as plain text.' : 'Use the email and password you registered with.'}</p>
+          </section>
+          <p className="mt-4 text-center text-xs text-slate-600">Secure account access · Your workspace, your work</p>
         </div>
-      </div>
+      </main>
     );
   }
 

@@ -6,6 +6,7 @@ export interface UserRecord {
   id: string;
   email: string;
   name: string;
+  passwordHash?: string;
   role: 'admin' | 'engineer' | 'reviewer';
   avatar: string;
   organizationId: string;
@@ -376,6 +377,16 @@ class RelationalDatabase {
 
   public getUserByEmail(email: string): UserRecord | undefined {
     return this.data.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  }
+
+  public addOrganization(organization: OrganizationRecord): void {
+    this.data.organizations.push(organization);
+    this.scheduleSave();
+  }
+
+  public addUser(user: UserRecord): void {
+    this.data.users.push(user);
+    this.scheduleSave();
   }
 
   public getOrganizations(): OrganizationRecord[] {
