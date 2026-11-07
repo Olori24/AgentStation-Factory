@@ -93,3 +93,30 @@ Use these labels in follow-up reporting:
 - **RESIDUAL RISK:** mitigation exists but the underlying risk remains.
 
 No formal OWASP, NIST, CIS, or other compliance certification is claimed by this review.
+
+
+## Mandatory six-control review checklist (2026-11-07)
+
+This checklist is a release gate for every launch and every material AI-agent/runtime change. A green CI run does not override any item marked partial or not verified.
+
+| Control | Evidence reviewed | Assessment |
+|---|---|---|
+| Server-side secrets | `server/auth.ts` requires production `ENCRYPTION_KEY` and `SESSION_SECRET`; provider credentials are read from server environment. `getAgentRouterConfigStatus()` returns the first eight characters of the AgentRouter key to an authenticated API caller. | **PARTIAL** — keep all secret material server-side; remove key-prefix disclosure and audit every status/log/error response for credential leakage. Verify deployed environment and rotation separately. |
+| Database RLS | `db/migrations/006_agentstation_state_store.sql` enables and forces RLS only on `agentstation_state`, with an organization predicate. Other tables created by migrations 001–004 do not declare RLS policies in the reviewed migrations. | **NOT VERIFIED / GAP** — the six-control standard is not met for the full schema. Inventory every production table, enable and force RLS where appropriate, add tenant policies, and test using the actual restricted application database role (not a table owner/superuser). |
+| Record ownership | Mission detail/task operations call `db.canAccessMission`; mission lists filter user and organization. The state store is one JSONB row addressed through fixed `DEFAULT_ORG.id = org-station-01`, while signup creates separate organization IDs and stores all state in that shared snapshot. | **PARTIAL / HIGH RISK** — application filters exist for selected mission routes, but the single shared snapshot is not tenant-isolated by database row. Audit every route and child record (files, logs, approvals, tasks, settings); move to tenant-keyed relational records or provide rigorously tested per-tenant partitioning and atomic ownership checks. |
+| Admin behind login | `/api` middleware authenticates requests before protected routes; `requireRole(['admin'])` protects admin endpoints and role is read from the server-side user record. | **PARTIAL** — route-level controls are visible, but complete route inventory, seeded/admin bootstrap lifecycle, privilege escalation tests, and cross-tenant admin boundaries still require verification. |
+| Signup abuse controls | Signup validates name/email/password and uses a 10-per-minute in-memory limiter. A second generic per-process limiter also exists. | **PARTIAL / HIGH RISK** — limits are process-local and reset on instance restart; they do not reliably protect horizontally scaled/serverless deployments. Add shared-store rate limiting, signup abuse/bot controls, email verification or equivalent enrollment controls, and race-safe uniqueness constraints. |
+| Webhook verification | `/api/github/webhook` verifies `X-Hub-Signature-256` using HMAC-SHA256 and constant-time comparison over the raw body. | **PARTIAL / HIGH RISK** — signature validation exists, but no delivery-ID deduplication/idempotency or replay ledger was found in the handler. Persist `X-GitHub-Delivery` with a unique constraint and reject duplicate deliveries; make side effects transactional/idempotent. Add bounded payload handling and event/repository allowlisting. |
+
+### Required remediation before production approval
+
+1. Remove the AgentRouter key-prefix field from client-visible configuration status; return presence/configured state only.
+2. Establish a complete schema inventory and enforce tenant RLS on every tenant-bearing table, including the actual production DB role and FORCE RLS behavior.
+3. Resolve the shared JSONB snapshot / fixed organization design before claiming database-enforced tenant isolation. Add per-tenant storage and ownership checks for all child resources.
+4. Complete an API authorization matrix for every route, with negative tests for unauthenticated access, wrong role, wrong owner, and cross-tenant identifiers. Review bootstrap/admin creation and role mutation paths.
+5. Replace process-local auth/signup limits with a shared distributed limiter and add signup abuse protections plus database-enforced unique email constraints.
+6. Add durable webhook delivery deduplication and replay/idempotency tests; retain HMAC verification and reject invalid signatures.
+
+### Evidence boundary
+
+These findings are based on the branch source and migrations inspected for this review. No production database connection, live role/policy inspection, deployed secret inventory, or live webhook delivery test was performed. Therefore RLS deployment, actual tenant enforcement, production secret configuration, and webhook replay resistance remain **not certified**. The six controls must be rechecked after remediation and on every future launch.
