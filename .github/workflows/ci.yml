@@ -136,10 +136,10 @@ jobs:
           AGENTSTATION_STORAGE: json
 
   # ---------------------------------------------------------------------------
-  # Adversarial security tests: real sandbox service + real app, subprocess
-  # based. No container engine is involved, so these cover authentication,
-  # token handling, tenant isolation, traversal and payload limits - NOT
-  # kernel isolation.
+  # Adversarial sandbox regression tests: fail-closed service startup plus
+  # source-level assertions for authentication, traversal, resource bounds,
+  # cleanup and container flags. These do NOT certify kernel isolation;
+  # docker-isolation below is the only kernel/container certification job.
   # ---------------------------------------------------------------------------
   adversarial:
     name: Adversarial security tests
