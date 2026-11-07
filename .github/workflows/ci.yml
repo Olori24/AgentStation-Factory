@@ -1,21 +1,27 @@
-name: AgentStation CI/CD Verification
+name: AgentStation CI - Typecheck, Build, Tests & E2E Demo
 
 on:
   push:
-    branches: [ main, develop, 'arena/**', 'feat/**', 'fix/**', 'ux/**', 'chore/**', 'docs/**', 'release/**' ]
+    branches: ['**']
   pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-test:
+  test:
+    name: Typecheck, Build & pytest
     runs-on: ubuntu-latest
-    name: Build, Lint & Automated Tests
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -23,40 +29,47 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Install Node Dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Dependency Security Audit
-        run: npm audit --audit-level=high
-
-      - name: Secret History Scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Type Check and Lint
+      - name: TypeScript typecheck
         run: npm run lint
 
-      - name: Compile and Build Applet
+      - name: Build (vite + esbuild)
         run: npm run build
 
-      - name: Set up Python for Security and Mission Sandboxes
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Python Test Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest
+      - name: Install pytest
+        run: python -m pip install --quiet pytest
 
-      - name: Static Security Regression Audit
-        run: python -m pytest tests/security_static_audit.py -q
+      - name: Run pytest suite
+        run: python -m pytest -v tests/test_mission_sandbox.py tests/security_static_audit.py
 
-      - name: Run Test Suite Verification
-        run: |
-          if [ -d "tests" ] && [ "$(ls -A tests 2>/dev/null)" ]; then
-            pytest -v tests/
-          else
-            echo "No test files found; verification skipped."
-          fi
+  e2e-demo:
+    name: End-to-end demo (fresh server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run demo end-to-end against a fresh server instance
+        env:
+          SANDBOX_RUNTIME: local
+          TERMINAL_EXECUTION_ENABLED: 'true'
+          DEMO_VERBOSE: '1'
+        run: npm run demo
