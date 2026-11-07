@@ -392,19 +392,74 @@ execution loop (write → test → document → bundle), and prints the delivera
 
 ### Sandbox runtime
 
-| Environment | Runtime | Notes |
-|---|---|---|
-| Development | `local` (default) | Runs commands in an isolated per-run directory with a scrubbed environment. **No Docker required.** |
-| Production | `docker` (required) | Hardened container: `--network=none --read-only --cap-drop=ALL --user 65532:65532`. |
+Mission and terminal commands are executed by a **sandbox runtime**. Three modes
+are supported; the app selects one from `SANDBOX_RUNTIME`:
 
-Build the hardened sandbox image (only needed for the Docker runtime):
+| Runtime | Where commands run | Isolation | Use it for |
+|---|---|---|---|
+| `local` (dev default) | Child process of the app, in an isolated per-run directory with a scrubbed environment | Process-level only | Fast local iteration, **no Docker required** |
+| `remote` | A dedicated sandbox service that runs each command in a throwaway container | Container-level | The Docker Compose dev profile |
+| `docker` (production) | The app spawns a hardened container per command | Container-level, fail-closed | Production |
+
+Every containerized execution is launched with:
+
+```
+--network=none --read-only --cap-drop=ALL --security-opt=no-new-privileges
+--ipc=none --pids-limit=128 --memory=512m --cpus=1 --ulimit nofile=256:256
+--user 65532:65532
+```
+
+and its per-run workspace is deleted afterwards.
+
+#### Docker Compose dev profile — stronger isolation, one command
+
+The plain `local` runtime runs mission code as a child process of the app. For
+materially stronger isolation without production credentials, the compose
+profile runs the app together with a **dedicated sandbox service**:
+
+```bash
+docker compose up --build
+```
+
+That starts three services:
+
+- **app** — the full-stack server (UI + API) on http://localhost:3000. It never
+  executes mission code and has no access to the container engine.
+- **sandbox** — accepts execution requests from the app over the internal
+  compose network and runs each command in a throwaway, hardened container.
+  Reachable only on the compose network; never published to the host.
+- **sandbox-image** — a one-shot helper that builds the hardened execution
+  image, so `up --build` needs no separate build step.
+
+The app is wired to the service with `SANDBOX_RUNTIME=remote` and
+`SANDBOX_REMOTE_URL=http://sandbox:7070`; the two share a token
+(`SANDBOX_REMOTE_TOKEN`). Copy `.env.compose.example` to `.env` to change the
+port, token, image, concurrency or run-root.
+
+> **Privilege boundary.** The `sandbox` service mounts `/var/run/docker.sock` so
+> it can start execution containers — that is the trust boundary of this
+> profile. It is a *development* convenience: the app container itself stays
+> unprivileged, but anyone who can reach the sandbox service can ask it to run
+> a container. Keep it on the compose network (as configured) and do not expose
+> port 7070.
+
+> **Docker Desktop note.** Per-run workspaces live under
+> `COMPOSE_SANDBOX_RUN_ROOT` (default `/tmp/agentstation-sandbox-runs`), mounted
+> at the identical path inside the service because the Docker daemon resolves
+> bind-mount sources on the host. On Docker Desktop, set it under `$HOME`
+> (e.g. `/Users/you/agentstation-sandbox-runs`) — host file sharing is limited
+> to `$HOME` there.
+
+#### Production
+
+Build the hardened sandbox image and select the Docker runtime:
 
 ```bash
 npm run sandbox:build
 ```
 
-Set `SANDBOX_RUNTIME=docker` to use it. Production refuses to run the sandbox
-unless the Docker runtime is selected.
+Set `SANDBOX_RUNTIME=docker`. Production refuses to run the sandbox unless the
+Docker runtime is selected.
 
 ---
 
@@ -414,6 +469,8 @@ unless the Docker runtime is selected.
 AgentStation-Factory/
 │
 ├── .github/workflows/       # CI + security verification
+├── docker-compose.yml       # Dev profile: app + dedicated sandbox service
+├── Dockerfile               # App image (full-stack server)
 ├── db/migrations/           # PostgreSQL migrations
 ├── docs/
 │   ├── assets/              # Product / README SVG artwork
@@ -424,6 +481,10 @@ AgentStation-Factory/
 │   ├── sw.js                # Service worker
 │   ├── icon.svg
 │   └── favicon.svg
+├── sandbox/
+│   ├── Dockerfile           # Hardened execution image (per-command container)
+│   ├── service.Dockerfile   # Dedicated sandbox service image
+│   └── server.mjs           # Sandbox service (runs commands in containers)
 ├── scripts/
 │   └── migrate.mjs          # Transactional migration runner
 ├── server/
