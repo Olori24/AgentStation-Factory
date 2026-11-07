@@ -14,6 +14,8 @@ export interface SandboxExecutionOptions {
   onChunk?: (text: string, stream: 'stdout' | 'stderr') => void;
 }
 
+export type SandboxRuntime = 'docker' | 'local' | 'remote';
+
 export interface SandboxExecutionResult {
   sandboxId: string;
   command: string;
@@ -23,7 +25,7 @@ export interface SandboxExecutionResult {
   durationMs: number;
   timedOut: boolean;
   isolatedPath: string;
-  runtime: 'docker' | 'local';
+  runtime: SandboxRuntime;
 }
 
 const BASE_SANDBOX_DIR = path.join(process.cwd(), 'data', 'sandboxes');
@@ -34,27 +36,44 @@ const BASE_SANDBOX_DIR = path.join(process.cwd(), 'data', 'sandboxes');
  * - Production always defaults to the hardened Docker runtime (fail-closed).
  * - Development defaults to the local process runtime so the platform runs
  *   end-to-end without requiring a container engine.
+ * - `remote` dispatches to the dedicated sandbox service started by the
+ *   Docker Compose dev profile (`docker compose up --build`): the
+ *   commands run inside a throwaway, hardened container instead of on the app
+ *   host. No Docker socket and no container engine are needed on the app host.
  *
  * An explicit SANDBOX_RUNTIME always wins.
  */
-export function getSandboxRuntime(): 'docker' | 'local' {
+export function getSandboxRuntime(): SandboxRuntime {
   const configured = (process.env.SANDBOX_RUNTIME || '').trim().toLowerCase();
-  if (configured === 'docker' || configured === 'local') return configured;
+  if (configured === 'docker' || configured === 'local' || configured === 'remote') return configured;
   return process.env.NODE_ENV === 'production' ? 'docker' : 'local';
+}
+
+/** Base URL of the dedicated sandbox service used by the `remote` runtime. */
+export function getRemoteSandboxUrl(): string {
+  return (process.env.SANDBOX_REMOTE_URL || '').trim().replace(/\/$/, '');
+}
+
+/** Shared secret authenticating the app to the dedicated sandbox service. */
+function getRemoteSandboxToken(): string {
+  return (process.env.SANDBOX_REMOTE_TOKEN || '').trim();
 }
 
 /**
  * Whether sandbox / terminal execution is permitted in this environment.
  *
  * An explicit TERMINAL_EXECUTION_ENABLED always wins. Otherwise execution is
- * enabled for the local development runtime and stays disabled in production
- * until the isolated runtime is explicitly certified.
+ * enabled for the local development runtime and for the containerized
+ * `remote` runtime, and stays disabled in production until the isolated
+ * runtime is explicitly certified.
  */
 export function isSandboxExecutionEnabled(): boolean {
   const flag = (process.env.TERMINAL_EXECUTION_ENABLED || '').trim().toLowerCase();
   if (flag === 'true') return true;
   if (flag === 'false') return false;
-  return process.env.NODE_ENV !== 'production' && getSandboxRuntime() === 'local';
+  const runtime = getSandboxRuntime();
+  if (runtime === 'remote') return true;
+  return process.env.NODE_ENV !== 'production' && runtime === 'local';
 }
 
 // High-risk host patterns refused by the local (non-container) runtime.
@@ -184,6 +203,105 @@ function runChildProcess(
   });
 }
 
+/**
+ * Execute a command through the dedicated sandbox service.
+ *
+ * This is the runtime behind the Docker Compose dev profile: the app container
+ * never mounts a Docker socket and never runs untrusted code on its own host —
+ * it hands the command to a separate service that executes it in a throwaway,
+ * hardened container. Reachability plus the shared token is the trust boundary.
+ */
+async function executeRemoteSandbox(
+  command: string,
+  options: SandboxExecutionOptions,
+  ctx: { sandboxId: string; timeoutMs: number; startTime: number }
+): Promise<SandboxExecutionResult> {
+  const { sandboxId, timeoutMs, startTime } = ctx;
+  const baseUrl = getRemoteSandboxUrl();
+
+  if (!baseUrl) {
+    const message =
+      'SANDBOX_RUNTIME=remote requires SANDBOX_REMOTE_URL (e.g. http://sandbox:7070). ' +
+      'Start the containerized sandbox with: docker compose up --build';
+    options.onChunk?.(`[SANDBOX] ${message}\n`, 'stderr');
+    if (options.missionId) streaming.streamTerminalLine(options.missionId, message, 'stderr');
+    return {
+      sandboxId,
+      command,
+      exitCode: 1,
+      stdout: '',
+      stderr: message,
+      durationMs: Date.now() - startTime,
+      timedOut: false,
+      isolatedPath: '',
+      runtime: 'remote',
+    };
+  }
+
+  const token = getRemoteSandboxToken();
+  const payload = {
+    command,
+    timeoutMs,
+    env: options.env || {},
+    files: (options.files || []).map((file) => ({ path: file.path, content: file.content })),
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'X-Sandbox-Token': token } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs + 15000),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`sandbox service returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 400)}` : ''}`);
+    }
+
+    const body: any = await response.json();
+    const stdout = String(body?.stdout ?? '');
+    const stderr = String(body?.stderr ?? '');
+
+    // Replay the buffered output through the same chunk callback the local and
+    // docker runtimes use, so the mission stream and terminal UI behave the same.
+    if (stdout) options.onChunk?.(stdout, 'stdout');
+    if (stderr) options.onChunk?.(stderr, 'stderr');
+
+    db.incrementMetric('totalSandboxExecutions');
+
+    return {
+      sandboxId,
+      command,
+      exitCode: Number(body?.exitCode ?? 1),
+      stdout,
+      stderr,
+      durationMs: Number(body?.durationMs ?? Date.now() - startTime),
+      timedOut: Boolean(body?.timedOut),
+      isolatedPath: String(body?.isolatedPath || ''),
+      runtime: 'remote',
+    };
+  } catch (err: any) {
+    const message = `Sandbox service unreachable at ${baseUrl}: ${err.message}`;
+    options.onChunk?.(`${message}\n`, 'stderr');
+    if (options.missionId) streaming.streamTerminalLine(options.missionId, message, 'stderr');
+    return {
+      sandboxId,
+      command,
+      exitCode: 1,
+      stdout: '',
+      stderr: message,
+      durationMs: Date.now() - startTime,
+      timedOut: false,
+      isolatedPath: '',
+      runtime: 'remote',
+    };
+  }
+}
+
 export async function executeSandboxedCommand(
   command: string,
   options: SandboxExecutionOptions = {}
@@ -200,11 +318,21 @@ export async function executeSandboxedCommand(
   if (process.env.NODE_ENV === 'production' && process.env.SANDBOX_RUNTIME !== 'docker') {
     throw new Error('Production sandbox requires SANDBOX_RUNTIME=docker. Host shell execution is permanently disabled.');
   }
-  if (runtime !== 'docker' && runtime !== 'local') {
+  if (runtime !== 'docker' && runtime !== 'local' && runtime !== 'remote') {
     throw new Error('Unsupported sandbox runtime. Production requires SANDBOX_RUNTIME=docker.');
   }
   if (!command || command.length > 20000) throw new Error('Command is missing or too large');
   if (runtime === 'local') assertLocalCommandSafe(command);
+
+  // Containerized dev profile: dispatch to the dedicated sandbox service. No
+  // local directory is created and no host process is spawned here.
+  if (runtime === 'remote') {
+    if (options.missionId) {
+      streaming.streamTerminalLine(options.missionId, `$ [SANDBOX CONTAINERIZED] ${command}\n`, 'stdout');
+    }
+    return executeRemoteSandbox(command, options, { sandboxId, timeoutMs, startTime: Date.now() });
+  }
+
   const startTime = Date.now();
 
   try {
