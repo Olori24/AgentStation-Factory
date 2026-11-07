@@ -23,9 +23,166 @@ export interface SandboxExecutionResult {
   durationMs: number;
   timedOut: boolean;
   isolatedPath: string;
+  runtime: 'docker' | 'local';
 }
 
 const BASE_SANDBOX_DIR = path.join(process.cwd(), 'data', 'sandboxes');
+
+/**
+ * Resolve the active sandbox runtime.
+ *
+ * - Production always defaults to the hardened Docker runtime (fail-closed).
+ * - Development defaults to the local process runtime so the platform runs
+ *   end-to-end without requiring a container engine.
+ *
+ * An explicit SANDBOX_RUNTIME always wins.
+ */
+export function getSandboxRuntime(): 'docker' | 'local' {
+  const configured = (process.env.SANDBOX_RUNTIME || '').trim().toLowerCase();
+  if (configured === 'docker' || configured === 'local') return configured;
+  return process.env.NODE_ENV === 'production' ? 'docker' : 'local';
+}
+
+/**
+ * Whether sandbox / terminal execution is permitted in this environment.
+ *
+ * An explicit TERMINAL_EXECUTION_ENABLED always wins. Otherwise execution is
+ * enabled for the local development runtime and stays disabled in production
+ * until the isolated runtime is explicitly certified.
+ */
+export function isSandboxExecutionEnabled(): boolean {
+  const flag = (process.env.TERMINAL_EXECUTION_ENABLED || '').trim().toLowerCase();
+  if (flag === 'true') return true;
+  if (flag === 'false') return false;
+  return process.env.NODE_ENV !== 'production' && getSandboxRuntime() === 'local';
+}
+
+// High-risk host patterns refused by the local (non-container) runtime.
+// The Docker runtime relies on kernel isolation instead of this denylist.
+const LOCAL_DENY_PATTERNS: RegExp[] = [
+  /\brm\s+-rf\s+\/(?:\s|$)/i,
+  /\bmkfs(\.\w+)?\b/i,
+  /\bdd\s+if=/i,
+  /\bshutdown\b/i,
+  /\breboot\b/i,
+  /:\(\)\s*\{\s*:\|:&\s*\};:/,
+  />\s*\/etc\//i,
+];
+
+function assertLocalCommandSafe(command: string) {
+  for (const pattern of LOCAL_DENY_PATTERNS) {
+    if (pattern.test(command)) {
+      throw new Error('Command refused by local sandbox safety policy.');
+    }
+  }
+}
+
+/**
+ * Stream a spawned child process to completion, enforcing timeout and output
+ * caps and forwarding live output to the mission stream. Shared by both the
+ * Docker and local runtimes.
+ */
+function runChildProcess(
+  child: import('child_process').ChildProcess,
+  ctx: {
+    sandboxId: string;
+    command: string;
+    sandboxPath: string;
+    runtime: 'docker' | 'local';
+    timeoutMs: number;
+    startTime: number;
+    missionId?: string;
+    onChunk?: (text: string, stream: 'stdout' | 'stderr') => void;
+  }
+): Promise<SandboxExecutionResult> {
+  const { sandboxId, command, sandboxPath, runtime, timeoutMs, startTime, missionId, onChunk } = ctx;
+
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGKILL');
+      const timeoutMsg = `\n[SANDBOX TIMEOUT] Command exceeded ${timeoutMs / 1000}s execution limit. Killed.`;
+      stderr += timeoutMsg;
+      onChunk?.(timeoutMsg, 'stderr');
+      if (missionId) {
+        streaming.streamTerminalLine(missionId, timeoutMsg, 'stderr');
+      }
+    }, timeoutMs);
+
+    const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
+    child.stdout?.on('data', (chunk) => {
+      const text = chunk.toString();
+      if (Buffer.byteLength(stdout, 'utf8') + Buffer.byteLength(text, 'utf8') > MAX_OUTPUT_BYTES) {
+        timedOut = true;
+        child.kill('SIGKILL');
+        stderr += '\n[SANDBOX OUTPUT LIMIT] stdout exceeded 2MB.';
+        return;
+      }
+      stdout += text;
+      onChunk?.(text, 'stdout');
+      if (missionId) {
+        streaming.streamTerminalLine(missionId, text, 'stdout');
+      }
+    });
+
+    child.stderr?.on('data', (chunk) => {
+      const text = chunk.toString();
+      if (Buffer.byteLength(stderr, 'utf8') + Buffer.byteLength(text, 'utf8') > MAX_OUTPUT_BYTES) {
+        timedOut = true;
+        child.kill('SIGKILL');
+        stderr += '\n[SANDBOX OUTPUT LIMIT] stderr exceeded 2MB.';
+        return;
+      }
+      stderr += text;
+      onChunk?.(text, 'stderr');
+      if (missionId) {
+        streaming.streamTerminalLine(missionId, text, 'stderr');
+      }
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const durationMs = Date.now() - startTime;
+      db.incrementMetric('totalSandboxExecutions');
+
+      // Cleanup temporary sandbox dir after 5 minutes asynchronously
+      setTimeout(() => {
+        fs.promises.rm(sandboxPath, { recursive: true, force: true }).catch(() => {});
+      }, 300000);
+
+      resolve({
+        sandboxId,
+        command,
+        exitCode: code ?? (timedOut ? 124 : 1),
+        stdout,
+        stderr,
+        durationMs,
+        timedOut,
+        isolatedPath: sandboxPath,
+        runtime,
+      });
+    });
+
+    child.on('error', () => {
+      clearTimeout(timer);
+      resolve({
+        sandboxId,
+        command,
+        exitCode: 1,
+        stdout,
+        stderr: 'Sandbox process failed to start.',
+        durationMs: Date.now() - startTime,
+        timedOut: false,
+        isolatedPath: sandboxPath,
+        runtime,
+      });
+    });
+  });
+}
 
 export async function executeSandboxedCommand(
   command: string,
@@ -35,13 +192,19 @@ export async function executeSandboxedCommand(
   const sandboxPath = path.join(BASE_SANDBOX_DIR, sandboxId);
   const requestedTimeout = Number(options.timeoutMs || 30000);
   const timeoutMs = Math.min(Math.max(Number.isFinite(requestedTimeout) ? requestedTimeout : 30000, 1000), 120000);
+  const runtime = getSandboxRuntime();
+
   if (process.env.NODE_ENV === 'production' && process.env.TERMINAL_EXECUTION_ENABLED !== 'true') {
     throw new Error('Production sandbox execution is disabled until the runtime is explicitly certified.');
   }
   if (process.env.NODE_ENV === 'production' && process.env.SANDBOX_RUNTIME !== 'docker') {
     throw new Error('Production sandbox requires SANDBOX_RUNTIME=docker. Host shell execution is permanently disabled.');
   }
+  if (runtime !== 'docker' && runtime !== 'local') {
+    throw new Error('Unsupported sandbox runtime. Production requires SANDBOX_RUNTIME=docker.');
+  }
   if (!command || command.length > 20000) throw new Error('Command is missing or too large');
+  if (runtime === 'local') assertLocalCommandSafe(command);
   const startTime = Date.now();
 
   try {
@@ -91,129 +254,62 @@ export async function executeSandboxedCommand(
       }
     }
 
-    return new Promise((resolve) => {
-      let stdout = '';
-      let stderr = '';
-      let timedOut = false;
+    // Notify streaming
+    if (options.missionId) {
+      streaming.streamTerminalLine(options.missionId, `$ [SANDBOX ISOLATED] ${command}\n`, 'stdout');
+    }
 
-      // Notify streaming
-      if (options.missionId) {
-        streaming.streamTerminalLine(options.missionId, `$ [SANDBOX ISOLATED] ${command}\n`, 'stdout');
-      }
+    const image = (process.env.SANDBOX_IMAGE || 'agentstation-sandbox:latest').trim();
+    const dockerArgs = [
+      'run', '--rm',
+      '--network=none',
+      '--read-only',
+      '--tmpfs', '/tmp:rw,noexec,nosuid,size=128m',
+      '--cap-drop=ALL',
+      '--security-opt=no-new-privileges',
+      '--pids-limit=128',
+      '--memory=512m',
+      '--cpus=1',
+      '--ipc=none',
+      '--ulimit', 'nofile=256:256',
+      '--user', '65532:65532',
+      '-v', sandboxPath + ':/workspace:rw',
+      '-w', '/workspace',
+      image,
+      'sh', '-lc', command,
+    ];
 
-      const runtime = (process.env.SANDBOX_RUNTIME || 'docker').trim().toLowerCase();
-      if (runtime !== 'docker') {
-        throw new Error('Unsupported sandbox runtime. Production requires SANDBOX_RUNTIME=docker.');
-      }
-
-      const image = (process.env.SANDBOX_IMAGE || 'agentstation-sandbox:latest').trim();
-      const dockerArgs = [
-        'run', '--rm',
-        '--network=none',
-        '--read-only',
-        '--tmpfs', '/tmp:rw,noexec,nosuid,size=128m',
-        '--cap-drop=ALL',
-        '--security-opt=no-new-privileges',
-        '--pids-limit=128',
-        '--memory=512m',
-        '--cpus=1',
-        '--ipc=none',
-        '--ulimit', 'nofile=256:256',
-        '--user', '65532:65532',
-        '-v', sandboxPath + ':/workspace:rw',
-        '-w', '/workspace',
-        image,
-        'sh', '-lc', command,
-      ];
-
-      const child = spawn('docker', dockerArgs, {
-        cwd: process.cwd(),
-        env: {
-          ...scrubbedEnv,
-          DOCKER_CONFIG: '/nonexistent',
-          HOME: '/tmp',
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-
-      const timer = setTimeout(() => {
-        timedOut = true;
-        child.kill('SIGKILL');
-        const timeoutMsg = `\n[SANDBOX TIMEOUT] Command exceeded ${timeoutMs / 1000}s execution limit. Killed.`;
-        stderr += timeoutMsg;
-        options.onChunk?.(timeoutMsg, 'stderr');
-        if (options.missionId) {
-          streaming.streamTerminalLine(options.missionId, timeoutMsg, 'stderr');
-        }
-      }, timeoutMs);
-
-      const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
-      child.stdout.on('data', (chunk) => {
-        const text = chunk.toString();
-        if (Buffer.byteLength(stdout, 'utf8') + Buffer.byteLength(text, 'utf8') > MAX_OUTPUT_BYTES) {
-          timedOut = true;
-          child.kill('SIGKILL');
-          stderr += '\n[SANDBOX OUTPUT LIMIT] stdout exceeded 2MB.';
-          return;
-        }
-        stdout += text;
-        options.onChunk?.(text, 'stdout');
-        if (options.missionId) {
-          streaming.streamTerminalLine(options.missionId, text, 'stdout');
-        }
-      });
-
-      child.stderr.on('data', (chunk) => {
-        const text = chunk.toString();
-        if (Buffer.byteLength(stderr, 'utf8') + Buffer.byteLength(text, 'utf8') > MAX_OUTPUT_BYTES) {
-          timedOut = true;
-          child.kill('SIGKILL');
-          stderr += '\n[SANDBOX OUTPUT LIMIT] stderr exceeded 2MB.';
-          return;
-        }
-        stderr += text;
-        options.onChunk?.(text, 'stderr');
-        if (options.missionId) {
-          streaming.streamTerminalLine(options.missionId, text, 'stderr');
-        }
-      });
-
-      child.on('close', (code) => {
-        clearTimeout(timer);
-        const durationMs = Date.now() - startTime;
-        db.incrementMetric('totalSandboxExecutions');
-
-        // Cleanup temporary sandbox dir after 5 minutes asynchronously
-        setTimeout(() => {
-          fs.promises.rm(sandboxPath, { recursive: true, force: true }).catch(() => {});
-        }, 300000);
-
-        resolve({
-          sandboxId,
-          command,
-          exitCode: code ?? (timedOut ? 124 : 1),
-          stdout,
-          stderr,
-          durationMs,
-          timedOut,
-          isolatedPath: sandboxPath,
+    const child = runtime === 'docker'
+      ? spawn('docker', dockerArgs, {
+          cwd: process.cwd(),
+          env: {
+            ...scrubbedEnv,
+            DOCKER_CONFIG: '/nonexistent',
+            HOME: '/tmp',
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+      : spawn('sh', ['-lc', command], {
+          // Local development runtime: executes inside an isolated per-run
+          // directory with a scrubbed environment. Production must use Docker.
+          cwd: sandboxPath,
+          env: {
+            ...scrubbedEnv,
+            HOME: '/tmp',
+            TMPDIR: '/tmp',
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
         });
-      });
 
-      child.on('error', () => {
-        clearTimeout(timer);
-        resolve({
-          sandboxId,
-          command,
-          exitCode: 1,
-          stdout,
-          stderr: 'Sandbox process failed to start.',
-
-          durationMs: Date.now() - startTime,
-          timedOut: false,
-          isolatedPath: sandboxPath,
-        });
-      });
+    return await runChildProcess(child, {
+      sandboxId,
+      command,
+      sandboxPath,
+      runtime,
+      timeoutMs,
+      startTime,
+      missionId: options.missionId,
+      onChunk: options.onChunk,
     });
   } catch (err: any) {
     return {
@@ -225,6 +321,7 @@ export async function executeSandboxedCommand(
       durationMs: Date.now() - startTime,
       timedOut: false,
       isolatedPath: sandboxPath,
+      runtime,
     };
   }
 }
