@@ -83,3 +83,15 @@ The branch contains meaningful defense-in-depth improvements, but the following 
 - deployment verification of shared-secret provisioning.
 
 A reviewer may inspect and test this branch through a pull request. Do not merge or deploy solely on the basis of these reports. Reassess the release decision only after the outstanding gates have evidence tied to the exact release commit.
+
+
+## Follow-up CI remediation (2026-11-07)
+
+The first PR workflow exposed two additional CI defects. Both have been addressed on this branch:
+
+- Added `tests/test_security_adversarial.py`. It verifies fail-closed sandbox-service startup when the shared token is missing or shorter than 16 characters, constant-time token comparison, request/command/output/time limits, concurrency reservation, traversal and symlink defenses, cleanup, restrictive Docker flags, and the app-side environment allowlist.
+- Corrected the adversarial job description so it does not claim these source-level/startup checks certify kernel isolation. The real Docker job remains the only kernel/container isolation certification.
+- Updated Express to 4.22.3, Vite to 6.4.5, and pinned the transitive body-parser and qs overrides to 1.20.9 and 6.16.1.
+- Regenerated `package-lock.json` using npm on a GitHub-hosted runner. The lockfile refresh job completed successfully; `npm ci` completed and both the production audit and full dependency audit reported **0 vulnerabilities**.
+
+The full AgentStation CI workflow for the latest PR head is still running/pending at the time of this report update. Therefore the new adversarial suite, full build/test matrix, and real Docker isolation job are **not yet recorded as passing on the latest head**. Do not treat the dependency audit success as full CI certification.
