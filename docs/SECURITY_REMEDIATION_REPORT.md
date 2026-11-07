@@ -109,3 +109,18 @@ The requested mandatory checklist has been applied to the actual branch source a
 - **Webhooks:** raw-body HMAC-SHA256 verification with constant-time comparison exists; durable delivery-ID deduplication/idempotency and replay handling were not found.
 
 The six-control findings and exact remediation gates are recorded in `docs/SECURITY_AUDIT_FINDINGS.md`. Passing CI validates the tested branch behavior; it does not close these additional architecture and deployment gaps. **Production approval remains blocked** until they are remediated and independently verified.
+
+
+## Implemented follow-up controls (2026-11-07)
+
+The following code changes have now been committed to the remediation branch:
+
+1. **Provider secret disclosure removed:** `getAgentRouterConfigStatus()` now returns only whether a key is configured/present and the provider base URL. It no longer returns any API-key prefix. Added a regression assertion.
+2. **Webhook replay/idempotency protection:** the GitHub webhook endpoint now requires a syntactically valid `X-GitHub-Delivery` and event header after HMAC signature verification. A new `github_webhook_deliveries` table uses a primary key on delivery ID; an atomic `INSERT ... ON CONFLICT DO NOTHING RETURNING` claim prevents duplicate delivery processing across instances. Added migration `007_github_webhook_idempotency.sql` and regression assertions.
+3. **Distributed signup/login rate limiting:** the previous process-local counter has been replaced with an atomic PostgreSQL fixed-window counter keyed by an HMAC of client address and route. Production fails closed if PostgreSQL-backed limiting is unavailable. Added migration `008_distributed_auth_rate_limits.sql` and regression assertions.
+
+**Deployment prerequisite:** run `npm run db:migrate` against the production database before deploying these changes. Until migrations 007 and 008 are applied, the webhook and signup/login protections intentionally fail closed in production rather than silently falling back to process memory.
+
+**Verification status:** GitHub Actions was running against latest commit `13a9fb0b1cfa089bf03c6d49226f627b5137be32` at the time of this report update. Do not mark the new implementation as CI-verified until that run completes successfully.
+
+**Still open / production blockers:** complete database-enforced tenant isolation (the shared JSONB snapshot and fixed organization context remain), comprehensive RLS across tenant-bearing tables, full route-by-route owner/admin authorization verification, race-safe unique signup identity storage/email verification, and independent deployment verification of secrets and migrations.
