@@ -70,7 +70,8 @@ for name, svc in services.items():
 # --- env interpolation is well formed ---------------------------------------
 for m in re.finditer(r"\$\{([^}]+)\}", raw):
     expr = m.group(1)
-    check(re.fullmatch(r"[A-Z0-9_]+(:-.*)?", expr) is not None,
+    # Accept ${NAME}, ${NAME:-default} and ${NAME:?required-message}.
+    check(re.fullmatch(r"[A-Z0-9_]+(?::[-?].*)?", expr) is not None,
           f"malformed interpolation: ${{{expr}}}")
 
 # --- the wiring the profile depends on --------------------------------------
@@ -79,6 +80,11 @@ check(app_env.get("SANDBOX_RUNTIME") == "${COMPOSE_SANDBOX_RUNTIME:-remote}",
       "app must default SANDBOX_RUNTIME to remote")
 check("SANDBOX_REMOTE_URL" in app_env, "app must set SANDBOX_REMOTE_URL")
 check("SANDBOX_REMOTE_TOKEN" in app_env, "app must set SANDBOX_REMOTE_TOKEN")
+# The shared secret must be REQUIRED (no insecure default).
+check(":?" in str(app_env.get("SANDBOX_REMOTE_TOKEN", "")),
+      "app SANDBOX_REMOTE_TOKEN must be required (no default token)")
+check(":?" in str(services["sandbox"].get("environment", {}).get("SANDBOX_REMOTE_TOKEN", "")),
+      "sandbox SANDBOX_REMOTE_TOKEN must be required (no default token)")
 check(app_env.get("TERMINAL_EXECUTION_ENABLED") == "true",
       "app must enable terminal execution in the dev profile")
 check(app_env.get("NODE_ENV") == "development",

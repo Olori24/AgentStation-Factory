@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { EventEmitter } from 'events';
+import { db, UserRecord } from './db';
 
 export interface SseEventMessage {
   type: 'agent_thought' | 'agent_action' | 'terminal_chunk' | 'queue_progress' | 'mission_status' | 'heartbeat';
@@ -9,7 +10,7 @@ export interface SseEventMessage {
 }
 
 class StreamingEngine extends EventEmitter {
-  private clients: Map<string, Response> = new Map();
+  private clients: Map<string, { res: Response; user?: UserRecord }> = new Map();
 
   constructor() {
     super();
@@ -23,14 +24,14 @@ class StreamingEngine extends EventEmitter {
     }, 15000);
   }
 
-  public registerClient(clientId: string, res: Response) {
+  public registerClient(clientId: string, res: Response, user?: UserRecord) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    this.clients.set(clientId, res);
+    this.clients.set(clientId, { res, user });
 
     // Send initial handshake
     this.sendToClient(res, {
@@ -58,9 +59,16 @@ class StreamingEngine extends EventEmitter {
 
   public broadcast(event: SseEventMessage, channelFilter?: string) {
     const payload = `data: ${JSON.stringify(event)}\n\n`;
-    for (const [, res] of this.clients.entries()) {
+    const channel = event.channel;
+    for (const [, client] of this.clients.entries()) {
+      // Mission-scoped events are only delivered to clients authorized for that
+      // mission. Fail closed when the client has no authenticated user, so a
+      // stream can never leak another tenant's telemetry.
+      if (channel) {
+        if (!client.user || !db.canAccessMission(client.user, channel)) continue;
+      }
       try {
-        res.write(payload);
+        client.res.write(payload);
       } catch {
         // failed write
       }

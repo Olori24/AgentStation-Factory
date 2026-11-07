@@ -25,6 +25,8 @@ import { getAgentRouterConfigStatus, agentRouterWallet, agentRouterUsage } from 
 import { listObjectiveTemplates, getObjectiveTemplate, instantiateObjectiveTemplate } from "./server/objectiveTemplates";
 import { listSkills, getSkill, resolveSkills } from "./server/skillRegistry";
 import { runMiroFishSimulation } from "./server/simulationProvider";
+import { claimWebhookDelivery } from "./server/webhookDelivery";
+import { allowAuthAttempt } from "./server/authRateLimit";
 
 dotenv.config();
 
@@ -101,18 +103,18 @@ function issueAuthCookie(res: any, userId: string) {
   res.setHeader("Cache-Control", "no-store");
 }
 
-const authAttemptState = new Map<string, { count: number; resetAt: number }>();
-function authRateLimit(req: any, res: any, next: any) {
-  const key = `${req.ip || req.socket.remoteAddress || "unknown"}:${req.path}`;
-  const now = Date.now();
-  const current = authAttemptState.get(key);
-  if (!current || current.resetAt <= now) {
-    authAttemptState.set(key, { count: 1, resetAt: now + 60_000 });
+async function authRateLimit(req: any, res: any, next: any) {
+  try {
+    const address = String(req.ip || req.socket.remoteAddress || "unknown");
+    const allowed = await allowAuthAttempt(address, req.path, 10);
+    if (!allowed) {
+      return res.status(429).json({ success: false, error: "Too many attempts. Please wait a minute and try again." });
+    }
     return next();
+  } catch (error) {
+    console.error("[AUTH] Distributed rate limiter unavailable:", error instanceof Error ? error.message : "unknown error");
+    return res.status(503).json({ success: false, error: "Authentication protection is temporarily unavailable." });
   }
-  if (current.count >= 10) return res.status(429).json({ success: false, error: "Too many attempts. Please wait a minute and try again." });
-  current.count++;
-  return next();
 }
 
 app.post("/api/auth/signup", authRateLimit, async (req, res) => {
@@ -1775,8 +1777,19 @@ app.post("/api/github/webhook", async (req: any, res) => {
   if (!verifyWebhookSignature(rawBody, String(req.headers["x-hub-signature-256"] || ""))) {
     return res.status(401).json({ success: false, error: "Invalid webhook signature" });
   }
+  const deliveryId = String(req.headers["x-github-delivery"] || "").trim();
+  const githubEvent = String(req.headers["x-github-event"] || "").trim();
+  if (!deliveryId || deliveryId.length > 128 || !/^[A-Za-z0-9._:-]+$/.test(deliveryId)) {
+    return res.status(400).json({ success: false, error: "Missing or invalid GitHub delivery identifier" });
+  }
+  if (!githubEvent || githubEvent.length > 100 || !/^[a-z_]+$/.test(githubEvent)) {
+    return res.status(400).json({ success: false, error: "Missing or invalid GitHub event name" });
+  }
   try {
-    const githubEvent = (req.headers["x-github-event"] as string) || "custom";
+    const claimed = await claimWebhookDelivery(deliveryId, githubEvent);
+    if (!claimed) {
+      return res.status(202).json({ success: true, duplicate: true, message: "Webhook delivery already processed" });
+    }
     const payload = JSON.parse(rawBody.toString("utf8") || "{}");
     const repoName = payload.repository?.full_name || "Olori24/AgentStation";
     const sender = payload.sender?.login || "github-actions[bot]";

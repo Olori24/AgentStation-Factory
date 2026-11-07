@@ -154,3 +154,35 @@ def test_workspace_tool_boundaries_and_audit_redaction():
     assert "redactForAudit" in tools
     assert "projectPath" not in tools
     assert "Sensitive file cannot be included in an artifact" in artifacts
+
+
+def test_provider_status_never_discloses_secret_material():
+    router = read("server/agentRouter.ts")
+    assert "keyPresent: Boolean(apiKey)" in router
+    assert "keyPrefix" not in router
+    assert "apiKey.slice" not in router
+
+
+def test_github_webhook_requires_signature_and_durable_delivery_idempotency():
+    server = read("server.ts")
+    delivery = read("server/webhookDelivery.ts")
+    migration = read("db/migrations/007_github_webhook_idempotency.sql")
+    assert "verifyWebhookSignature(rawBody" in server
+    assert 'req.headers["x-github-delivery"]' in server
+    assert "claimWebhookDelivery(deliveryId, githubEvent)" in server
+    assert "Webhook delivery already processed" in server
+    assert "ON CONFLICT (delivery_id) DO NOTHING" in delivery
+    assert "PRIMARY KEY" in migration
+    assert "Durable webhook idempotency requires PostgreSQL storage" in delivery
+
+
+def test_auth_rate_limit_uses_shared_atomic_storage_in_production():
+    server = read("server.ts")
+    limiter = read("server/authRateLimit.ts")
+    migration = read("db/migrations/008_distributed_auth_rate_limits.sql")
+    assert "allowAuthAttempt(address, req.path, 10)" in server
+    assert "Distributed auth rate limiting requires PostgreSQL storage" in limiter
+    assert "ON CONFLICT (key_hash, window_start)" in limiter
+    assert "request_count = auth_rate_limits.request_count + 1" in limiter
+    assert "PRIMARY KEY (key_hash, window_start)" in migration
+    assert "authAttemptState" not in server

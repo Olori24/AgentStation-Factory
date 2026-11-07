@@ -61,7 +61,6 @@ export function getAgentRouterConfigStatus() {
     configured: Boolean(apiKey),
     baseUrl,
     keyPresent: Boolean(apiKey),
-    keyPrefix: apiKey ? apiKey.slice(0, 8) + "…" : null,
   };
 }
 

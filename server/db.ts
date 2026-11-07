@@ -627,6 +627,29 @@ class RelationalDatabase {
     this.scheduleSave();
   }
 
+  /**
+   * Merge files into a mission's recorded file list without dropping the ones
+   * already there. Used by the direct file-save endpoints so the mission's file
+   * list stays authoritative for access control (see /api/files/download).
+   */
+  public upsertFilesForMission(missionId: string, files: Array<{ path: string; language?: string; content: string }>) {
+    const byPath = new Map(this.data.files.filter((f) => f.missionId === missionId).map((f) => [f.path, f]));
+    for (const file of files) {
+      const existing = byPath.get(file.path);
+      byPath.set(file.path, {
+        id: existing?.id || `file-${crypto.randomBytes(4).toString('hex')}`,
+        missionId,
+        path: file.path,
+        language: file.language || (path.extname(file.path).replace('.', '') || 'text'),
+        content: file.content,
+        sizeBytes: Buffer.byteLength(file.content, 'utf8'),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    this.data.files = this.data.files.filter((f) => f.missionId !== missionId).concat(Array.from(byPath.values()));
+    this.scheduleSave();
+  }
+
   // --- Agent Logs ---
   public getLogsByMission(missionId: string): AgentLogRecord[] {
     return this.data.logs.filter((l) => l.missionId === missionId);
