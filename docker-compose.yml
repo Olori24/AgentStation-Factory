@@ -1,0 +1,125 @@
+# AgentStation Factory — Docker Compose development profile
+#
+#   docker compose up --build
+#
+# Three services, one command:
+#
+#   app             the full-stack AgentStation server (command-deck UI + API).
+#                   NODE_ENV=development, so the Vite middleware serves the UI
+#                   and durable JSON storage is used. It never executes mission
+#                   code itself and has no access to the container engine.
+#
+#   sandbox         the dedicated sandbox service. Accepts execution requests
+#                   from the app over the internal compose network and runs each
+#                   command in a throwaway, hardened container:
+#                     --network=none --read-only --cap-drop=ALL
+#                     --security-opt=no-new-privileges --ipc=none
+#                     --pids-limit=128 --memory=512m --cpus=1
+#                     --ulimit nofile=256:256 --user 65532:65532
+#                   The per-run workspace is deleted after every execution.
+#
+#   sandbox-image   one-shot helper that builds and tags the hardened execution
+#                   image, so `up --build` needs no separate build step.
+#
+# This gives materially stronger isolation than the plain `local` runtime
+# (which runs commands as a child process of the app on the host) while still
+# starting with a single command and no production credentials.
+#
+# Only port 3000 is published. The sandbox service is reachable only on the
+# compose network — it is never exposed to the host or the internet.
+#
+# NOTE ON VARIABLE NAMES: every interpolation below uses a COMPOSE_-prefixed
+# name. The app's own `.env.example` uses the unprefixed names
+# (SANDBOX_RUNTIME, SANDBOX_IMAGE, ...), so copying it to `.env` for plain
+# `npm run dev` can never accidentally change how this profile behaves.
+
+name: agentstation
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentstation-app:dev
+    ports:
+      - "${COMPOSE_APP_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: development
+      PORT: "3000"
+      # Dispatch every mission/terminal command to the dedicated sandbox service.
+      SANDBOX_RUNTIME: "${COMPOSE_SANDBOX_RUNTIME:-remote}"
+      SANDBOX_REMOTE_URL: "${COMPOSE_SANDBOX_URL:-http://sandbox:7070}"
+      SANDBOX_REMOTE_TOKEN: "${COMPOSE_SANDBOX_TOKEN:-agentstation-dev-sandbox-token}"
+      TERMINAL_EXECUTION_ENABLED: "true"
+      # Development storage: durable JSON on the app-data volume.
+      AGENTSTATION_STORAGE: "json"
+    volumes:
+      - app-data:/app/data
+      - app-workspace:/app/workspace
+    depends_on:
+      sandbox:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    restart: unless-stopped
+
+  sandbox:
+    build:
+      context: ./sandbox
+      dockerfile: service.Dockerfile
+    image: agentstation-sandboxd:dev
+    environment:
+      SANDBOX_PORT: "7070"
+      SANDBOX_IMAGE: "${COMPOSE_SANDBOX_IMAGE:-agentstation-sandbox:latest}"
+      SANDBOX_REMOTE_TOKEN: "${COMPOSE_SANDBOX_TOKEN:-agentstation-dev-sandbox-token}"
+      # Mounted build context, used to (re)build the execution image if missing.
+      SANDBOX_BUILD_CONTEXT: "/sandbox-src"
+      SANDBOX_MAX_CONCURRENCY: "${COMPOSE_SANDBOX_CONCURRENCY:-4}"
+      # Must be the SAME absolute path inside this service and on the host:
+      # the Docker daemon resolves bind-mount sources on the host, so the
+      # per-run workspace has to exist at an identical path in both places.
+      SANDBOX_RUN_ROOT: "${COMPOSE_SANDBOX_RUN_ROOT:-/tmp/agentstation-sandbox-runs}"
+    volumes:
+      # Container engine access — this is the privilege boundary, see README.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Build context for the hardened execution image (sandbox/Dockerfile).
+      - ./sandbox:/sandbox-src:ro
+      # Host run root, mounted at the identical path (see SANDBOX_RUN_ROOT).
+      - ${COMPOSE_SANDBOX_RUN_ROOT:-/tmp/agentstation-sandbox-runs}:${COMPOSE_SANDBOX_RUN_ROOT:-/tmp/agentstation-sandbox-runs}
+    # Reachable on the compose network only; never published to the host.
+    expose:
+      - "7070"
+    depends_on:
+      sandbox-image:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:7070/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    restart: unless-stopped
+
+  sandbox-image:
+    image: "${COMPOSE_SANDBOX_IMAGE:-agentstation-sandbox:latest}"
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    # The image's CMD prints a readiness line and exits 0.
+    restart: "no"
+
+volumes:
+  app-data:
+  app-workspace:

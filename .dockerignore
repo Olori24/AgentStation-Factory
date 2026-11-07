@@ -1,0 +1,33 @@
+node_modules
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# VCS / editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Build output (rebuilt inside the image)
+dist
+build
+coverage
+
+# Local runtime state — the compose profile uses fresh named volumes instead
+data
+workspace
+.pytest_cache
+**/__pycache__
+**/*.pyc
+
+# Local secrets / env (never bake into an image)
+.env
+.env.*
+!.env.example
+
+# Nested docs assets are not needed to run the app
+docs/assets
+
+# Compose files themselves
+docker-compose*.yml

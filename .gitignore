@@ -6,6 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+!.env.compose.example
+core
+core.*
 __pycache__/
 *.pyc
 data/sandboxes/
