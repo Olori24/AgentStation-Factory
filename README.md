@@ -51,32 +51,32 @@ The product is designed to feel like stepping onto the bridge of a powerful AI o
 ┌──────────────────┐
 │   HUMAN INTENT   │
 │ Objective / Goal │
-└────────┬─────────┘
+└──────────────────┘
          ▼
 ┌──────────────────┐
 │  MISSION CONTROL │
 │ Plan → State     │
-└────────┬─────────┘
+└──────────────────┘
          ▼
 ┌──────────────────┐
 │ SPECIALIST SQUAD │
 │ Roles + Context  │
-└────────┬─────────┘
+└──────────────────┘
          ▼
 ┌──────────────────┐
 │ CONTROLLED TOOLS │
 │ Web / Files / QA │
-└────────┬─────────┘
+└──────────────────┘
          ▼
 ┌──────────────────┐
 │ EXECUTION LAYER  │
 │ Sandbox + Stream │
-└────────┬─────────┘
+└──────────────────┘
          ▼
 ┌──────────────────┐
 │   VERIFICATION   │
 │ Tests + Approval │
-└────────┬─────────┘
+└──────────────────┘
          ▼
 ┌──────────────────┐
 │ ARTIFACT DELIVERY│
@@ -370,6 +370,41 @@ npm run db:migrate
 ```
 
 **Never commit secrets to the repository.**
+
+---
+
+## ⚡ Quickstart — run it end to end
+
+```bash
+npm install
+cp .env.example .env      # optional for local dev; the defaults are safe
+npm run dev               # full-stack server on http://localhost:3000
+```
+
+In a second terminal, drive a complete autonomous mission through the API:
+
+```bash
+npm run demo
+```
+
+The demo signs up a fresh workspace, plans a mission, runs the multi-agent
+execution loop (write → test → document → bundle), and prints the deliverable.
+
+### Sandbox runtime
+
+| Environment | Runtime | Notes |
+|---|---|---|
+| Development | `local` (default) | Runs commands in an isolated per-run directory with a scrubbed environment. **No Docker required.** |
+| Production | `docker` (required) | Hardened container: `--network=none --read-only --cap-drop=ALL --user 65532:65532`. |
+
+Build the hardened sandbox image (only needed for the Docker runtime):
+
+```bash
+npm run sandbox:build
+```
+
+Set `SANDBOX_RUNTIME=docker` to use it. Production refuses to run the sandbox
+unless the Docker runtime is selected.
 
 ---
 

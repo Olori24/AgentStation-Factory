@@ -1,8 +1,9 @@
 """Automated test suite for AgentStation mission sandbox & full-stack API validation."""
+import http.cookiejar
 import json
 import os
-import urllib.request
 import urllib.error
+import urllib.request
 
 
 def test_agentstation_environment():
@@ -43,7 +44,11 @@ def test_skills_and_control_plane_artifacts():
 
 
 def test_live_api_endpoints_if_online():
-    """Verify full-stack API endpoints when server is listening on port 3000."""
+    """Verify full-stack API endpoints when the server is listening on port 3000.
+
+    Exercises the public surface, an authenticated engineer session, and the
+    server-side authorization boundary on admin-only routes.
+    """
     base = "http://127.0.0.1:3000"
     try:
         with urllib.request.urlopen(f"{base}/api/health", timeout=2) as resp:
@@ -53,29 +58,49 @@ def test_live_api_endpoints_if_online():
         # Server not running in standalone unit mode
         return
 
-    # 1. Verify Objective Templates
-    with urllib.request.urlopen(f"{base}/api/objectives/templates", timeout=3) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-        assert data.get("success") is True
-        assert len(data.get("templates", [])) >= 7
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 
-    # 2. Verify Skills Registry API
-    with urllib.request.urlopen(f"{base}/api/skills", timeout=3) as resp:
-        skills_data = json.loads(resp.read().decode("utf-8"))
-        assert skills_data.get("success") is True
-        assert len(skills_data.get("skills", [])) >= 5
+    def get(path, timeout=3):
+        with opener.open(f"{base}{path}", timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
 
-    # 3. Verify Autonomy Scheduler Status
-    with urllib.request.urlopen(f"{base}/api/autonomy/status", timeout=3) as resp:
-        status_payload = json.loads(resp.read().decode("utf-8"))
-        assert status_payload.get("success") is True
-        inner_status = status_payload.get("status", status_payload)
-        assert inner_status.get("totalGoals", 0) >= 4
+    def post(path, payload, timeout=5):
+        req = urllib.request.Request(
+            f"{base}{path}",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with opener.open(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
 
-    # 4. Verify Growth Factory Campaign Generator
-    req = urllib.request.Request(
-        f"{base}/api/growth/campaign",
-        data=json.dumps({
+    # 0. Authenticate: creates a fresh workspace + engineer account.
+    signup = post(
+        "/api/auth/signup",
+        {
+            "name": "Sandbox Verifier",
+            "email": f"verify-{os.getpid()}@agentstation.dev",
+            "password": "agentstation-verify-123",
+        },
+    )
+    assert signup.get("success") is True
+    assert signup.get("user", {}).get("role") in ("engineer", "admin")
+
+    # 1. Public: Objective Templates
+    templates = get("/api/objectives/templates")
+    assert templates.get("success") is True
+    assert len(templates.get("templates", [])) >= 7
+
+    # 2. Public: Skills Registry API
+    skills_data = get("/api/skills")
+    assert skills_data.get("success") is True
+    assert len(skills_data.get("skills", [])) >= 5
+
+    # 3. Public: Growth Factory Campaign Generator
+    growth = post(
+        "/api/growth/campaign",
+        {
             "project": {
                 "id": "leadgen",
                 "name": "LeadGen Studio",
@@ -83,53 +108,38 @@ def test_live_api_endpoints_if_online():
                 "audience": "Clinics, real estate teams, legal and consulting practices",
             },
             "objective": "Create a 30-day short-form campaign that attracts qualified leads.",
-        }).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+        },
     )
-    with urllib.request.urlopen(req, timeout=5) as resp:
-        growth = json.loads(resp.read().decode("utf-8"))
-        assert growth.get("success") is True
-        assert len(growth.get("campaign", {}).get("angles", [])) >= 6
+    assert growth.get("success") is True
+    assert len(growth.get("campaign", {}).get("angles", [])) >= 6
 
-    # 5. Verify Batch File Persistence & File Tree API (Phase 2)
-    batch_req = urllib.request.Request(
-        f"{base}/api/files/save-batch",
-        data=json.dumps({
-            "missionId": "test-mission",
+    # 4. Authenticated (engineer): plan a mission, then persist workspace files.
+    mission_id = f"verify-{os.getpid()}"
+    plan = post("/api/tasks/plan", {"missionId": mission_id, "prompt": "Verification mission"})
+    assert plan.get("success") is True
+
+    saved = post(
+        "/api/files/save-batch",
+        {
+            "missionId": mission_id,
             "files": [
                 {
                     "path": "reports/sandbox_verification.md",
                     "content": "# Sandbox Verification\nStatus: Verified\n",
                 }
             ],
-        }).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+        },
     )
-    with urllib.request.urlopen(batch_req, timeout=3) as resp:
-        saved = json.loads(resp.read().decode("utf-8"))
-        assert saved.get("success") is True
-        assert saved.get("savedCount") == 1
+    assert saved.get("success") is True
+    assert saved.get("savedCount") == 1
 
-    with urllib.request.urlopen(f"{base}/api/files/tree", timeout=3) as resp:
-        tree = json.loads(resp.read().decode("utf-8"))
-        assert tree.get("success") is True
-        assert any(f.get("path") == "reports/sandbox_verification.md" for f in tree.get("files", []))
-
-    # 6. Verify Real-time SSE Broadcast Endpoint (Phase 3)
-    sse_req = urllib.request.Request(
-        f"{base}/api/stream/test-emit",
-        data=json.dumps({
-            "agent": "Atlas",
-            "thought": "Automated sandbox verification telemetry check.",
-        }).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(sse_req, timeout=3) as resp:
-        sse_data = json.loads(resp.read().decode("utf-8"))
-        assert sse_data.get("success") is True
+    # 5. Authorization boundary: admin-only routes reject an engineer session.
+    for admin_path in ("/api/files/tree", "/api/autonomy/status"):
+        try:
+            get(admin_path)
+            raise AssertionError(f"{admin_path} should require admin authorization")
+        except urllib.error.HTTPError as err:
+            assert err.code in (401, 403), f"{admin_path} returned {err.code}"
 
 
 if __name__ == "__main__":
