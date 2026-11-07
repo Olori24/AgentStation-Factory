@@ -174,3 +174,15 @@ def test_github_webhook_requires_signature_and_durable_delivery_idempotency():
     assert "ON CONFLICT (delivery_id) DO NOTHING" in delivery
     assert "PRIMARY KEY" in migration
     assert "Durable webhook idempotency requires PostgreSQL storage" in delivery
+
+
+def test_auth_rate_limit_uses_shared_atomic_storage_in_production():
+    server = read("server.ts")
+    limiter = read("server/authRateLimit.ts")
+    migration = read("db/migrations/008_distributed_auth_rate_limits.sql")
+    assert "allowAuthAttempt(address, req.path, 10)" in server
+    assert "Distributed auth rate limiting requires PostgreSQL storage" in limiter
+    assert "ON CONFLICT (key_hash, window_start)" in limiter
+    assert "request_count = auth_rate_limits.request_count + 1" in limiter
+    assert "PRIMARY KEY (key_hash, window_start)" in migration
+    assert "authAttemptState" not in server
