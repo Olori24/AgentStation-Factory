@@ -14,5 +14,14 @@ __pycache__/
 data/sandboxes/
 data/artifacts/
 data/autonomy_goals.json
+# Runtime state and user data must never be committed (contains PII).
+data/agentstation_relational_db.json
+data/missions_store.json
+data/*.json
+# Mission output written at runtime by the sandbox/agents.
+workspace/src/
+workspace/docs/
+workspace/sec/
+workspace/reports/
 workspace/reports/sandbox_verification.md
 

@@ -27,7 +27,9 @@
  * Env
  *   SANDBOX_PORT          (default 7070)
  *   SANDBOX_IMAGE         (default agentstation-sandbox:latest)
- *   SANDBOX_REMOTE_TOKEN  shared secret; when set, requests must present it
+ *   SANDBOX_REMOTE_TOKEN  shared secret; REQUIRED. The service refuses to start
+ *                         without it, so authentication can never silently
+ *                         become optional.
  *   SANDBOX_MAX_CONCURRENCY (default 4)
  */
 import http from 'node:http';
@@ -42,6 +44,21 @@ const PORT = Number(process.env.SANDBOX_PORT || 7070);
 const IMAGE = (process.env.SANDBOX_IMAGE || 'agentstation-sandbox:latest').trim();
 const TOKEN = (process.env.SANDBOX_REMOTE_TOKEN || '').trim();
 const MAX_CONCURRENCY = Number(process.env.SANDBOX_MAX_CONCURRENCY || 4);
+
+// Fail closed: this service executes arbitrary commands in containers, so it
+// must never run unauthenticated. Refuse to start without a shared secret.
+if (!TOKEN) {
+  console.error(
+    '[sandbox] FATAL: SANDBOX_REMOTE_TOKEN is required. Refusing to start an ' +
+      'unauthenticated command-execution service. Set it to a strong random ' +
+      'value shared with the app (see .env.compose.example).'
+  );
+  process.exit(1);
+}
+if (TOKEN.length < 16) {
+  console.error('[sandbox] FATAL: SANDBOX_REMOTE_TOKEN must be at least 16 characters.');
+  process.exit(1);
+}
 const BUILD_CONTEXT = (process.env.SANDBOX_BUILD_CONTEXT || '').trim();
 // Per-run workspaces. When this service is reached through the mounted Docker
 // socket, the daemon resolves bind-mount sources on the HOST — so this path
@@ -140,7 +157,25 @@ function materializeFiles(runDir, files) {
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
       throw new Error('Sandbox file path escapes sandbox');
     }
-    fs.mkdirSync(path.dirname(absolute), { recursive: true });
+    const parentDir = path.dirname(absolute);
+    fs.mkdirSync(parentDir, { recursive: true });
+    // Symlink defence: resolve the parent directory (following any pre-existing
+    // links) and refuse to write if the real location sits outside the run dir.
+    // Also refuse when the target itself is already a symlink, so a file entry
+    // can never be used to write through a link to a host path.
+    const runRootReal = fs.realpathSync(runDir);
+    const parentReal = fs.realpathSync(parentDir);
+    const parentRelative = path.relative(runRootReal, parentReal);
+    if (parentRelative.startsWith('..') || path.isAbsolute(parentRelative)) {
+      throw new Error('Sandbox file path escapes sandbox');
+    }
+    try {
+      if (fs.lstatSync(absolute).isSymbolicLink()) {
+        throw new Error('Sandbox file path escapes sandbox');
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
     fs.writeFileSync(absolute, content, 'utf8');
   }
 }
@@ -228,6 +263,7 @@ function runContainer({ command, runDir, timeoutMs }) {
 
 async function handleExecute(req, res) {
   let runDir = '';
+  let reserved = false;
   try {
     const raw = await readBody(req);
     let body;
@@ -244,6 +280,11 @@ async function handleExecute(req, res) {
     if (active >= MAX_CONCURRENCY) {
       return sendJson(res, 429, { error: `sandbox service is at capacity (${MAX_CONCURRENCY})` });
     }
+    // Reserve the slot immediately after the capacity check and BEFORE the first
+    // await, so concurrent requests can never both pass the check and
+    // oversubscribe the host.
+    active += 1;
+    reserved = true;
 
     if (!(await ensureImage())) {
       return sendJson(res, 503, {
@@ -260,10 +301,17 @@ async function handleExecute(req, res) {
     const sandboxId = `sbx-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
     runDir = path.join(RUN_ROOT, sandboxId);
     fs.mkdirSync(runDir, { recursive: true });
+    // The execution container runs as uid/gid 65532 (non-root). The run
+    // directory is created by this service (root) with a restrictive umask, so
+    // without this the container user cannot write to its own workspace.
+    try {
+      fs.chmodSync(runDir, 0o777);
+    } catch (err) {
+      log(`warning: could not chmod run dir ${runDir}: ${err?.message}`);
+    }
 
     materializeFiles(runDir, body.files);
 
-    active += 1;
     log(`run ${sandboxId} start (active=${active})`);
     const result = await runContainer({ command, runDir, timeoutMs });
 
@@ -272,7 +320,9 @@ async function handleExecute(req, res) {
   } catch (err) {
     sendJson(res, 500, { error: err?.message || 'sandbox execution failed' });
   } finally {
-    active = Math.max(0, active - 1);
+    // Only release the slot if this request actually reserved one (the early
+    // 400/429/503 returns happen before `active += 1`).
+    if (reserved) active = Math.max(0, active - 1);
     if (runDir) {
       fs.rm(runDir, { recursive: true, force: true }, () => {});
     }
@@ -312,14 +362,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/execute') {
-    if (TOKEN) {
-      const presented = String(req.headers['x-sandbox-token'] || '').trim();
-      // Constant-time compare to avoid leaking the token via timing.
-      const a = Buffer.from(presented);
-      const b = Buffer.from(TOKEN);
-      const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-      if (!ok) return sendJson(res, 401, { error: 'unauthorized' });
-    }
+    // Authentication is mandatory (the service refuses to start without a
+    // token). Constant-time compare to avoid leaking the token via timing.
+    const presented = String(req.headers['x-sandbox-token'] || '').trim();
+    const a = Buffer.from(presented);
+    const b = Buffer.from(TOKEN);
+    const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+    if (!ok) return sendJson(res, 401, { error: 'unauthorized' });
     return handleExecute(req, res);
   }
 
@@ -328,7 +377,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', async () => {
   const hasDocker = await dockerAvailable();
-  log(`listening on 0.0.0.0:${PORT} (image=${IMAGE}, auth=${TOKEN ? 'enabled' : 'disabled'})`);
+  log(`listening on 0.0.0.0:${PORT} (image=${IMAGE}, auth=enabled)`);
   log(hasDocker ? 'docker engine reachable' : 'WARNING: docker engine not reachable from this service');
   if (!hasDocker) return;
   const ready = await ensureImage();

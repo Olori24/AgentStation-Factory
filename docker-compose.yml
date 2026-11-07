@@ -49,7 +49,9 @@ services:
       # Dispatch every mission/terminal command to the dedicated sandbox service.
       SANDBOX_RUNTIME: "${COMPOSE_SANDBOX_RUNTIME:-remote}"
       SANDBOX_REMOTE_URL: "${COMPOSE_SANDBOX_URL:-http://sandbox:7070}"
-      SANDBOX_REMOTE_TOKEN: "${COMPOSE_SANDBOX_TOKEN:-agentstation-dev-sandbox-token}"
+      # Required: no default. Compose refuses to start without a strong shared
+      # secret, so the sandbox service can never run unauthenticated.
+      SANDBOX_REMOTE_TOKEN: "${COMPOSE_SANDBOX_TOKEN:?COMPOSE_SANDBOX_TOKEN is required - set a strong random shared secret (see .env.compose.example)}"
       TERMINAL_EXECUTION_ENABLED: "true"
       # Development storage: durable JSON on the app-data volume.
       AGENTSTATION_STORAGE: "json"
@@ -79,7 +81,7 @@ services:
     environment:
       SANDBOX_PORT: "7070"
       SANDBOX_IMAGE: "${COMPOSE_SANDBOX_IMAGE:-agentstation-sandbox:latest}"
-      SANDBOX_REMOTE_TOKEN: "${COMPOSE_SANDBOX_TOKEN:-agentstation-dev-sandbox-token}"
+      SANDBOX_REMOTE_TOKEN: "${COMPOSE_SANDBOX_TOKEN:?COMPOSE_SANDBOX_TOKEN is required - set a strong random shared secret (see .env.compose.example)}"
       # Mounted build context, used to (re)build the execution image if missing.
       SANDBOX_BUILD_CONTEXT: "/sandbox-src"
       SANDBOX_MAX_CONCURRENCY: "${COMPOSE_SANDBOX_CONCURRENCY:-4}"
