@@ -95,3 +95,17 @@ The first PR workflow exposed two additional CI defects. Both have been addresse
 - Regenerated `package-lock.json` using npm on a GitHub-hosted runner. The lockfile refresh job completed successfully; `npm ci` completed and both the production audit and full dependency audit reported **0 vulnerabilities**.
 
 The full AgentStation CI workflow for the latest PR head is still running/pending at the time of this report update. Therefore the new adversarial suite, full build/test matrix, and real Docker isolation job are **not yet recorded as passing on the latest head**. Do not treat the dependency audit success as full CI certification.
+
+
+## Six-control launch review added (2026-11-07)
+
+The requested mandatory checklist has been applied to the actual branch source and migrations. It identifies additional production blockers beyond the passing CI suite:
+
+- **Secrets:** server-side environment handling is present, but the AgentRouter configuration status exposes an eight-character API-key prefix to authenticated callers. Remove this disclosure.
+- **RLS:** the reviewed migration enables/forces RLS on `agentstation_state` only. RLS coverage for the other tenant-bearing tables is not established.
+- **Ownership/tenant isolation:** mission ownership checks exist on selected routes, but the persisted state is a shared JSONB snapshot under a fixed default organization ID while signup creates per-user organizations. This is not database-enforced per-tenant isolation.
+- **Admin authorization:** authentication middleware and server-side role checks protect many routes; a complete route-by-route authorization and bootstrap lifecycle review remains outstanding.
+- **Signup abuse:** validation and rate limiting exist, but the limiter is process-local and therefore insufficient as the only protection for horizontally scaled/serverless production.
+- **Webhooks:** raw-body HMAC-SHA256 verification with constant-time comparison exists; durable delivery-ID deduplication/idempotency and replay handling were not found.
+
+The six-control findings and exact remediation gates are recorded in `docs/SECURITY_AUDIT_FINDINGS.md`. Passing CI validates the tested branch behavior; it does not close these additional architecture and deployment gaps. **Production approval remains blocked** until they are remediated and independently verified.
