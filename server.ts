@@ -85,7 +85,9 @@ function verifyPassword(password: string, stored: string): boolean {
 }
 
 function publicUser(user: any) {
-  const { passwordHash: _passwordHash, ...safeUser } = user;
+  // GitHub installation metadata is server-side authorization state, not profile data.
+  // Never expose it (or future credential-bearing fields) through public user responses.
+  const { passwordHash: _passwordHash, githubConnection: _githubConnection, ...safeUser } = user;
   return safeUser;
 }
 
