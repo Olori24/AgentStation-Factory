@@ -1097,9 +1097,9 @@ async function runGeneratedFileTests(files: any[], missionId?: string) {
       files: safeFiles,
       timeoutMs: 60000,
     });
-    const output = `${result.stdout || ""}${result.stderr ? `\\n${result.stderr}` : ""}`;
-    const passed = output.match(/(\\d+)\\s+passed/i);
-    const failed = output.match(/(\\d+)\\s+failed/i);
+    const output = `${result.stdout || ""}${result.stderr ? `\n${result.stderr}` : ""}`;
+    const passed = output.match(/(\d+)\s+passed/i);
+    const failed = output.match(/(\d+)\s+failed/i);
     return {
       command,
       stdout: output || (result.exitCode === 0 ? "Command exited successfully with no output." : "Test command returned no output."),
