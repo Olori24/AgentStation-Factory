@@ -38,7 +38,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { DEFAULT_AGENTS, INITIAL_MISSION, GITHUB_REPO_INFO } from './data/defaults';
 import { SAMPLE_MISSIONS } from './data/sampleMissions';
 import { SquadMission, AgentProfile, AgentRole, AgentLogEntry, WorkspaceFile, VideoProject, CiStatusInfo, TerminalStreamMessage } from './types';
-import { executeAutonomousPipeline, simulateSandboxCommand } from './services/autonomousEngine';
+import { executeAutonomousPipeline } from './services/autonomousEngine';
 
 function AgentStationApp() {
   const [missionHistory, setMissionHistory] = useState<SquadMission[]>(() => {
@@ -593,9 +593,8 @@ function AgentStationApp() {
         }
       }
 
-      // If backend is offline or static hosting, simulate sandbox command runner
-      if (!data) {
-        data = simulateSandboxCommand(command, mission.files, mission.gitBranch);
+      if (!res.ok || !data) {
+        throw new Error(data?.error || `Terminal service unavailable (HTTP ${res.status}). No command was executed.`);
       }
 
       setMission((prev) => ({
@@ -624,10 +623,22 @@ function AgentStationApp() {
       setStreamingTerminalOutput((prev) => (prev && prev.length > startBanner.length ? prev : data.stdout || startBanner));
       showToast(`Command finished with return code ${data.exitCode}`);
     } catch (err: any) {
-      console.warn('Terminal backend fetch failed, using sandbox simulator:', err);
-      const data = simulateSandboxCommand(command, mission.files, mission.gitBranch);
-      setStreamingTerminalOutput(data.stdout);
-      showToast('Command executed in sandbox simulation (exit 0)');
+      const message = err?.message || 'Terminal execution failed. No simulated result was created.';
+      setStreamingTerminalOutput((prev) => `${prev}
+[EXECUTION NOT RUN] ${message}`);
+      setMission((prev) => ({
+        ...prev,
+        execution: {
+          ...prev.execution,
+          command,
+          stdout: `Execution was not run: ${message}`,
+          exitCode: 1,
+          testsPassed: 0,
+          testsFailed: 0,
+          durationMs: 0,
+        },
+      }));
+      showToast(message);
     } finally {
       setIsRunningCommand(false);
       setIsStreamingTerminal(false);
@@ -821,7 +832,7 @@ function AgentStationApp() {
         ) : (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden pt-14 lg:pt-0">
             {/* Mobile View Switcher (Visible on mobile screens < 1024px) */}
-            <div className="lg:hidden fixed bottom-2 left-2 right-2 z-[70] px-1 py-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-700/80 shadow-2xl shadow-black/50">
+            <div className="lg:hidden relative z-10 mx-2 mt-2 mb-2 px-1 py-1.5 bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-700/80 shadow-xl shrink-0">
               <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 w-full max-w-md mx-auto">
                 <button
                   type="button"
