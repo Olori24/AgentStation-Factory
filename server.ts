@@ -441,7 +441,7 @@ app.get("/api/github/callback", async (req: any, res) => {
 
 // Mint a short-lived token for the authenticated user's own GitHub App installation.
 // The token is intentionally never returned to the browser or persisted.
-async function createUserInstallationToken(userId: string): Promise<{ token: string; connection: any } | null> {
+async function createUserInstallationToken(userId: string, writeAccess = false): Promise<{ token: string; connection: any } | null> {
   const user = db.getUserById(userId);
   const connection = user?.githubConnection;
   if (!connection || !Number.isSafeInteger(connection.installationId) || connection.installationId <= 0) return null;
@@ -455,7 +455,11 @@ async function createUserInstallationToken(userId: string): Promise<{ token: str
       "User-Agent": "AgentStation",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ permissions: { contents: "read", metadata: "read" } }),
+    body: JSON.stringify({
+      permissions: writeAccess
+        ? { contents: "write", pull_requests: "write", metadata: "read" }
+        : { contents: "read", metadata: "read" },
+    }),
     signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) return null;
