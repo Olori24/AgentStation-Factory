@@ -352,7 +352,7 @@ def test_github_pr_publish_requires_exact_explicit_diff_approval():
     assert 'git diff --name-status --no-renames' in sandbox
     assert 'isSafeWorkspaceRelativePath' in sandbox
     assert "'.git'" in sandbox
-    assert "'.npmrc'" in sandbox
+    assert r"\.npmrc" in sandbox
     assert 'changedFiles.length > 50' in server
     assert '5 * 1024 * 1024' in server
     assert 'Approve & create GitHub PR' in modal
