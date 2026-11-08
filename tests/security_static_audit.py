@@ -176,3 +176,38 @@ def test_public_user_responses_redact_github_connection_metadata():
     assert "passwordHash" in public_user
     assert "githubConnection" in public_user
     assert "_githubConnection" in public_user
+
+
+def test_github_installation_flow_is_session_bound_and_fail_closed():
+    server = read("server.ts")
+    db = read("server/db.ts")
+    migration = read("db/migrations/007_github_install_states.sql")
+    assert 'app.get("/api/github/install", authRateLimit' in server
+    assert 'app.get("/api/github/callback"' in server
+    assert '"/github/callback"' in server
+    assert "GITHUB_APP_ID" in server
+    assert "GITHUB_APP_PRIVATE_KEY" in server
+    assert "GITHUB_APP_SLUG" in server
+    assert "GITHUB_APP_CALLBACK_URL" in server
+    assert "as_github_callback" in server
+    assert 'sameSite: "lax"' in server
+    assert "verifyGitHubCallbackTicket" in server
+    assert "createGitHubInstallState" in db
+    assert "consumeGitHubInstallState" in db
+    assert "DELETE FROM github_install_states" in db
+    assert "RETURNING user_id, organization_id, session_hash, expires_at" in db
+    assert "github_install_states_tenant_isolation" in migration
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "FORCE ROW LEVEL SECURITY" in migration
+    assert "state_hash char(64) PRIMARY KEY" in migration
+
+
+def test_github_installation_tokens_are_short_lived_and_not_persisted():
+    server = read("server.ts")
+    db = read("server/db.ts")
+    assert '"/access_tokens"' in server
+    assert "tokenData.token" in server
+    assert "The installation token is deliberately discarded" in server
+    connection = db.split("export interface GitHubConnectionRecord", 1)[1].split("export interface UserRecord", 1)[0]
+    assert "accessToken" not in connection
+    assert "refreshToken" not in connection
