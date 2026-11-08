@@ -2349,7 +2349,8 @@ app.post("/api/missions/:id/github-binding", requireRole(["admin","engineer"]), 
         currentMission.organizationId !== req.user.organizationId || currentMission.status === "running") {
       return res.status(409).json({ success: false, error: "Mission ownership or state changed. Refresh and retry." });
     }
-    const { repositoryWorkspace: _previousRepositoryWorkspace, ...metadataWithoutWorkspace } = currentMission.metadata || {};
+    const metadataWithoutWorkspace = { ...(currentMission.metadata || {}) };
+    delete metadataWithoutWorkspace.repositoryWorkspace;
     const updated = db.upsertMission({
       ...currentMission,
       targetRepo: selected.fullName,
