@@ -52,6 +52,7 @@ interface AgentCreationFlowProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: (agent: AgentProfile) => void;
+  onViewAgents?: () => void;
   /** Optional preset to open with (e.g. from a template card). */
   initialPresetId?: string;
 }
@@ -75,6 +76,7 @@ export const AgentCreationFlow: React.FC<AgentCreationFlowProps> = ({
   isOpen,
   onClose,
   onCreated,
+  onViewAgents,
   initialPresetId,
 }) => {
   const [step, setStep] = useState(1);
@@ -161,7 +163,7 @@ export const AgentCreationFlow: React.FC<AgentCreationFlowProps> = ({
             <Button tone="ghost" onClick={onClose}>
               Close
             </Button>
-            <Button tone="primary" icon={<ArrowRight className="w-3.5 h-3.5" />} onClick={onClose}>
+            <Button tone="primary" icon={<ArrowRight className="w-3.5 h-3.5" />} onClick={() => { onClose(); onViewAgents?.(); }}>
               Go to my agents
             </Button>
           </>
