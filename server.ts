@@ -114,7 +114,7 @@ function isSafeRepositorySnapshotPath(value: unknown): value is string {
   if (parts.some((part) => !part || part === "." || part === "..")) return false;
   const lower = value.toLowerCase();
   if (parts.some((part) => ["node_modules", ".git", ".next", "dist", "build", "coverage", "vendor"].includes(part))) return false;
-  if (/(^|\\/)\.env($|\.)/i.test(value) || /(secret|credential|private[-_]?key|\.pem$|\.p12$|\.pfx$)/i.test(lower)) return false;
+  if (/(^|\/)\.env($|\.)/i.test(value) || /(secret|credential|private[-_]?key|\.pem$|\.p12$|\.pfx$|\.key$)/i.test(lower)) return false;
   return true;
 }
 
