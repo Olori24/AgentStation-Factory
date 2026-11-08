@@ -1478,7 +1478,12 @@ async function runGeneratedFileTests(files: any[], missionId?: string, userId?: 
                   durationMs: Number(result.durationMs ?? 0),
                   completedAt: new Date().toISOString(),
                   returnedFileCount: Array.isArray(result.files) ? result.files.length : 0,
-                  diff: String(result.diff || "").slice(0, 150000),
+                  diff: String(result.diff || "").slice(0, 150 * 1024),
+                  diffHash: result.diff && !result.diffTruncated
+                    ? crypto.createHash("sha256").update(String(result.diff)).digest("hex")
+                    : undefined,
+                  diffTruncated: Boolean(result.diffTruncated),
+                  changedFiles: Array.isArray(result.changedFiles) ? result.changedFiles : [],
                 },
               },
             },
@@ -1494,7 +1499,12 @@ async function runGeneratedFileTests(files: any[], missionId?: string, userId?: 
           testsPassed: passed ? Number(passed[1]) : 0,
           testsFailed: failed ? Number(failed[1]) : (hasTests && Number(result.exitCode ?? 1) !== 0 ? 1 : 0),
           durationMs: Number(result.durationMs ?? 0),
-          diff: String(result.diff || "").slice(0, 150000),
+          diff: String(result.diff || "").slice(0, 150 * 1024),
+          diffHash: result.diff && !result.diffTruncated
+            ? crypto.createHash("sha256").update(String(result.diff)).digest("hex")
+            : undefined,
+          diffTruncated: Boolean(result.diffTruncated),
+          changedFiles: Array.isArray(result.changedFiles) ? result.changedFiles : [],
           baseSha: mission.baseSha,
         };
       }
