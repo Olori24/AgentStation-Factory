@@ -61,9 +61,9 @@ export const UserOnboardingModal: React.FC<UserOnboardingModalProps> = ({
         return;
       }
       if (e.key === 'Tab') {
-        const items = Array.from(
-          dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) || []
-        ).filter((item) => item.offsetParent !== null);
+        const items = (Array.from(
+          dialogRef.current?.querySelectorAll(focusableSelector) || []
+        ) as HTMLElement[]).filter((item) => item.offsetParent !== null);
         if (items.length === 0) {
           e.preventDefault();
           dialogRef.current?.focus();
