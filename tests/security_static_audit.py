@@ -298,6 +298,9 @@ def test_mission_repository_workspace_isolated_and_repository_grounded():
     assert 'Bind repository to this mission' in modal
     assert 'Prepare coding workspace' in modal
     assert 'missionId={mission.id}' in app
+    assert 'Connect / Reconnect GitHub' in modal
+    assert "fetch('/api/github/install'" in modal
+    assert 'window.location.assign(data.installUrl)' in modal
 
 
 
