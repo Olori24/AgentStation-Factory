@@ -11,7 +11,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AgentCreationFlow } from '../src/components/AgentCreationFlow';
 import { AgentManager } from '../src/components/AgentManager';
-import { Disclosure } from '../src/components/ui';
+import { Disclosure, StatTile } from '../src/components/ui';
 import { DEFAULT_AGENTS } from '../src/data/defaults';
 import {
   AGENT_PRESETS,
@@ -88,6 +88,10 @@ check('maps the role title', profile.roleTitle === filled.roleTitle);
 check('maps the goal', profile.goal === filled.goal);
 check('maps the tools', JSON.stringify(profile.tools) === JSON.stringify(filled.tools));
 check('maps the limits', profile.limits?.maxSteps === filled.limits.maxSteps);
+check('maps the selected preset', profile.presetId === filled.presetId);
+check('maps the selected writing style', profile.tone === filled.tone);
+check('maps the selected autonomy', profile.autonomy === filled.autonomy);
+check('uses preset instructions when the draft is blank', draftToAgentProfile({ ...filled, systemPrompt: '   ' }).systemPrompt === AGENT_PRESETS.find((p) => p.id === filled.presetId)?.systemPrompt);
 check('is marked as a custom agent', profile.custom === true);
 check('has a unique key', typeof profile.key === 'string' && profile.key.length > 0);
 
@@ -113,6 +117,15 @@ check('renders the "My agents" title', manager.includes('My agents'));
 check('lists the built-in squad', manager.includes('Atlas') && manager.includes('Cypher'));
 check('offers a create entry', manager.includes('New agent'));
 check('shows a search field', manager.includes('Search agents'));
+
+const informationalTile = renderToStaticMarkup(
+  React.createElement(StatTile, { icon: '•', label: 'Files', value: 0 })
+);
+const actionableTile = renderToStaticMarkup(
+  React.createElement(StatTile, { icon: '•', label: 'Missions', value: 1, onClick: () => {} })
+);
+check('non-actionable stat tiles are not keyboard buttons', !informationalTile.includes('<button'));
+check('actionable stat tiles remain keyboard buttons', actionableTile.includes('<button'));
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'} \u2014 ${failures} failure(s)`);
 process.exit(failures === 0 ? 0 : 1);
