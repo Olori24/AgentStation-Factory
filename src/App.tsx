@@ -1137,6 +1137,7 @@ function AgentStationApp() {
         commitMessage={mission.gitCommitMessage}
         currentBranch={mission.gitBranch || 'main'}
         missionFiles={mission.files}
+        missionId={mission.id}
         onSuccessNotification={(msg) => showToast(msg)}
         onBranchChange={(newBranch) => {
           setMission((prev) => {
