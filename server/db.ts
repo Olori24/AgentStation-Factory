@@ -20,6 +20,15 @@ export interface GitHubConnectionRecord {
   connectedAt: string;
 }
 
+export interface GitHubInstallStateRecord {
+  stateHash: string;
+  userId: string;
+  organizationId: string;
+  sessionHash: string;
+  expiresAt: number;
+  createdAt: number;
+}
+
 export interface UserRecord {
   id: string;
   email: string;
@@ -193,6 +202,7 @@ export interface DatabaseSchema {
   files: WorkspaceFileRecord[];
   logs: AgentLogRecord[];
   jobs: JobRecord[];
+  githubInstallStates: GitHubInstallStateRecord[];
   systemMetrics: {
     totalMissionsSynthesized: number;
     totalSandboxExecutions: number;
@@ -304,6 +314,7 @@ class RelationalDatabase {
     files: [],
     logs: [],
     jobs: [],
+    githubInstallStates: [],
     systemMetrics: {
       totalMissionsSynthesized: 0,
       totalSandboxExecutions: 0,
@@ -352,6 +363,7 @@ class RelationalDatabase {
           settings: parsed.settings || [],
           users: parsed.users?.length ? parsed.users : DEFAULT_USERS,
           organizations: parsed.organizations?.length ? parsed.organizations : [DEFAULT_ORG],
+          githubInstallStates: parsed.githubInstallStates || [],
         };
       } else {
         this.saveImmediately();
@@ -445,6 +457,28 @@ class RelationalDatabase {
     delete user.githubConnection;
     this.scheduleSave();
     return true;
+  }
+
+  /** Stores only a hash of the one-time GitHub installation state. */
+  public createGitHubInstallState(record: GitHubInstallStateRecord): boolean {
+    if (!this.getUserById(record.userId) || !record.stateHash || !record.sessionHash ||
+        !Number.isFinite(record.expiresAt) || record.expiresAt <= Date.now()) return false;
+    this.data.githubInstallStates = (this.data.githubInstallStates || []).filter((entry) => entry.expiresAt > Date.now());
+    if (this.data.githubInstallStates.some((entry) => entry.stateHash === record.stateHash)) return false;
+    this.data.githubInstallStates.push(structuredClone(record));
+    this.scheduleSave();
+    return true;
+  }
+
+  /** Atomically consumes state once and checks user, organization, session and expiry. */
+  public consumeGitHubInstallState(stateHash: string, userId: string, organizationId: string, sessionHash: string): boolean {
+    const states = this.data.githubInstallStates || [];
+    const index = states.findIndex((entry) => entry.stateHash === stateHash);
+    if (index < 0) return false;
+    const [record] = states.splice(index, 1);
+    this.scheduleSave();
+    return record.expiresAt > Date.now() && record.userId === userId &&
+      record.organizationId === organizationId && record.sessionHash === sessionHash;
   }
 
   public addOrganization(organization: OrganizationRecord): void {
