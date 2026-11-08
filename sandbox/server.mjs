@@ -147,7 +147,7 @@ function writeWorkspaceFiles(dir, files, overwrite = false) {
     const content = typeof file?.content === 'string' ? file.content : null;
     const parts = rel.split('/');
     if (!rel || rel.length > 300 || content === null || rel.startsWith('/') ||
-        rel.includes('\\0') || rel.includes('\\\\') || parts.some((part) => !part || part === '.' || part === '..')) {
+        rel.includes('\0') || rel.includes('\\') || parts.some((part) => !part || part === '.' || part === '..')) {
       throw new Error('invalid workspace file');
     }
     const absolute = path.resolve(dir, rel);
