@@ -1077,8 +1077,8 @@ async function runGeneratedFileTests(files: any[], missionId?: string) {
     .filter((file) => file && typeof file.path === "string" && typeof file.content === "string")
     .map((file) => ({ path: file.path, content: file.content }));
 
-  const hasPythonTests = safeFiles.some((file) => /(^|\\/)tests\\/.*\\.py$/i.test(file.path));
-  const hasNodeTests = safeFiles.some((file) => /(^|\\/)([^/]+\\.)?(test|spec)\\.[cm]?js$/i.test(file.path));
+  const hasPythonTests = safeFiles.some((file) => /(^|\/)tests\/.*\.py$/i.test(file.path));
+  const hasNodeTests = safeFiles.some((file) => /(^|\/)([^/]+\.)?(test|spec)\.[cm]?js$/i.test(file.path));
   if (!hasPythonTests && !hasNodeTests) {
     return {
       command: "Not run",
