@@ -172,7 +172,7 @@ def test_github_installation_metadata_is_user_scoped_and_non_secret():
 
 def test_public_user_responses_redact_github_connection_metadata():
     server = read("server.ts")
-    public_user = server.split("function publicUser", 1)[1].split("\\n}", 1)[0]
+    public_user = server.split("function publicUser", 1)[1].split("\n}", 1)[0]
     assert "passwordHash" in public_user
     assert "githubConnection" in public_user
     assert "_githubConnection" in public_user
