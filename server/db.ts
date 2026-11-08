@@ -62,6 +62,12 @@ export interface DbMissionRecord {
   status: 'draft' | 'running' | 'completed' | 'failed' | string;
   targetRepo?: string;
   branch?: string;
+  /** Verified GitHub repository identity captured when this mission is bound. */
+  githubRepositoryId?: number;
+  /** GitHub App installation ID; metadata only, never an installation token. */
+  githubInstallationId?: number;
+  /** Immutable branch tip SHA captured at mission binding time. */
+  baseSha?: string;
   filesCount?: number;
   durationMs?: number;
   currentStage?: string;
