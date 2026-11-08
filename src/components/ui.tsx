@@ -189,19 +189,23 @@ export const StatTile: React.FC<{
     violet: 'bg-violet-500/10 text-violet-400 border-violet-500/25',
     cyan: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/25',
   };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="as-card as-card-interactive w-full text-left rounded-xl border border-slate-800/90 bg-slate-900/60 p-3.5 flex items-start gap-3"
-    >
+  const tileContent = (
+    <>
       <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${iconTones[tone]}`}>{icon}</div>
       <div className="min-w-0">
         <div className="text-lg font-bold tracking-tight text-slate-100 leading-tight">{value}</div>
         <div className="text-[11px] font-medium text-slate-400 truncate">{label}</div>
         {hint && <div className="text-[10px] text-slate-500 mt-0.5 truncate">{hint}</div>}
       </div>
+    </>
+  );
+  const tileClass = "as-card w-full text-left rounded-xl border border-slate-800/90 bg-slate-900/60 p-3.5 flex items-start gap-3";
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`${tileClass} as-card-interactive`}>
+      {tileContent}
     </button>
+  ) : (
+    <div className={tileClass}>{tileContent}</div>
   );
 };
 
@@ -240,20 +244,50 @@ export const Modal: React.FC<{
   maxWidth?: string;
 }> = ({ isOpen, onClose, title, subtitle, icon, children, footer, maxWidth = 'max-w-2xl' }) => {
   const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const focusableSelector =
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const items = Array.from(
+          panelRef.current?.querySelectorAll<HTMLElement>(focusableSelector) || []
+        ).filter((item) => item.offsetParent !== null);
+        if (items.length === 0) {
+          e.preventDefault();
+          panelRef.current?.focus();
+          return;
+        }
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
-    const prev = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
     return () => {
       window.removeEventListener('keydown', onKey);
-      prev?.focus?.();
+      previous?.focus?.();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
