@@ -255,3 +255,13 @@ def test_github_mission_binding_is_owner_scoped_and_pins_base_sha():
     assert "githubInstallationId?: number" in mission
     assert "baseSha?: string" in mission
     assert '"Cache-Control", "no-store"' in route
+    assert 'targetRepo: existing?.targetRepo' in server
+    assert 'githubRepositoryId: existing?.githubRepositoryId' in server
+    assert 'githubInstallationId: existing?.githubInstallationId' in server
+    assert 'baseSha: existing?.baseSha' in server
+    assert '_clientGithubBinding' in server
+    modal = read("src/components/GitHubModal.tsx")
+    app = read("src/App.tsx")
+    assert 'missionId={mission.id}' in app
+    assert 'Bind repository to this mission' in modal
+    assert '/github-binding' in modal
