@@ -14,6 +14,9 @@ import {
   ArrowLeft,
   Zap,
   Palette,
+  Loader2,
+  Layers,
+  ShieldCheck,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { SquadBar } from './components/SquadBar';
@@ -31,10 +34,13 @@ import { ManusWorkspace } from './components/ManusWorkspace';
 import { ManusSidebar } from './components/ManusSidebar';
 import { ManusConversation } from './components/ManusConversation';
 import { ManusComputer, WorkstationTab } from './components/ManusComputer';
+import { CommandDeck } from './components/CommandDeck';
 import { GrowthFactoryModal } from './components/GrowthFactoryModal';
 import { GradientStudio } from './components/GradientStudio';
 import { AutonomyCommandCenter } from './components/AutonomyCommandCenter';
 import { CommandPalette } from './components/CommandPalette';
+import { AgentCreationFlow } from './components/AgentCreationFlow';
+import { AgentManager } from './components/AgentManager';
 import { DEFAULT_AGENTS, INITIAL_MISSION, GITHUB_REPO_INFO } from './data/defaults';
 import { SAMPLE_MISSIONS } from './data/sampleMissions';
 import { SquadMission, AgentProfile, AgentRole, AgentLogEntry, WorkspaceFile, VideoProject, CiStatusInfo, TerminalStreamMessage } from './types';
@@ -56,10 +62,20 @@ function AgentStationApp() {
     return missionHistory[0] || INITIAL_MISSION;
   });
   const [isHomePromptMode, setIsHomePromptMode] = useState<boolean>(false);
+  const [isDeckMode, setIsDeckMode] = useState<boolean>(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
   const [computerTab, setComputerTab] = useState<WorkstationTab>('browser');
   const [mobileActiveView, setMobileActiveView] = useState<'chat' | 'workstation'>('chat');
-  const [agents, setAgents] = useState<AgentProfile[]>(DEFAULT_AGENTS);
+  const [agents, setAgents] = useState<AgentProfile[]>(() => {
+    try {
+      const saved = localStorage.getItem('agentstation_custom_agents_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return [...DEFAULT_AGENTS, ...parsed];
+      }
+    } catch {}
+    return DEFAULT_AGENTS;
+  });
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [executionControl, setExecutionControl] = useState<'running' | 'paused' | 'cancelling' | 'cancelled'>('running');
   const executionControlRef = useRef<'running' | 'paused' | 'cancelling' | 'cancelled'>('running');
@@ -91,6 +107,9 @@ function AgentStationApp() {
   const [isGradientStudioOpen, setIsGradientStudioOpen] = useState(false);
   const [isAutonomyOpen, setIsAutonomyOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isAgentFlowOpen, setIsAgentFlowOpen] = useState(false);
+  const [isAgentManagerOpen, setIsAgentManagerOpen] = useState(false);
+  const [agentFlowPresetId, setAgentFlowPresetId] = useState<string | undefined>(undefined);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
 
   // Global ⌘K / Ctrl+K shortcut for Command Palette (Jakob's Law)
@@ -329,9 +348,46 @@ function AgentStationApp() {
     setTimeout(() => setNotification(null), 3500);
   };
 
+  const persistCustomAgents = (list: AgentProfile[]) => {
+    try {
+      localStorage.setItem('agentstation_custom_agents_v1', JSON.stringify(list.filter((a) => a.custom)));
+    } catch {
+      /* storage unavailable */
+    }
+  };
+
+  const handleAgentCreated = (agent: AgentProfile) => {
+    setAgents((prev) => {
+      const next = [...prev, agent];
+      persistCustomAgents(next);
+      return next;
+    });
+    showToast(`Agent "${agent.name}" created.`);
+  };
+
+  const handleDeleteAgent = (key: string) => {
+    setAgents((prev) => {
+      const next = prev.filter((a) => (a.key || a.id) !== key);
+      persistCustomAgents(next);
+      return next;
+    });
+    showToast('Agent deleted.');
+  };
+
+  const openAgentFlow = (presetId?: string) => {
+    setAgentFlowPresetId(presetId);
+    setIsAgentManagerOpen(false);
+    setIsAgentFlowOpen(true);
+  };
+
+  const openAgentManager = () => {
+    setIsAgentManagerOpen(true);
+  };
+
   // Run autonomous multi-agent squad
   const handleExecutePrompt = async (promptText: string) => {
     setIsHomePromptMode(false);
+    setIsDeckMode(false);
     executionControlRef.current = 'running';
     setExecutionControl('running');
     setIsExecuting(true);
@@ -687,6 +743,7 @@ function AgentStationApp() {
     setMission(selected);
     setStreamingTerminalOutput(selected.execution?.stdout || '');
     setIsHomePromptMode(false);
+    setIsDeckMode(false);
     // Selecting a mission completes the mobile navigation action; return
     // focus to the workspace instead of leaving the drawer over the content.
     setIsSidebarOpen(false);
@@ -788,7 +845,15 @@ function AgentStationApp() {
           missions={missionHistory}
           currentMissionId={mission.id}
           onSelectMission={handleSelectMission}
-          onNewTask={() => setIsHomePromptMode(true)}
+          onNewTask={() => {
+            setIsDeckMode(false);
+            setIsHomePromptMode(true);
+          }}
+          onGoHome={() => {
+            setIsDeckMode(true);
+            setIsHomePromptMode(false);
+            setIsSidebarOpen(false);
+          }}
           onDeleteMission={handleDeleteMission}
           isExecuting={isExecuting}
           isOpen={isSidebarOpen}
@@ -801,11 +866,33 @@ function AgentStationApp() {
           onOpenGrowthFactory={() => setIsGrowthFactoryOpen(true)}
           onOpenAutonomy={() => setIsAutonomyOpen(true)}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          onOpenAgents={openAgentManager}
+          onNewAgent={() => openAgentFlow()}
           aiProvider={aiProvider}
+          isDeckMode={isDeckMode}
         />
 
         {/* Panel 2 & 3: AgentStation Workstation */}
-        {isHomePromptMode ? (
+        {isDeckMode ? (
+          <div className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-slate-950 pt-14 lg:pt-0">
+            <CommandDeck
+              missions={missionHistory}
+              agents={agents}
+              isExecuting={isExecuting}
+              activeAgentRole={activeAgentRole}
+              onNewTask={() => {
+                setIsDeckMode(false);
+                setIsHomePromptMode(true);
+              }}
+              onSelectMission={handleSelectMission}
+              onOpenAutonomy={() => setIsAutonomyOpen(true)}
+              onOpenGrowthFactory={() => setIsGrowthFactoryOpen(true)}
+              onOpenOnboarding={() => setIsOnboardingOpen(true)}
+              onOpenAgents={openAgentManager}
+              onNewAgent={() => openAgentFlow()}
+            />
+          </div>
+        ) : isHomePromptMode ? (
           <div className="flex-1 flex flex-col justify-center overflow-y-auto min-h-0 bg-slate-950">
             <ManusHeroPrompt
               onExecutePrompt={handleExecutePrompt}
@@ -1197,7 +1284,10 @@ function AgentStationApp() {
         onClose={() => setIsCommandPaletteOpen(false)}
         missions={missionHistory}
         onSelectMission={handleSelectMission}
-        onNewTask={() => setIsHomePromptMode(true)}
+        onNewTask={() => {
+          setIsDeckMode(false);
+          setIsHomePromptMode(true);
+        }}
         onExecutePrompt={handleExecutePrompt}
         onSelectTab={(tab) => {
           setComputerTab(tab);
@@ -1210,6 +1300,8 @@ function AgentStationApp() {
         onOpenFullStack={() => setIsFullStackModalOpen(true)}
         onOpenGitHub={() => setIsGitHubModalOpen(true)}
         onOpenOllama={() => setIsOllamaModalOpen(true)}
+        onOpenAgents={openAgentManager}
+        onNewAgent={() => openAgentFlow()}
       />
 
       {/* GitHub Repository Modal */}
@@ -1275,6 +1367,23 @@ function AgentStationApp() {
         currentMission={mission}
         onToast={showToast}
       />
+
+      {/* Guided agent creation flow */}
+      <AgentCreationFlow
+        isOpen={isAgentFlowOpen}
+        onClose={() => setIsAgentFlowOpen(false)}
+        onCreated={handleAgentCreated}
+        initialPresetId={agentFlowPresetId}
+      />
+
+      {/* My agents — list, detail and create entry */}
+      <AgentManager
+        isOpen={isAgentManagerOpen}
+        onClose={() => setIsAgentManagerOpen(false)}
+        agents={agents}
+        onCreateAgent={() => openAgentFlow()}
+        onDeleteAgent={handleDeleteAgent}
+      />
     </div>
   );
 }
@@ -1326,36 +1435,96 @@ export default function App() {
   };
 
   if (authChecking) {
-    return <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center text-sm">Preparing your secure workspace…</div>;
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center gap-4">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-600/30">
+          <Bot className="w-5 h-5 text-white" />
+        </div>
+        <div className="text-sm text-slate-400 flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+          Preparing your secure workspace…
+        </div>
+      </div>
+    );
   }
 
   if (!authenticated) {
     const isSignup = authMode === 'signup';
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 sm:p-6">
-        <div className="w-full max-w-md">
-          <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 shadow-lg shadow-blue-950/50"><Bot className="h-6 w-6" /></div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-blue-300">Your AI workspace</p>
-            <h1 className="text-3xl font-bold tracking-tight">Welcome to AgentStation</h1>
-            <p className="mt-2 text-sm text-slate-400">{isSignup ? 'Create your account to start building with AI.' : 'Sign in to continue to your workspace.'}</p>
-          </div>
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-2xl sm:p-7">
-            <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1">
-              <button type="button" onClick={() => { setAuthMode('signup'); setAuthError(null); }} className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${isSignup ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Create account</button>
-              <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${!isSignup ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Sign in</button>
+      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-stretch">
+        {/* Left: value proposition panel (desktop) */}
+        <div className="hidden lg:flex w-[46%] xl:w-[42%] flex-col justify-between p-10 xl:p-14 border-r border-slate-800/70 bg-slate-900/30 relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 20% 0%, rgba(37,99,235,.14), transparent 24rem), radial-gradient(circle at 90% 80%, rgba(124,58,237,.08), transparent 22rem)' }} />
+          <div className="relative flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-600/30">
+              <Bot className="w-4.5 h-4.5 text-white" />
             </div>
-            <form onSubmit={(event) => void handleAuth(event)} className="space-y-4">
-              {isSignup && <div><label htmlFor="signup-name" className="mb-1.5 block text-sm font-medium text-slate-300">Your name</label><input id="signup-name" type="text" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" maxLength={80} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder="Enter your name" /></div>}
-              <div><label htmlFor="signup-email" className="mb-1.5 block text-sm font-medium text-slate-300">Email address</label><input id="signup-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" maxLength={254} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder="you@example.com" /></div>
-              <div><label htmlFor="signup-password" className="mb-1.5 block text-sm font-medium text-slate-300">Password</label><input id="signup-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={10} maxLength={128} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder={isSignup ? 'At least 10 characters' : 'Enter your password'} /></div>
-              {isSignup && <div><label htmlFor="signup-confirm-password" className="mb-1.5 block text-sm font-medium text-slate-300">Confirm password</label><input id="signup-confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={10} maxLength={128} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder="Enter the same password again" /></div>}
-              {authError && <p role="alert" className="rounded-lg border border-red-900/70 bg-red-950/40 px-3 py-2.5 text-sm text-red-300">{authError}</p>}
-              <button type="submit" disabled={authBusy} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{authBusy ? 'Please wait…' : isSignup ? 'Create my account' : 'Sign in to AgentStation'}</button>
-            </form>
-            <p className="mt-5 text-center text-xs leading-5 text-slate-500">{isSignup ? 'Your password is securely hashed and never stored as plain text.' : 'Use the email and password you registered with.'}</p>
-          </section>
-          <p className="mt-4 text-center text-xs text-slate-600">Secure account access · Your workspace, your work</p>
+            <span className="text-base font-extrabold tracking-tight text-white">AgentStation</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/70 text-blue-400 border border-blue-800/60 font-semibold">SQUAD</span>
+          </div>
+
+          <div className="relative space-y-6">
+            <h1 className="text-3xl xl:text-4xl font-black tracking-[-0.03em] leading-[1.08] text-white">
+              Your autonomous digital workforce,<br />
+              <span className="text-blue-400">one prompt away.</span>
+            </h1>
+            <p className="text-sm xl:text-base text-slate-400 leading-7 max-w-md">
+              AgentStation decomposes any objective, deploys specialist agents, executes in an isolated sandbox, and delivers verified artifacts — code, tests, reports, and video.
+            </p>
+            <ul className="space-y-3">
+              {[
+                { icon: <Layers className="w-4 h-4 text-blue-400" />, title: 'Multi-agent pipeline', desc: 'Architect → Engineer → QA → Creative, with live hand-offs' },
+                { icon: <ShieldCheck className="w-4 h-4 text-emerald-400" />, title: 'Isolated sandbox', desc: 'Every command runs in a hardened, disposable container' },
+                { icon: <Github className="w-4 h-4 text-slate-300" />, title: 'GitHub-native', desc: 'Push generated projects straight to your repositories' },
+              ].map((f) => (
+                <li key={f.title} className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/70 flex items-center justify-center shrink-0 mt-0.5">{f.icon}</div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-200">{f.title}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{f.desc}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="relative flex items-center gap-2 text-[11px] font-mono text-slate-500">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>Secure account access · Your workspace, your work</span>
+          </div>
+        </div>
+
+        {/* Right: auth form */}
+        <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
+          <div className="w-full max-w-md as-enter">
+            <div className="mb-6 text-center lg:hidden">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 shadow-lg shadow-blue-950/50"><Bot className="h-6 w-6" /></div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-blue-300">Your AI workspace</p>
+              <h1 className="text-3xl font-bold tracking-tight">Welcome to AgentStation</h1>
+              <p className="mt-2 text-sm text-slate-400">{isSignup ? 'Create your account to start building with AI.' : 'Sign in to continue to your workspace.'}</p>
+            </div>
+            <div className="hidden lg:block mb-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300 mb-1.5">Your AI workspace</p>
+              <h1 className="text-2xl font-bold tracking-tight text-white">{isSignup ? 'Create your account' : 'Welcome back'}</h1>
+              <p className="mt-1.5 text-sm text-slate-400">{isSignup ? 'Start building with AI in under a minute.' : 'Sign in to continue to your workspace.'}</p>
+            </div>
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-2xl sm:p-7">
+              <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1">
+                <button type="button" onClick={() => { setAuthMode('signup'); setAuthError(null); }} className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${isSignup ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Create account</button>
+                <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${!isSignup ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Sign in</button>
+              </div>
+              <form onSubmit={(event) => void handleAuth(event)} className="space-y-4">
+                {isSignup && <div><label htmlFor="signup-name" className="mb-1.5 block text-sm font-medium text-slate-300">Your name</label><input id="signup-name" type="text" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" maxLength={80} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder="Enter your name" /></div>}
+                <div><label htmlFor="signup-email" className="mb-1.5 block text-sm font-medium text-slate-300">Email address</label><input id="signup-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" maxLength={254} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder="you@example.com" /></div>
+                <div><label htmlFor="signup-password" className="mb-1.5 block text-sm font-medium text-slate-300">Password</label><input id="signup-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={10} maxLength={128} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder={isSignup ? 'At least 10 characters' : 'Enter your password'} /></div>
+                {isSignup && <div><label htmlFor="signup-confirm-password" className="mb-1.5 block text-sm font-medium text-slate-300">Confirm password</label><input id="signup-confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={10} maxLength={128} required className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" placeholder="Enter the same password again" /></div>}
+                {authError && <p role="alert" className="rounded-lg border border-red-900/70 bg-red-950/40 px-3 py-2.5 text-sm text-red-300">{authError}</p>}
+                <button type="submit" disabled={authBusy} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{authBusy ? 'Please wait…' : isSignup ? 'Create my account' : 'Sign in to AgentStation'}</button>
+              </form>
+              <p className="mt-5 text-center text-xs leading-5 text-slate-500">{isSignup ? 'Your password is securely hashed and never stored as plain text.' : 'Use the email and password you registered with.'}</p>
+            </section>
+            <p className="mt-4 text-center text-xs text-slate-600 lg:hidden">Secure account access · Your workspace, your work</p>
+          </div>
         </div>
       </main>
     );

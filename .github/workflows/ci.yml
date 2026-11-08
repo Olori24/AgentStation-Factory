@@ -1,4 +1,4 @@
-name: AgentStation CI - Typecheck, Build, Tests & E2E Demo
+name: AgentStation CI - Security, Typecheck, Build, Tests & E2E
 
 on:
   push:
@@ -6,27 +6,107 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege by default. Jobs escalate only what they need.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+env:
+  NODE_VERSION: '22'
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Secret scanning. Runs first and fast so a leaked credential fails the build
+  # before anything else spends time.
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_SUMMARY: true
+
+  # ---------------------------------------------------------------------------
+  # Dependency vulnerabilities + static security analysis.
+  # ---------------------------------------------------------------------------
+  static-analysis:
+    name: Dependency scan & static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write   # required to upload SARIF
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Blocking: fail on high/critical advisories in production dependencies.
+      - name: npm audit (production deps, high+)
+        run: npm audit --omit=dev --audit-level=high
+
+      # Informational: full tree, including dev dependencies.
+      - name: npm audit (all deps, report only)
+        continue-on-error: true
+        run: npm audit --audit-level=moderate
+
+      - name: Trivy filesystem scan (vuln + secrets + misconfig)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        continue-on-error: true
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9418214df1f2c4b8128c770156c409013b07d6b9 # v3
+        continue-on-error: true
+        with:
+          sarif_file: trivy-results.sarif
+
+  # ---------------------------------------------------------------------------
+  # TypeScript, production build, and the Python test suite.
+  # ---------------------------------------------------------------------------
   test:
     name: Typecheck, Build & pytest
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install dependencies
@@ -39,29 +119,78 @@ jobs:
         run: npm run build
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
 
-      - name: Install pytest
-        run: python -m pip install --quiet pytest
+      - name: Install test dependencies
+        run: python -m pip install --quiet pytest pyyaml
 
-      - name: Run pytest suite
+      - name: Run functional pytest suite
         run: python -m pytest -v tests/test_mission_sandbox.py tests/security_static_audit.py
 
+      - name: Streaming isolation (behavioral)
+        run: npx tsx tests/streaming_isolation.ts
+        env:
+          NODE_ENV: development
+          AGENTSTATION_STORAGE: json
+
+      - name: Agent creation flow (render & logic)
+        run: npx tsx tests/agent_flow_render.tsx
+
+  # ---------------------------------------------------------------------------
+  # Adversarial security tests: real sandbox service + real app, subprocess
+  # based. No container engine is involved, so these cover authentication,
+  # token handling, tenant isolation, traversal and payload limits - NOT
+  # kernel isolation.
+  # ---------------------------------------------------------------------------
+  adversarial:
+    name: Adversarial security tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: python -m pip install --quiet pytest pyyaml
+
+      - name: Run adversarial security suite
+        run: python -m pytest -v tests/test_security_adversarial.py
+
+  # ---------------------------------------------------------------------------
+  # End-to-end demo against a fresh server instance.
+  # ---------------------------------------------------------------------------
   e2e-demo:
     name: End-to-end demo (fresh server)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install dependencies
@@ -74,34 +203,87 @@ jobs:
           DEMO_VERBOSE: '1'
         run: npm run demo
 
+  # ---------------------------------------------------------------------------
+  # Compose profile: structure/wiring validation (STUB engine - this job proves
+  # the app -> sandbox service -> execution path, and explicitly does NOT
+  # certify container isolation; see the docker-isolation job).
+  # ---------------------------------------------------------------------------
   compose-profile:
-    name: Docker Compose dev profile (static + wiring)
+    name: Compose profile (structure + stub wiring)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
 
       - name: Install pyyaml
         run: python -m pip install --quiet pyyaml
 
-      - name: Validate compose profile (structure, graph, wiring)
+      - name: Validate compose profile (structure, graph, wiring, no default token)
         run: python3 tests/validate_compose.py
 
-      - name: Verify compose wiring end to end (stub engine)
+      - name: Verify compose wiring end to end (STUB engine, not real isolation)
         run: bash tests/verify_compose_profile.sh
+
+  # ---------------------------------------------------------------------------
+  # REAL container isolation. This is the only job that can certify the
+  # sandbox's kernel-level boundaries, and it runs on a real Docker daemon.
+  # ---------------------------------------------------------------------------
+  docker-isolation:
+    name: Docker isolation (REAL container, certifying)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: python -m pip install --quiet pytest
+
+      - name: Docker info
+        run: docker info
+
+      - name: Build hardened sandbox image
+        run: docker build -t agentstation-sandbox:latest ./sandbox
+
+      - name: Run REAL isolation suite (fails if daemon is unavailable)
+        env:
+          SANDBOX_TEST_REAL_DOCKER: '1'
+          SANDBOX_IMAGE: agentstation-sandbox:latest
+        run: |
+          # Do not let a skip pass silently: the GitHub runner always has a
+          # daemon, so a skip means isolation was NOT verified -> fail.
+          python -m pytest -v tests/test_docker_isolation.py --no-header \
+            -p no:cacheprovider | tee docker-isolation.log
+          if grep -q "skipped" docker-isolation.log; then
+            echo "::error::Docker isolation suite skipped - isolation NOT verified"
+            exit 1
+          fi

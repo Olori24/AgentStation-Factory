@@ -1,15 +1,20 @@
 @import "tailwindcss";
 
-/* AgentStation premium visual system */
+/* ================================================================== */
+/* AgentStation design system — tokens, typography, elevation, motion */
+/* ================================================================== */
 :root{
   color-scheme:dark;
+  /* Surfaces */
   --as-bg:#04060a;
   --as-bg-soft:#070b12;
   --as-panel:rgba(10,15,24,.78);
   --as-panel-strong:rgba(12,18,29,.92);
   --as-panel-muted:rgba(15,23,42,.62);
+  /* Borders */
   --as-border:rgba(148,163,184,.13);
   --as-border-strong:rgba(148,163,184,.23);
+  /* Accent */
   --as-accent:#60a5fa;
   --as-accent-strong:#3b82f6;
   --as-cyan:#22d3ee;
@@ -18,7 +23,54 @@
   --as-danger:#fb7185;
   --as-glow:rgba(59,130,246,.18);
   --as-shadow:0 28px 100px rgba(0,0,0,.38);
+  /* Typography scale */
+  --as-text-xs:0.75rem;
+  --as-text-sm:0.8125rem;
+  --as-text-base:0.9375rem;
+  --as-text-lg:1.125rem;
+  --as-text-xl:1.375rem;
+  --as-text-2xl:1.75rem;
+  --as-text-3xl:2.25rem;
+  --as-text-4xl:3rem;
+  --as-leading-tight:1.15;
+  --as-leading-normal:1.55;
+  --as-tracking-tight:-0.02em;
+  /* Elevation */
+  --as-elevation-1:0 1px 2px rgba(0,0,0,.3);
+  --as-elevation-2:0 4px 14px rgba(0,0,0,.28);
+  --as-elevation-3:0 12px 40px rgba(0,0,0,.34);
+  /* Motion */
+  --as-duration-fast:120ms;
+  --as-duration-base:180ms;
+  --as-duration-slow:320ms;
+  --as-ease-out:cubic-bezier(.22,.61,.36,1);
+  --as-ease-spring:cubic-bezier(.34,1.3,.5,1);
+  /* Radii */
+  --as-radius-sm:0.5rem;
+  --as-radius-md:0.75rem;
+  --as-radius-lg:1rem;
+  --as-radius-xl:1.25rem;
 }
+
+/* Light theme — opt-in via .as-theme-light on <html> */
+html.as-theme-light{
+  color-scheme:light;
+  --as-bg:#f6f8fb;
+  --as-bg-soft:#eef2f7;
+  --as-panel:rgba(255,255,255,.86);
+  --as-panel-strong:rgba(255,255,255,.96);
+  --as-panel-muted:rgba(241,245,249,.7);
+  --as-border:rgba(15,23,42,.1);
+  --as-border-strong:rgba(15,23,42,.18);
+  --as-accent:#2563eb;
+  --as-accent-strong:#1d4ed8;
+  --as-glow:rgba(37,99,235,.12);
+  --as-shadow:0 24px 80px rgba(15,23,42,.12);
+}
+html.as-theme-light body{color:#0f172a}
+html.as-theme-light .as-card,
+html.as-theme-light .as-glass{background:rgba(255,255,255,.9)}
+html.as-theme-light .as-card{color:#0f172a}
 html,body,#root{min-height:100%}
 html{background:var(--as-bg)}
 body{
@@ -203,3 +255,68 @@ button{-webkit-tap-highlight-color:transparent}
 .gradient-studio-shell input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
 .gradient-studio-shell input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(255,255,255,.2); border-radius: 8px; }
 @media (prefers-reduced-motion: reduce) { .gradient-studio-preview { animation: none; } }
+
+/* ================================================================== */
+/* Shared primitives — cards, skeletons, tooltips, focus, motion      */
+/* ================================================================== */
+.as-card{
+  transition:border-color var(--as-duration-base) var(--as-ease-out),
+    background-color var(--as-duration-base) var(--as-ease-out),
+    box-shadow var(--as-duration-base) var(--as-ease-out),
+    transform var(--as-duration-base) var(--as-ease-out);
+}
+.as-card-interactive:hover{
+  border-color:var(--as-border-strong);
+  background-color:rgba(15,23,42,.78);
+  box-shadow:var(--as-elevation-2);
+}
+.as-card-interactive:active{transform:translateY(0) scale(.995)}
+.as-card-interactive:focus-visible{outline:2px solid var(--as-accent);outline-offset:2px}
+
+.as-skeleton{
+  background:linear-gradient(100deg,rgba(148,163,184,.08) 40%,rgba(148,163,184,.18) 50%,rgba(148,163,184,.08) 60%);
+  background-size:200% 100%;
+  animation:as-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes as-skeleton-shimmer{0%{background-position:120% 0}100%{background-position:-80% 0}}
+
+.as-tooltip-wrap:focus-visible{outline:2px solid var(--as-accent);outline-offset:2px;border-radius:4px}
+.as-tooltip-wrap:hover .as-tooltip,
+.as-tooltip-wrap:focus-visible .as-tooltip,
+.as-tooltip-wrap:focus .as-tooltip{opacity:1;transform:translateY(0)}
+
+/* Global focus visibility — keyboard users always see where they are */
+:focus-visible{outline:2px solid var(--as-accent);outline-offset:2px}
+button:focus:not(:focus-visible),a:focus:not(:focus-visible),input:focus:not(:focus-visible),textarea:focus:not(:focus-visible),select:focus:not(:focus-visible){outline:none}
+
+/* Purposeful motion — entrance, list, and status transitions */
+.as-enter{animation:as-enter var(--as-duration-slow) var(--as-ease-out) both}
+@keyframes as-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.as-enter-fast{animation:as-enter var(--as-duration-base) var(--as-ease-out) both}
+.as-scale-in{animation:as-scale-in var(--as-duration-base) var(--as-ease-spring) both}
+@keyframes as-scale-in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+.as-fade-in{animation:as-fade-in var(--as-duration-base) var(--as-ease-out) both}
+@keyframes as-fade-in{from{opacity:0}to{opacity:1}}
+
+/* Status dot — calm, non-distracting pulse for live indicators */
+.as-live-dot{position:relative;display:inline-block;width:8px;height:8px;border-radius:999px;background:var(--as-success)}
+.as-live-dot::after{content:"";position:absolute;inset:-3px;border-radius:999px;border:1px solid var(--as-success);opacity:.5;animation:as-live-ping 2.2s var(--as-ease-out) infinite}
+@keyframes as-live-ping{0%{transform:scale(.6);opacity:.6}70%,100%{transform:scale(1.4);opacity:0}}
+
+/* Scrollbars — quiet, consistent */
+*{scrollbar-width:thin;scrollbar-color:rgba(148,163,184,.25) transparent}
+*::-webkit-scrollbar{width:8px;height:8px}
+*::-webkit-scrollbar-thumb{background:rgba(148,163,184,.22);border-radius:8px}
+*::-webkit-scrollbar-thumb:hover{background:rgba(148,163,184,.38)}
+*::-webkit-scrollbar-track{background:transparent}
+
+/* Reduced motion — respect user preference everywhere */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+    scroll-behavior:auto !important;
+  }
+  .as-live-dot::after{display:none}
+}

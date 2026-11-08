@@ -19,6 +19,7 @@ import {
   Layers,
   X,
   Palette,
+  Bot,
 } from 'lucide-react';
 import { SquadMission } from '../types';
 import { WorkstationTab } from './ManusComputer';
@@ -37,6 +38,8 @@ interface CommandPaletteProps {
   onOpenFullStack: () => void;
   onOpenGitHub: () => void;
   onOpenOllama: () => void;
+  onOpenAgents?: () => void;
+  onNewAgent?: () => void;
 }
 
 interface CommandItem {
@@ -63,6 +66,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onOpenFullStack,
   onOpenGitHub,
   onOpenOllama,
+  onOpenAgents,
+  onNewAgent,
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -88,6 +93,37 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           onClose();
         },
       },
+      ...(onNewAgent
+        ? [
+            {
+              id: 'act-new-agent',
+              group: 'Quick Actions' as const,
+              title: 'Create a new agent',
+              subtitle: 'Guided setup — pick a template, describe the goal, and launch in four short steps',
+              shortcut: 'A',
+              icon: <Bot className="w-4 h-4 text-violet-400" />,
+              onSelect: () => {
+                onNewAgent();
+                onClose();
+              },
+            },
+          ]
+        : []),
+      ...(onOpenAgents
+        ? [
+            {
+              id: 'act-agents',
+              group: 'Quick Actions' as const,
+              title: 'My agents',
+              subtitle: 'Review your squad, inspect configuration, and manage the agents you created',
+              icon: <Bot className="w-4 h-4 text-violet-300" />,
+              onSelect: () => {
+                onOpenAgents();
+                onClose();
+              },
+            },
+          ]
+        : []),
       {
         id: 'act-autonomy',
         group: 'Quick Actions',
