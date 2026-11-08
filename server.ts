@@ -2349,6 +2349,7 @@ app.post("/api/missions/:id/github-binding", requireRole(["admin","engineer"]), 
         currentMission.organizationId !== req.user.organizationId || currentMission.status === "running") {
       return res.status(409).json({ success: false, error: "Mission ownership or state changed. Refresh and retry." });
     }
+    const { repositoryWorkspace: _previousRepositoryWorkspace, ...metadataWithoutWorkspace } = currentMission.metadata || {};
     const updated = db.upsertMission({
       ...currentMission,
       targetRepo: selected.fullName,
@@ -2357,7 +2358,7 @@ app.post("/api/missions/:id/github-binding", requireRole(["admin","engineer"]), 
       githubInstallationId: connection.installationId,
       baseSha,
       metadata: {
-        ...(currentMission.metadata || {}),
+        ...metadataWithoutWorkspace,
         githubBinding: {
           repositoryId: selected.id,
           repository: selected.fullName,
@@ -2535,7 +2536,12 @@ app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), 
     if (!workspace?.workspaceId || workspace.baseSha !== mission.baseSha || !workspace.baseCommitSha) {
       return res.status(409).json({ success: false, error: "The mission workspace is missing or no longer matches its pinned base commit." });
     }
-    if (workspace.published?.diffHash === req.body?.diffHash && workspace.published?.pullRequestUrl) {
+    if (workspace.published?.diffHash === req.body?.diffHash &&
+        workspace.published?.repository === mission.targetRepo &&
+        workspace.published?.repositoryId === mission.githubRepositoryId &&
+        workspace.published?.branchBase === mission.branch &&
+        workspace.published?.baseSha === mission.baseSha &&
+        workspace.published?.pullRequestUrl) {
       return res.setHeader("Cache-Control", "no-store").json({
         success: true, alreadyPublished: true, branch: workspace.published.branch,
         commitSha: workspace.published.commitSha, pullRequestNumber: workspace.published.pullRequestNumber,
@@ -2650,11 +2656,22 @@ app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), 
         latestMission.baseSha !== mission.baseSha ||
         latestMission.metadata?.repositoryWorkspace?.workspaceId !== workspace.workspaceId ||
         latestMission.metadata?.repositoryWorkspace?.lastExecution?.diffHash !== req.body.diffHash ||
-        latestConnection?.installationId !== mission.githubInstallationId) {
+        latestConnection?.installationId !== mission.githubInstallationId ||
+        !latestConnection.selectedRepositories?.some((item) => item.id === mission.githubRepositoryId && item.fullName === mission.targetRepo)) {
       return res.status(409).json({ success: false, error: "Mission or GitHub authorization changed during publication. No branch was created." });
     }
     await githubRequest("POST", "/git/refs", { ref: "refs/heads/" + createdBranch, sha: commit.sha });
     const title = "AgentStation: " + String(mission.title || mission.prompt || "mission changes").replace(/[\r\n]+/g, " ").slice(0, 180);
+    const beforePullMission = db.getMissionById(mission.id);
+    const beforePullConnection = db.getGitHubConnectionForUser(req.user.id);
+    if (!beforePullMission || beforePullMission.userId !== req.user.id ||
+        beforePullMission.targetRepo !== mission.targetRepo || beforePullMission.branch !== mission.branch ||
+        beforePullMission.baseSha !== mission.baseSha ||
+        beforePullMission.metadata?.repositoryWorkspace?.workspaceId !== workspace.workspaceId ||
+        beforePullConnection?.installationId !== mission.githubInstallationId ||
+        !beforePullConnection.selectedRepositories?.some((item) => item.id === mission.githubRepositoryId && item.fullName === mission.targetRepo)) {
+      return res.status(409).json({ success: false, branchCreated: true, branch: createdBranch, error: "Mission or GitHub authorization changed before pull request creation." });
+    }
     const pull = await githubRequest("POST", "/pulls", {
       title,
       head: createdBranch,
@@ -2682,6 +2699,10 @@ app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), 
             ...current.metadata?.repositoryWorkspace,
             published: {
               diffHash: req.body.diffHash,
+              repository: mission.targetRepo,
+              repositoryId: mission.githubRepositoryId,
+              branchBase: mission.branch,
+              baseSha: mission.baseSha,
               branch: createdBranch,
               commitSha: commit.sha,
               pullRequestNumber: pull.number,
