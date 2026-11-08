@@ -139,22 +139,34 @@ function getWorkspaceDir(id) {
   return dir;
 }
 
-function writeWorkspaceFiles(dir, files) {
+function writeWorkspaceFiles(dir, files, overwrite = false) {
   if (!Array.isArray(files) || files.length > MAX_WORKSPACE_FILES) throw new Error('invalid workspace file list');
   let total = 0;
   for (const file of files) {
     const rel = String(file?.path || '').trim();
     const content = typeof file?.content === 'string' ? file.content : null;
-    if (!rel || rel.length > 300 || content === null || rel.startsWith('/') || rel.includes('\\0') || rel.includes('\\\\')) {
+    const parts = rel.split('/');
+    if (!rel || rel.length > 300 || content === null || rel.startsWith('/') ||
+        rel.includes('\\0') || rel.includes('\\\\') || parts.some((part) => !part || part === '.' || part === '..')) {
       throw new Error('invalid workspace file');
     }
     const absolute = path.resolve(dir, rel);
     const relative = path.relative(dir, absolute);
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('workspace file path escapes workspace');
+    let cursor = dir;
+    for (const part of parts.slice(0, -1)) {
+      cursor = path.join(cursor, part);
+      if (fs.existsSync(cursor) && (!fs.lstatSync(cursor).isDirectory() || fs.lstatSync(cursor).isSymbolicLink())) {
+        throw new Error('workspace path contains a non-directory or symbolic link');
+      }
+    }
+    if (fs.existsSync(absolute) && (!fs.lstatSync(absolute).isFile() || fs.lstatSync(absolute).isSymbolicLink())) {
+      throw new Error('workspace target is not a regular file');
+    }
     const bytes = Buffer.byteLength(content, 'utf8');
     if (bytes > MAX_WORKSPACE_FILE_BYTES || (total += bytes) > MAX_WORKSPACE_TOTAL_BYTES) throw new Error('workspace snapshot exceeds size limits');
     fs.mkdirSync(path.dirname(absolute), { recursive: true });
-    fs.writeFileSync(absolute, content, { encoding: 'utf8', flag: 'wx' });
+    fs.writeFileSync(absolute, content, { encoding: 'utf8', flag: overwrite ? 'w' : 'wx' });
   }
 }
 
@@ -367,7 +379,7 @@ async function handleWorkspaceCreate(req, res) {
     dir = getWorkspaceDir(workspaceId);
     fs.mkdirSync(dir, { recursive: false });
     writeWorkspaceFiles(dir, body.files);
-    // Expire inactive workspaces after six hours. Each successful execution refreshes this timer.
+    // Workspace lifetime is capped at six hours from creation.
     const timer = setTimeout(() => fs.rm(dir, { recursive: true, force: true }, () => {}), 6 * 60 * 60 * 1000);
     timer.unref?.();
     return sendJson(res, 201, { workspaceId, fileCount: body.files.length, expiresInSeconds: 21600 });
@@ -383,6 +395,7 @@ async function handleWorkspaceExecute(req, res) {
     const body = JSON.parse(raw || '{}');
     const dir = getWorkspaceDir(body.workspaceId);
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return sendJson(res, 404, { error: 'workspace not found or expired' });
+    if (Array.isArray(body.files) && body.files.length) writeWorkspaceFiles(dir, body.files, true);
     const command = typeof body.command === 'string' ? body.command.trim() : '';
     if (!command || command.length > 20000) return sendJson(res, 400, { error: 'invalid command' });
     if (active >= MAX_CONCURRENCY) return sendJson(res, 429, { error: 'sandbox service is at capacity' });
