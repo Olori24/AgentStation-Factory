@@ -821,19 +821,21 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
             {!isExecuting && mission.status === 'completed' && (
               <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/30 to-slate-900 border border-emerald-500/30 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{mission.execution?.exitCode === -1 ? 'Code Generation Finished — Verification Pending' : 'Objective Completed by AgentStation'}</span>
+                  <div className={`flex items-center gap-2 font-bold text-xs ${mission.execution?.exitCode > 0 ? 'text-red-400' : mission.execution?.exitCode === -1 ? 'text-amber-300' : 'text-emerald-400'}`}>
+                    {mission.execution?.exitCode > 0 ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                    <span>{mission.execution?.exitCode === -1 ? 'Code Generation Finished — Verification Pending' : mission.execution?.exitCode > 0 ? 'Code Generated — Tests Failed' : 'Code Generated — Tests Passed'}</span>
                   </div>
                   <span className="text-[11px] font-mono text-slate-400">
-                    {mission.files?.length || 0} files created • {mission.execution?.exitCode === -1 ? 'Tests not run' : `${mission.execution?.testsPassed || 0} tests passed`}
+                    {mission.files?.length || 0} files created • {mission.execution?.exitCode === -1 ? 'Tests not run' : mission.execution?.exitCode > 0 ? `${mission.execution?.testsFailed || 0} tests failed` : `${mission.execution?.testsPassed || 0} tests passed`}
                   </span>
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed font-sans">
                   {mission.execution?.exitCode === -1
-                    ? <>The provider generated these files, but AgentStation has not executed the project or run its tests. Review the source, then run the required commands in the <strong>AgentStation Workstation</strong> before treating this result as verified.</>
-                    : <>The objective has been executed and verified in the sandbox. You can examine artifacts and source code or run additional commands in the <strong>AgentStation Workstation</strong>.</>}
+                    ? <>The provider generated these files, but AgentStation could not run the test suite. Review the source, then execute the required commands in the <strong>AgentStation Workstation</strong> before treating this result as verified.</>
+                    : mission.execution?.exitCode > 0
+                    ? <>The project was tested in the sandbox and the command failed. Review the actual output below, correct the issues, and rerun the tests in the <strong>AgentStation Workstation</strong>.</>
+                    : <>The generated project test command completed successfully in the sandbox. Review the source and test output in the <strong>AgentStation Workstation</strong> before release.</>}
                 </p>
 
                 {/* Clickable Generated File Chips (Jakob's Law: Cursor / Claude Artifact Deep-Links) */}
