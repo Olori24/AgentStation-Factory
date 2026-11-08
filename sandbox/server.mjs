@@ -150,6 +150,18 @@ function lstatIfPresent(target) {
   }
 }
 
+function isSafeWorkspaceRelativePath(rel) {
+  if (typeof rel !== 'string' || !rel || rel.length > 300 || rel.startsWith('/') ||
+      rel.includes('\0') || rel.includes('\\')) return false;
+  const parts = rel.split('/');
+  if (parts.some((part) => !part || part === '.' || part === '..' ||
+      ['.git', '.aws', '.ssh', '.docker', '.kube', 'node_modules'].includes(part.toLowerCase()))) return false;
+  if (/(^|\/)\.env($|\.)/i.test(rel) ||
+      /(^|\/)(\.npmrc|\.pypirc|\.netrc|id_rsa|id_ed25519)$/i.test(rel) ||
+      /(secret|credential|private[-_]?key|\.pem$|\.p12$|\.pfx$|\.key$|\.jks$|\.keystore$)/i.test(rel)) return false;
+  return true;
+}
+
 function writeWorkspaceFiles(dir, files, overwrite = false) {
   if (!Array.isArray(files) || files.length > MAX_WORKSPACE_FILES) throw new Error('invalid workspace file list');
   let total = 0;
@@ -157,8 +169,7 @@ function writeWorkspaceFiles(dir, files, overwrite = false) {
     const rel = String(file?.path || '').trim();
     const content = typeof file?.content === 'string' ? file.content : null;
     const parts = rel.split('/');
-    if (!rel || rel.length > 300 || content === null || rel.startsWith('/') ||
-        rel.includes('\0') || rel.includes('\\') || parts.some((part) => !part || part === '.' || part === '..')) {
+    if (content === null || !isSafeWorkspaceRelativePath(rel)) {
       throw new Error('invalid workspace file');
     }
     const absolute = path.resolve(dir, rel);
@@ -234,9 +245,9 @@ function readWorkspaceFiles(dir) {
   const ignored = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'coverage', 'vendor']);
   function walk(current, prefix) {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      if (ignored.has(entry.name)) continue;
       const absolute = path.join(current, entry.name);
       const rel = prefix ? prefix + '/' + entry.name : entry.name;
+      if (ignored.has(entry.name) || !isSafeWorkspaceRelativePath(rel)) continue;
       const stat = fs.lstatSync(absolute);
       if (stat.isSymbolicLink()) throw new Error('workspace contains a symbolic link; refusing to export it');
       if (stat.isDirectory()) { walk(absolute, rel); continue; }
