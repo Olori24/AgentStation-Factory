@@ -54,14 +54,16 @@ export const CommandDeck: React.FC<CommandDeckProps> = ({
   onNewAgent,
 }) => {
   const completed = missions.filter((m) => m.status === 'completed');
+  const latestCompleted = completed[0];
   const running = missions.filter((m) => m.status === 'running');
   const failed = missions.filter((m) => m.status === 'failed');
   const totalFiles = missions.reduce((acc, m) => acc + (m.files?.length || 0), 0);
   const totalTests = missions.reduce((acc, m) => acc + (m.execution?.testsPassed || 0), 0);
-  const activeAgents = agents.filter((a) => a.status === 'working' || (isExecuting && activeAgentRole === a.id));
+  const activeAgents = agents.filter((a) => !a.custom && (a.status === 'working' || (isExecuting && activeAgentRole === a.id)));
   const workingAgent = activeAgentRole ? agents.find((a) => a.id === activeAgentRole) : undefined;
 
   const recent = [...missions].slice(0, 4);
+  const visibleAgents = [...agents.filter((a) => a.custom), ...agents.filter((a) => !a.custom)].slice(0, 5);
   const needsAttention = failed.length > 0;
 
   const stageIndex = workingAgent ? ROLE_ORDER.indexOf(workingAgent.id) : -1;
@@ -116,7 +118,7 @@ export const CommandDeck: React.FC<CommandDeckProps> = ({
           value={completed.length}
           tone="emerald"
           hint={`${totalTests} tests passed across all work`}
-          onClick={() => onSelectMission(recent[0] || missions[0])}
+          onClick={() => latestCompleted && onSelectMission(latestCompleted)}
         />
         <StatTile
           icon={<FileCode className="w-4 h-4" />}
@@ -130,7 +132,7 @@ export const CommandDeck: React.FC<CommandDeckProps> = ({
           label={isExecuting ? 'Squad active' : 'Squad idle'}
           value={isExecuting ? (workingAgent?.name || 'Working') : 'Ready'}
           tone={isExecuting ? 'amber' : 'cyan'}
-          hint={isExecuting ? `${activeAgents.length} agent${activeAgents.length === 1 ? '' : 's'} on task` : '5 specialists synchronized'}
+          hint={isExecuting ? `${activeAgents.length} agent${activeAgents.length === 1 ? '' : 's'} on task` : `${agents.filter((agent) => !agent.custom).length} built-in specialists ready`}
         />
         <StatTile
           icon={<AlertTriangle className="w-4 h-4" />}
@@ -197,12 +199,12 @@ export const CommandDeck: React.FC<CommandDeckProps> = ({
               <ProgressBar value={100} tone="emerald" />
               <div className="flex items-center justify-between gap-3 pt-1">
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-slate-100 truncate">{recent[0]?.prompt}</div>
+                  <div className="text-sm font-semibold text-slate-100 truncate">{latestCompleted?.prompt}</div>
                   <div className="text-[11px] text-slate-500 mt-0.5 font-mono">
-                    {recent[0]?.files?.length || 0} files · {recent[0]?.execution?.testsPassed || 0} tests passed
+                    {latestCompleted?.files?.length || 0} files · {latestCompleted?.execution?.testsPassed || 0} tests passed
                   </div>
                 </div>
-                <Button tone="subtle" size="xs" icon={<Play className="w-3 h-3" />} onClick={() => onSelectMission(recent[0])}>
+                <Button tone="subtle" size="xs" icon={<Play className="w-3 h-3" />} onClick={() => latestCompleted && onSelectMission(latestCompleted)}>
                   Open
                 </Button>
               </div>
@@ -279,8 +281,8 @@ export const CommandDeck: React.FC<CommandDeckProps> = ({
             <span className="text-sm font-bold text-slate-100">Recent missions</span>
           </div>
           {missions.length > 0 && (
-            <button onClick={() => onSelectMission(recent[0])} className="text-xs text-blue-400 hover:text-blue-300 font-medium transition">
-              View all →
+            <button onClick={() => recent[0] && onSelectMission(recent[0])} className="text-xs text-blue-400 hover:text-blue-300 font-medium transition">
+              Open latest →
             </button>
           )}
         </div>
@@ -355,11 +357,11 @@ export const CommandDeck: React.FC<CommandDeckProps> = ({
           )}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {agents.slice(0, 5).map((agent) => {
-            const isActive = isExecuting && activeAgentRole === agent.id;
+          {visibleAgents.map((agent) => {
+            const isActive = !agent.custom && isExecuting && activeAgentRole === agent.id;
             return (
               <div
-                key={agent.id}
+                key={agent.key || agent.id}
                 className={`rounded-xl border p-3 transition ${
                   isActive
                     ? 'border-blue-500/50 bg-blue-500/10'
