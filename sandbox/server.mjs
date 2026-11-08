@@ -125,6 +125,64 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
+const WORKSPACE_ROOT = path.join(RUN_ROOT, 'workspaces');
+const WORKSPACE_ID_RE = /^[a-f0-9]{32}$/;
+const MAX_WORKSPACE_FILES = 200;
+const MAX_WORKSPACE_FILE_BYTES = 1024 * 1024;
+const MAX_WORKSPACE_TOTAL_BYTES = 10 * 1024 * 1024;
+fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
+
+function getWorkspaceDir(id) {
+  if (typeof id !== 'string' || !WORKSPACE_ID_RE.test(id)) throw new Error('invalid workspace id');
+  const dir = path.resolve(WORKSPACE_ROOT, id);
+  if (path.dirname(dir) !== WORKSPACE_ROOT) throw new Error('invalid workspace id');
+  return dir;
+}
+
+function writeWorkspaceFiles(dir, files) {
+  if (!Array.isArray(files) || files.length > MAX_WORKSPACE_FILES) throw new Error('invalid workspace file list');
+  let total = 0;
+  for (const file of files) {
+    const rel = String(file?.path || '').trim();
+    const content = typeof file?.content === 'string' ? file.content : null;
+    if (!rel || rel.length > 300 || content === null || rel.startsWith('/') || rel.includes('\\0') || rel.includes('\\\\')) {
+      throw new Error('invalid workspace file');
+    }
+    const absolute = path.resolve(dir, rel);
+    const relative = path.relative(dir, absolute);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('workspace file path escapes workspace');
+    const bytes = Buffer.byteLength(content, 'utf8');
+    if (bytes > MAX_WORKSPACE_FILE_BYTES || (total += bytes) > MAX_WORKSPACE_TOTAL_BYTES) throw new Error('workspace snapshot exceeds size limits');
+    fs.mkdirSync(path.dirname(absolute), { recursive: true });
+    fs.writeFileSync(absolute, content, { encoding: 'utf8', flag: 'wx' });
+  }
+}
+
+function readWorkspaceFiles(dir) {
+  const files = [];
+  let total = 0;
+  const ignored = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'coverage', 'vendor']);
+  function walk(current, prefix) {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (ignored.has(entry.name)) continue;
+      const absolute = path.join(current, entry.name);
+      const rel = prefix ? prefix + '/' + entry.name : entry.name;
+      const stat = fs.lstatSync(absolute);
+      if (stat.isSymbolicLink()) throw new Error('workspace contains a symbolic link; refusing to export it');
+      if (stat.isDirectory()) { walk(absolute, rel); continue; }
+      if (!stat.isFile()) continue;
+      if (files.length >= MAX_WORKSPACE_FILES || stat.size > MAX_WORKSPACE_FILE_BYTES || (total += stat.size) > MAX_WORKSPACE_TOTAL_BYTES) {
+        throw new Error('workspace output exceeds export limits');
+      }
+      const content = fs.readFileSync(absolute);
+      if (content.includes(0)) continue;
+      files.push({ path: rel, content: content.toString('utf8') });
+    }
+  }
+  walk(dir, '');
+  return files;
+}
+
 /** Write the mission's files into the per-run directory, refusing path escapes. */
 function materializeFiles(runDir, files) {
   if (!Array.isArray(files)) return;
@@ -290,6 +348,60 @@ async function probe(force = false) {
   return probeCache;
 }
 
+function authorizeInternalRequest(req, res) {
+  if (!TOKEN) return true;
+  const presented = String(req.headers['x-sandbox-token'] || '').trim();
+  const a = Buffer.from(presented);
+  const b = Buffer.from(TOKEN);
+  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (!ok) { sendJson(res, 401, { error: 'unauthorized' }); return false; }
+  return true;
+}
+
+async function handleWorkspaceCreate(req, res) {
+  let dir = '';
+  try {
+    const raw = await readBody(req);
+    const body = JSON.parse(raw || '{}');
+    const workspaceId = crypto.randomBytes(16).toString('hex');
+    dir = getWorkspaceDir(workspaceId);
+    fs.mkdirSync(dir, { recursive: false });
+    writeWorkspaceFiles(dir, body.files);
+    // Expire inactive workspaces after six hours. Each successful execution refreshes this timer.
+    const timer = setTimeout(() => fs.rm(dir, { recursive: true, force: true }, () => {}), 6 * 60 * 60 * 1000);
+    timer.unref?.();
+    return sendJson(res, 201, { workspaceId, fileCount: body.files.length, expiresInSeconds: 21600 });
+  } catch (err) {
+    if (dir) fs.rm(dir, { recursive: true, force: true }, () => {});
+    return sendJson(res, 400, { error: err?.message || 'workspace creation failed' });
+  }
+}
+
+async function handleWorkspaceExecute(req, res) {
+  try {
+    const raw = await readBody(req);
+    const body = JSON.parse(raw || '{}');
+    const dir = getWorkspaceDir(body.workspaceId);
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return sendJson(res, 404, { error: 'workspace not found or expired' });
+    const command = typeof body.command === 'string' ? body.command.trim() : '';
+    if (!command || command.length > 20000) return sendJson(res, 400, { error: 'invalid command' });
+    if (active >= MAX_CONCURRENCY) return sendJson(res, 429, { error: 'sandbox service is at capacity' });
+    if (!(await ensureImage())) return sendJson(res, 503, { error: 'sandbox execution image unavailable' });
+    const requested = Number(body.timeoutMs || 60000);
+    const timeoutMs = Math.min(Math.max(Number.isFinite(requested) ? requested : 60000, MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
+    active += 1;
+    const result = await runContainer({ command, runDir: dir, timeoutMs });
+    let files;
+    try { files = readWorkspaceFiles(dir); }
+    catch (err) { return sendJson(res, 413, { error: err?.message || 'workspace export failed', execution: result }); }
+    return sendJson(res, 200, { ...result, workspaceId: body.workspaceId, files });
+  } catch (err) {
+    return sendJson(res, 400, { error: err?.message || 'workspace execution failed' });
+  } finally {
+    active = Math.max(0, active - 1);
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
@@ -311,16 +423,11 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  if (req.method === 'POST' && url.pathname === '/execute') {
-    if (TOKEN) {
-      const presented = String(req.headers['x-sandbox-token'] || '').trim();
-      // Constant-time compare to avoid leaking the token via timing.
-      const a = Buffer.from(presented);
-      const b = Buffer.from(TOKEN);
-      const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-      if (!ok) return sendJson(res, 401, { error: 'unauthorized' });
-    }
-    return handleExecute(req, res);
+  if (req.method === 'POST' && ['/execute', '/workspace/create', '/workspace/execute'].includes(url.pathname)) {
+    if (!authorizeInternalRequest(req, res)) return;
+    if (url.pathname === '/execute') return handleExecute(req, res);
+    if (url.pathname === '/workspace/create') return handleWorkspaceCreate(req, res);
+    return handleWorkspaceExecute(req, res);
   }
 
   sendJson(res, 404, { error: 'not found' });
