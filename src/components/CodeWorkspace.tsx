@@ -951,6 +951,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
               <summary className="cursor-pointer px-4 py-2 text-xs font-semibold text-emerald-300">
                 Actual repository diff · pinned base {safeExecution.baseSha || 'commit'}
               </summary>
+              {safeExecution.diffTruncated && <p className="px-4 py-2 text-xs text-amber-300">Diff truncated at the review limit. Do not approve or publish this incomplete patch.</p>}
               <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words px-4 py-3 text-[11px] leading-relaxed text-slate-200">{safeExecution.diff}</pre>
             </details>
           )}
