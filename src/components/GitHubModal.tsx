@@ -85,6 +85,8 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   const [isSavingRepository, setIsSavingRepository] = useState(false);
   const [isBindingMission, setIsBindingMission] = useState(false);
   const [missionBinding, setMissionBinding] = useState<{repository:string;branch:string;baseSha:string}|null>(null);
+  const [workspaceStatus, setWorkspaceStatus] = useState<{fileCount:number;baseSha:string;expiresAt:string}|null>(null);
+  const [isPreparingWorkspace, setIsPreparingWorkspace] = useState(false);
 
   const [webhooksList, setWebhooksList] = useState<any[]>([]);
   const [isLoadingWebhooks, setIsLoadingWebhooks] = useState<boolean>(false);
@@ -229,6 +231,27 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
       setRepositoryError(error.message || 'Could not select repository branch.');
     } finally {
       setIsSavingRepository(false);
+    }
+  };
+
+  const prepareMissionWorkspace = async () => {
+    if (!missionId) return;
+    setIsPreparingWorkspace(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch(`/api/missions/${encodeURIComponent(missionId)}/repository/workspace`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not prepare the isolated repository workspace.');
+      setWorkspaceStatus({ fileCount: data.fileCount, baseSha: data.baseSha, expiresAt: data.expiresAt });
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Repository workspace preparation failed.');
+    } finally {
+      setIsPreparingWorkspace(false);
     }
   };
 
@@ -754,6 +777,10 @@ git push -u origin main`;
                 {isBindingMission ? 'Verifying mission binding…' : 'Bind repository to this mission'}
               </button>
               {missionBinding && <span className="text-[10px] text-emerald-300">Bound: {missionBinding.repository} · {missionBinding.branch} · {missionBinding.baseSha.slice(0, 8)}</span>}
+              <button type="button" onClick={prepareMissionWorkspace} disabled={isPreparingWorkspace || isBindingMission || !selectedBranch} className="rounded-lg border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-50">
+                {isPreparingWorkspace ? 'Preparing isolated workspace…' : 'Prepare coding workspace'}
+              </button>
+              {workspaceStatus && <span className="text-[10px] text-emerald-300">Workspace ready: {workspaceStatus.fileCount} files · base {workspaceStatus.baseSha.slice(0, 8)}</span>}
             </div>
           )}
           {repositoryError && <p role="alert" className="text-[11px] text-rose-300">{repositoryError}</p>}
