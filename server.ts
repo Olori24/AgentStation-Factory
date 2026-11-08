@@ -2098,8 +2098,22 @@ app.post("/api/missions", requireRole(["admin","engineer"]), (req: any, res) => 
     if (existing && !db.canAccessMission(user, id)) {
       return res.status(403).json({ success: false, error: "Forbidden" });
     }
+    const incomingMetadata = body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata) ? body.metadata : {};
+    const { githubBinding: _clientGithubBinding, ...safeMetadata } = incomingMetadata;
+    const metadata = {
+      ...safeMetadata,
+      ...(existing?.metadata?.githubBinding ? { githubBinding: existing.metadata.githubBinding } : {}),
+    };
     const mission = db.upsertMission({
       ...body,
+      // GitHub binding fields are server-owned. Generic mission saves must never
+      // let a client forge or erase the verified repository, installation, or base SHA.
+      targetRepo: existing?.targetRepo,
+      branch: existing?.branch,
+      githubRepositoryId: existing?.githubRepositoryId,
+      githubInstallationId: existing?.githubInstallationId,
+      baseSha: existing?.baseSha,
+      metadata,
       id,
       prompt,
       userId: existing?.userId || user.id,
