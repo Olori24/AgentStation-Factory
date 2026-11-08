@@ -46,6 +46,7 @@ const PRESET_ICON: Record<string, React.ReactNode> = {
 
 function presetForAgent(agent: AgentProfile) {
   return (
+    AGENT_PRESETS.find((p) => p.id === agent.presetId) ||
     AGENT_PRESETS.find((p) => p.role === agent.id && p.id !== 'custom') ||
     AGENT_PRESETS.find((p) => p.id === 'custom')!
   );
@@ -238,7 +239,8 @@ export const AgentManager: React.FC<AgentManagerProps> = ({
 
 const AgentDetail: React.FC<{ agent: AgentProfile }> = ({ agent }) => {
   const preset = presetForAgent(agent);
-  const tone = TONE_OPTIONS.find((o) => o.value === (agent as any).tone)?.label;
+  const tone = TONE_OPTIONS.find((o) => o.value === agent.tone)?.label;
+  const autonomy = AUTONOMY_OPTIONS.find((o) => o.value === agent.autonomy)?.label;
   const memory = MEMORY_OPTIONS.find((o) => o.value === agent.memory)?.label;
   const schedule = SCHEDULE_OPTIONS.find((o) => o.value === agent.schedule)?.label;
   const tools = (agent.tools || [])
@@ -254,6 +256,7 @@ const AgentDetail: React.FC<{ agent: AgentProfile }> = ({ agent }) => {
     { label: 'Runs', value: schedule || 'Only when I ask' },
   ];
   if (tone) rows.splice(3, 0, { label: 'Style', value: tone });
+  if (autonomy) rows.splice(4, 0, { label: 'Autonomy', value: autonomy });
 
   return (
     <div className="p-5 sm:p-6 space-y-4 as-enter-fast">
