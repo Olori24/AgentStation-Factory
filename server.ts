@@ -2517,6 +2517,175 @@ app.post("/api/missions/:id/repository/execute", requireRole(["admin","engineer"
   }
 });
 
+// Publish only the exact diff explicitly approved in the AgentStation UI.
+app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), async (req: any, res) => {
+  let createdBranch = "";
+  try {
+    await db.ready();
+    const mission = db.getMissionById(String(req.params.id || ""));
+    if (!mission || mission.userId !== req.user.id || mission.organizationId !== req.user.organizationId ||
+        !mission.targetRepo || !mission.branch || !mission.baseSha || !mission.githubRepositoryId || !mission.githubInstallationId) {
+      return res.status(404).json({ success: false, error: "A verified repository binding for this mission is required." });
+    }
+    if (req.body?.confirmPublish !== true || typeof req.body?.diffHash !== "string" || !/^[a-f0-9]{64}$/i.test(req.body.diffHash)) {
+      return res.status(400).json({ success: false, error: "Explicit confirmation and the reviewed diff hash are required." });
+    }
+    const workspace = mission.metadata?.repositoryWorkspace;
+    if (!workspace?.workspaceId || workspace.baseSha !== mission.baseSha) {
+      return res.status(409).json({ success: false, error: "The mission workspace is missing or no longer matches its pinned base commit." });
+    }
+    const lastExecution = workspace.lastExecution;
+    if (lastExecution?.diffHash !== req.body.diffHash || lastExecution?.diffTruncated) {
+      return res.status(409).json({ success: false, error: "The workspace changed or its diff was truncated. Regenerate and review the complete diff before publishing." });
+    }
+    const connection = db.getGitHubConnectionForUser(req.user.id);
+    if (!connection || connection.installationId !== mission.githubInstallationId ||
+        !connection.selectedRepositories?.some((item) => item.id === mission.githubRepositoryId && item.fullName === mission.targetRepo)) {
+      return res.status(409).json({ success: false, error: "The connected GitHub installation or repository selection changed. Reconnect and rebind." });
+    }
+    const minted = await createUserInstallationToken(req.user.id, true);
+    if (!minted || minted.connection.installationId !== mission.githubInstallationId) {
+      return res.status(409).json({ success: false, error: "GitHub write authorization is unavailable. Reconnect the GitHub App and grant Contents: write and Pull requests: write." });
+    }
+    const snapshot = await callMissionSandboxWorkspace("/workspace/execute", {
+      workspaceId: workspace.workspaceId, command: "true", timeoutMs: 10000,
+    });
+    const currentDiff = String(snapshot.diff || "");
+    const currentHash = crypto.createHash("sha256").update(currentDiff).digest("hex");
+    if (snapshot.diffTruncated || !currentDiff || currentHash !== req.body.diffHash ||
+        snapshot.baseCommitSha !== workspace.baseCommitSha && workspace.baseCommitSha) {
+      return res.status(409).json({ success: false, error: "The repository diff changed after review. Review the latest diff and approve it again." });
+    }
+    const changedFiles = Array.isArray(snapshot.changedFiles) ? snapshot.changedFiles : [];
+    const workspaceFiles = Array.isArray(snapshot.files) ? snapshot.files : [];
+    if (!changedFiles.length || changedFiles.length > 200) {
+      return res.status(422).json({ success: false, error: "There are no publishable changes or the patch exceeds the file limit." });
+    }
+    const treeEntries = [];
+    for (const changed of changedFiles) {
+      if (!changed || !["A", "M", "D"].includes(changed.status) || !isSafeRepositorySnapshotPath(changed.path)) {
+        return res.status(422).json({ success: false, error: "The patch contains an unsupported or sensitive file path." });
+      }
+      if (changed.status === "D") {
+        treeEntries.push({ path: changed.path, mode: "100644", type: "blob", sha: null });
+        continue;
+      }
+      const file = workspaceFiles.find((item: any) => item?.path === changed.path && typeof item.content === "string");
+      if (!file || Buffer.byteLength(file.content, "utf8") > 1024 * 1024) {
+        return res.status(422).json({ success: false, error: "A changed file is missing or exceeds the publish size limit." });
+      }
+      treeEntries.push({ path: changed.path, mode: "100644", type: "blob", content: file.content });
+    }
+    const apiBase = "https://api.github.com/repos/" + mission.targetRepo;
+    const githubRequest = async (method: string, endpoint: string, payload?: any) => {
+      const response = await fetch(apiBase + endpoint, {
+        method,
+        headers: {
+          Authorization: "Bearer " + minted.token,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "AgentStation",
+          ...(payload ? { "Content-Type": "application/json" } : {}),
+        },
+        ...(payload ? { body: JSON.stringify(payload) } : {}),
+        signal: AbortSignal.timeout(20000),
+      });
+      const body: any = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = response.status === 403 || response.status === 404
+          ? "GitHub rejected write access. Confirm the App has Contents: write and Pull requests: write for this repository."
+          : "GitHub rejected the requested repository operation (HTTP " + response.status + ").";
+        throw new Error(message);
+      }
+      return body;
+    };
+    const baseCommit = await githubRequest("GET", "/git/commits/" + mission.baseSha);
+    const baseTreeSha = baseCommit?.tree?.sha;
+    if (typeof baseTreeSha !== "string" || !/^[a-f0-9]{40}$/i.test(baseTreeSha)) {
+      return res.status(502).json({ success: false, error: "GitHub did not return the pinned base tree." });
+    }
+    const tree = [];
+    for (const entry of treeEntries) {
+      if (entry.sha === null) {
+        tree.push({ path: entry.path, mode: entry.mode, type: "blob", sha: null });
+      } else {
+        const blob = await githubRequest("POST", "/git/blobs", {
+          content: entry.content,
+          encoding: "utf-8",
+        });
+        if (typeof blob.sha !== "string") throw new Error("GitHub did not create a source blob.");
+        tree.push({ path: entry.path, mode: entry.mode, type: "blob", sha: blob.sha });
+      }
+    }
+    const newTree = await githubRequest("POST", "/git/trees", { base_tree: baseTreeSha, tree });
+    if (typeof newTree.sha !== "string") throw new Error("GitHub did not create the approved source tree.");
+    const commit = await githubRequest("POST", "/git/commits", {
+      message: "AgentStation mission " + String(mission.id).slice(0, 48) + ": approved changes",
+      tree: newTree.sha,
+      parents: [mission.baseSha],
+    });
+    if (typeof commit.sha !== "string") throw new Error("GitHub did not create the approved commit.");
+    const missionSlug = String(mission.id).replace(/[^a-zA-Z0-9-]/g, "").slice(0, 12) || "task";
+    createdBranch = "agentstation/mission-" + missionSlug + "-" + req.body.diffHash.slice(0, 10);
+    await githubRequest("POST", "/git/refs", { ref: "refs/heads/" + createdBranch, sha: commit.sha });
+    const title = "AgentStation: " + String(mission.title || mission.prompt || "mission changes").replace(/[\r\n]+/g, " ").slice(0, 180);
+    const pull = await githubRequest("POST", "/pulls", {
+      title,
+      head: createdBranch,
+      base: mission.branch,
+      body: [
+        "## AgentStation mission changes",
+        "",
+        "Mission: " + mission.id,
+        "Repository base commit: " + mission.baseSha,
+        "Reviewed diff SHA-256: " + req.body.diffHash,
+        "",
+        "This branch was created only after explicit approval in AgentStation. It does not modify the selected base branch directly.",
+      ].join("\n"),
+    });
+    if (typeof pull.html_url !== "string" || typeof pull.number !== "number") {
+      throw new Error("GitHub created the branch but did not return a pull request URL.");
+    }
+    const current = db.getMissionById(mission.id);
+    if (current && current.userId === req.user.id && current.metadata?.repositoryWorkspace?.workspaceId === workspace.workspaceId) {
+      db.upsertMission({
+        ...current,
+        metadata: {
+          ...(current.metadata || {}),
+          repositoryWorkspace: {
+            ...current.metadata?.repositoryWorkspace,
+            published: {
+              diffHash: req.body.diffHash,
+              branch: createdBranch,
+              commitSha: commit.sha,
+              pullRequestNumber: pull.number,
+              pullRequestUrl: pull.html_url,
+              publishedAt: new Date().toISOString(),
+            },
+          },
+        },
+        updatedAt: new Date().toISOString(),
+      });
+      await db.flush();
+    }
+    return res.setHeader("Cache-Control", "no-store").json({
+      success: true,
+      branch: createdBranch,
+      commitSha: commit.sha,
+      pullRequestNumber: pull.number,
+      pullRequestUrl: pull.html_url,
+      diffHash: req.body.diffHash,
+    });
+  } catch (error: any) {
+    return res.status(createdBranch ? 502 : 503).json({
+      success: false,
+      branchCreated: Boolean(createdBranch),
+      branch: createdBranch || undefined,
+      error: error?.message || "Approved GitHub publication failed.",
+    });
+  }
+});
+
 app.delete("/api/missions/:id", requireRole(["admin","engineer"]), (req: any, res) => {
   try {
     const id = String(req.params.id || "").trim();
