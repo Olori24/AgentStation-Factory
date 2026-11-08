@@ -126,7 +126,10 @@ function sendJson(res, status, payload) {
 }
 
 const WORKSPACE_ROOT = path.join(RUN_ROOT, 'workspaces');
+const WORKSPACE_META_ROOT = path.join(RUN_ROOT, 'workspace-meta');
 const WORKSPACE_ID_RE = /^[a-f0-9]{32}$/;
+const activeWorkspaces = new Set();
+fs.mkdirSync(WORKSPACE_META_ROOT, { recursive: true });
 const MAX_WORKSPACE_FILES = 200;
 const MAX_WORKSPACE_FILE_BYTES = 1024 * 1024;
 const MAX_WORKSPACE_TOTAL_BYTES = 10 * 1024 * 1024;
@@ -168,6 +171,21 @@ function writeWorkspaceFiles(dir, files, overwrite = false) {
     fs.mkdirSync(path.dirname(absolute), { recursive: true });
     fs.writeFileSync(absolute, content, { encoding: 'utf8', flag: overwrite ? 'w' : 'wx' });
   }
+}
+
+function setWorkspaceOwnership(dir) {
+  const stat = fs.lstatSync(dir);
+  if (stat.isSymbolicLink()) throw new Error('workspace contains a symbolic link');
+  if (stat.isDirectory()) {
+    fs.chownSync(dir, 65532, 65532);
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) setWorkspaceOwnership(path.join(dir, entry.name));
+  } else if (stat.isFile()) {
+    fs.chownSync(dir, 65532, 65532);
+  }
+}
+
+function workspaceMetadataPath(id) {
+  return path.join(WORKSPACE_META_ROOT, id + '.json');
 }
 
 function readWorkspaceFiles(dir) {
@@ -379,10 +397,32 @@ async function handleWorkspaceCreate(req, res) {
     dir = getWorkspaceDir(workspaceId);
     fs.mkdirSync(dir, { recursive: false });
     writeWorkspaceFiles(dir, body.files);
-    // Workspace lifetime is capped at six hours from creation.
-    const timer = setTimeout(() => fs.rm(dir, { recursive: true, force: true }, () => {}), 6 * 60 * 60 * 1000);
+    setWorkspaceOwnership(dir);
+    if (active >= MAX_CONCURRENCY) throw new Error('sandbox service is at capacity');
+    if (!(await ensureImage())) throw new Error('sandbox execution image unavailable');
+    active += 1;
+    let initialized;
+    try {
+      initialized = await runContainer({
+        command: "git init -q && git config user.name AgentStation && git config user.email noreply@agentstation.local && git add -A && git commit -qm 'Base repository snapshot' && git rev-parse HEAD",
+        runDir: dir,
+        timeoutMs: 15000,
+      });
+    } finally {
+      active = Math.max(0, active - 1);
+    }
+    const baseCommitSha = String(initialized?.stdout || '').trim().split(/\\s+/).pop();
+    if (initialized?.exitCode !== 0 || !/^[a-f0-9]{40}$/i.test(baseCommitSha)) {
+      throw new Error('Could not initialize the isolated workspace baseline.');
+    }
+    const metadata = { workspaceId, baseCommitSha, createdAt: new Date().toISOString() };
+    fs.writeFileSync(workspaceMetadataPath(workspaceId), JSON.stringify(metadata), { mode: 0o600, flag: 'wx' });
+    const timer = setTimeout(() => {
+      fs.rm(dir, { recursive: true, force: true }, () => {});
+      fs.rm(workspaceMetadataPath(workspaceId), { force: true }, () => {});
+    }, 6 * 60 * 60 * 1000);
     timer.unref?.();
-    return sendJson(res, 201, { workspaceId, fileCount: body.files.length, expiresInSeconds: 21600 });
+    return sendJson(res, 201, { workspaceId, fileCount: body.files.length, baseCommitSha, expiresInSeconds: 21600 });
   } catch (err) {
     if (dir) fs.rm(dir, { recursive: true, force: true }, () => {});
     return sendJson(res, 400, { error: err?.message || 'workspace creation failed' });
@@ -390,12 +430,19 @@ async function handleWorkspaceCreate(req, res) {
 }
 
 async function handleWorkspaceExecute(req, res) {
+  let lockedId = '';
   try {
     const raw = await readBody(req);
     const body = JSON.parse(raw || '{}');
     const dir = getWorkspaceDir(body.workspaceId);
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return sendJson(res, 404, { error: 'workspace not found or expired' });
-    if (Array.isArray(body.files) && body.files.length) writeWorkspaceFiles(dir, body.files, true);
+    lockedId = body.workspaceId;
+    if (activeWorkspaces.has(lockedId)) return sendJson(res, 409, { error: 'workspace is already executing another task' });
+    activeWorkspaces.add(lockedId);
+    if (Array.isArray(body.files) && body.files.length) {
+      writeWorkspaceFiles(dir, body.files, true);
+      setWorkspaceOwnership(dir);
+    }
     const command = typeof body.command === 'string' ? body.command.trim() : '';
     if (!command || command.length > 20000) return sendJson(res, 400, { error: 'invalid command' });
     if (active >= MAX_CONCURRENCY) return sendJson(res, 429, { error: 'sandbox service is at capacity' });
@@ -407,11 +454,24 @@ async function handleWorkspaceExecute(req, res) {
     let files;
     try { files = readWorkspaceFiles(dir); }
     catch (err) { return sendJson(res, 413, { error: err?.message || 'workspace export failed', execution: result }); }
-    return sendJson(res, 200, { ...result, workspaceId: body.workspaceId, files });
+    const metadata = JSON.parse(fs.readFileSync(workspaceMetadataPath(body.workspaceId), 'utf8'));
+    const baseCommitSha = String(metadata.baseCommitSha || '');
+    let diff = '';
+    if (/^[a-f0-9]{40}$/i.test(baseCommitSha)) {
+      const diffResult = await runContainer({
+        command: "git diff --no-ext-diff --binary --unified=3 " + baseCommitSha + " --",
+        runDir: dir,
+        timeoutMs: 15000,
+      });
+      if (diffResult.exitCode === 0) diff = String(diffResult.stdout || '').slice(0, MAX_OUTPUT_BYTES);
+      else result.stderr = (result.stderr || '') + "\\n[DIFF] Unable to calculate workspace diff from the recorded baseline.";
+    }
+    return sendJson(res, 200, { ...result, workspaceId: body.workspaceId, files, diff, baseCommitSha });
   } catch (err) {
     return sendJson(res, 400, { error: err?.message || 'workspace execution failed' });
   } finally {
     active = Math.max(0, active - 1);
+    if (lockedId) activeWorkspaces.delete(lockedId);
   }
 }
 
