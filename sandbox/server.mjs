@@ -17,12 +17,15 @@
  * - Only reachable on the compose network; requires a shared token.
  * - Per-container limits: no network, read-only rootfs, no capabilities,
  *   non-root user, PID/memory/CPU/file-descriptor caps.
- * - Per-run directory is created, used as a bind mount, then deleted.
+ * - One-off execution directories are deleted after each run; mission workspaces persist with a six-hour TTL.
+ * - Mission workspaces are isolated by random IDs and can only be accessed through the authenticated app-to-sandbox channel.
  * - Output is capped and every container is force-removed after the timeout.
  *
  * Endpoints
  *   GET  /health   -> { status, docker, image, active }
  *   POST /execute  -> { sandboxId, exitCode, stdout, stderr, durationMs, timedOut }
+ *   POST /workspace/create  -> creates a bounded, mission-scoped repository workspace
+ *   POST /workspace/execute -> applies bounded file updates, runs a command, returns a diff
  *
  * Env
  *   SANDBOX_PORT          (default 7070)
