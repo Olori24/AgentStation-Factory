@@ -2353,13 +2353,6 @@ app.post("/api/missions/:id/repository/workspace", requireRole(["admin","enginee
         !mission.targetRepo || !mission.branch || !mission.baseSha || !mission.githubRepositoryId || !mission.githubInstallationId) {
       return res.status(404).json({ success: false, error: "A verified repository binding for this mission is required." });
     }
-    const existingWorkspace = mission.metadata?.repositoryWorkspace;
-    if (existingWorkspace?.workspaceId && existingWorkspace.baseSha === mission.baseSha) {
-      return res.setHeader("Cache-Control", "no-store").json({
-        success: true, existing: true, fileCount: existingWorkspace.fileCount,
-        baseSha: mission.baseSha, expiresAt: existingWorkspace.expiresAt,
-      });
-    }
     const connection = db.getGitHubConnectionForUser(req.user.id);
     if (!connection || connection.installationId !== mission.githubInstallationId) {
       return res.status(409).json({ success: false, error: "The GitHub installation changed. Rebind the repository." });
