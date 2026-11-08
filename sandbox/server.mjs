@@ -203,7 +203,7 @@ function scheduleWorkspaceExpiry(id, createdAt) {
 }
 
 for (const entry of fs.readdirSync(WORKSPACE_META_ROOT, { withFileTypes: true })) {
-  if (!entry.isFile() || !/^[a-f0-9]{32}\\.json$/.test(entry.name)) continue;
+  if (!entry.isFile() || !/^[a-f0-9]{32}\.json$/.test(entry.name)) continue;
   const id = entry.name.slice(0, -5);
   try {
     const metadata = JSON.parse(fs.readFileSync(workspaceMetadataPath(id), 'utf8'));
