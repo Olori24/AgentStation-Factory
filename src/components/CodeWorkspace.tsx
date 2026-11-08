@@ -393,7 +393,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
         <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-900/50 border border-blue-700/50 text-blue-300 uppercase">${currentFile?.language || 'code'}</span>
       </div>
       <p class="text-xs text-slate-400 mt-2">
-        This file is verified in the sandboxed test runner. Below is the active runtime artifact:
+        This file is shown from the current workspace. The actual sandbox validation status is reported below:
       </p>
       <div class="mt-3 p-3 rounded-lg bg-slate-950 font-mono text-xs text-slate-300 overflow-x-auto max-h-72 border border-slate-800">
         <pre>${escapedCode}</pre>
