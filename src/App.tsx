@@ -38,7 +38,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { DEFAULT_AGENTS, INITIAL_MISSION, GITHUB_REPO_INFO } from './data/defaults';
 import { SAMPLE_MISSIONS } from './data/sampleMissions';
 import { SquadMission, AgentProfile, AgentRole, AgentLogEntry, WorkspaceFile, VideoProject, CiStatusInfo, TerminalStreamMessage } from './types';
-import { executeAutonomousPipeline, simulateSandboxCommand } from './services/autonomousEngine';
+import { executeAutonomousPipeline } from './services/autonomousEngine';
 
 function AgentStationApp() {
   const [missionHistory, setMissionHistory] = useState<SquadMission[]>(() => {
@@ -340,9 +340,9 @@ function AgentStationApp() {
 
     // Reset agents to working
     setAgents((prev) =>
-      prev.map((a) => ({ ...a, status: a.id === 'architect' ? 'working' : 'idle' }))
+      prev.map((a) => ({ ...a, status: a.id === 'developer' ? 'working' : 'idle' }))
     );
-    setActiveAgentRole('architect');
+    setActiveAgentRole('developer');
 
     // Add initial log
     const startLog: AgentLogEntry = {
@@ -351,7 +351,7 @@ function AgentStationApp() {
       role: 'system',
       agentName: 'AgentStation Core',
       type: 'status',
-      message: `Starting multi-agent execution pipeline for: "${promptText}"`,
+      message: `Starting provider-backed code generation and isolated test run for: "${promptText}"`,
     };
 
     setMission((prev) => ({
@@ -364,105 +364,7 @@ function AgentStationApp() {
     }));
 
     try {
-      // Emit initial Atlas SSE telemetry
-      fetch('/api/stream/test-emit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agent: 'Atlas (Architect)',
-          thought: `Decomposing objective into modular architecture & subtasks: "${promptText.slice(0, 60)}"`,
-        }),
-      }).catch(() => {});
-
-      // Simulate sequential hand-offs smoothly
-      setTimeout(() => {
-        setActiveAgentRole('developer');
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.id === 'architect'
-              ? { ...a, status: 'completed' }
-              : a.id === 'developer'
-              ? { ...a, status: 'working' }
-              : a
-          )
-        );
-        fetch('/api/stream/test-emit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agent: 'Cypher (Lead Engineer)',
-            thought: 'Synthesizing typed application modules, interactive UI, and workspace artifacts.',
-          }),
-        }).catch(() => {});
-      }, 900);
-
-      setTimeout(() => {
-        setActiveAgentRole('qa');
-        setComputerTab('terminal');
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.id === 'developer'
-              ? { ...a, status: 'completed' }
-              : a.id === 'qa'
-              ? { ...a, status: 'working' }
-              : a
-          )
-        );
-        fetch('/api/stream/test-emit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agent: 'Sentinel (QA Auditor)',
-            thought: 'Executing automated verification suite and sandbox assertions.',
-          }),
-        }).catch(() => {});
-      }, 1800);
-
-      setTimeout(() => {
-        setActiveAgentRole('creative');
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.id === 'qa'
-              ? { ...a, status: 'completed' }
-              : a.id === 'creative'
-              ? { ...a, status: 'working' }
-              : a
-          )
-        );
-        fetch('/api/stream/test-emit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agent: 'Vesper (Dossier & Strategy)',
-            thought: 'Compiling executive dossier, structured spreadsheet dataset, and outreach sequence.',
-          }),
-        }).catch(() => {});
-      }, 2700);
-
-      setTimeout(() => {
-        setActiveAgentRole('video_producer');
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.id === 'creative'
-              ? { ...a, status: 'completed' }
-              : a.id === 'video_producer'
-              ? { ...a, status: 'working' }
-              : a
-          )
-        );
-      }, 3600);
-
-      // Trigger autonomous task planner to generate actionable subtasks in database
-      fetch('/api/tasks/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          missionId: newMissionId,
-          prompt: promptText,
-        }),
-      }).catch(() => {});
-
-      // Execute mission via autonomous pipeline (attempts server API, falls back gracefully to in-engine synthesizer on error or static hosting)
+      // Run the provider-backed code generation and actual sandbox verification path.
       const finalMission = await executeAutonomousPipeline({
         missionId: newMissionId,
         prompt: promptText,
@@ -496,9 +398,6 @@ function AgentStationApp() {
         return;
       }
 
-      // Retain context from previous logs
-      finalMission.logs = [...finalMission.logs, ...mission.logs];
-
       // Persist all generated mission files to workspace/ disk (Phase 2 + Phase 3 SSE sync)
       if (Array.isArray(finalMission.files) && finalMission.files.length > 0) {
         fetch('/api/files/save-batch', {
@@ -518,11 +417,11 @@ function AgentStationApp() {
       } else {
         setComputerTab('browser');
       }
-      setMobileActiveView('workstation'); // Auto-switch on mobile so user sees the live result!
+      setMobileActiveView('chat'); // Keep the conversation visible after the agent responds.
 
-      setAgents((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
+      setAgents((prev) => prev.map((a) => ({ ...a, status: a.id === 'developer' ? 'completed' : a.id === 'qa' ? (finalMission.execution.exitCode === 0 ? 'completed' : finalMission.execution.exitCode > 0 ? 'error' : 'idle') : 'idle' })));
       setActiveAgentRole(undefined);
-      showToast('Squad mission completed! Code, tests, and preview are ready.');
+      showToast(finalMission.execution.exitCode === 0 ? 'Code generated and sandbox tests passed.' : finalMission.execution.exitCode > 0 ? 'Code generated, but sandbox tests failed.' : 'Code generated. Runtime verification is still pending.');
     } catch (err: any) {
       console.error('Autonomous squad error:', err);
       const errMsg = err?.message || 'Execution error during multi-agent handoff';
@@ -542,7 +441,7 @@ function AgentStationApp() {
         logs: [failLog, ...prev.logs],
       }));
       showToast(`Notice: ${errMsg.slice(0, 50)}`);
-      setAgents((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
+      setAgents((prev) => prev.map((a) => ({ ...a, status: a.id === 'developer' || a.id === 'qa' ? 'error' : 'idle' })));
       setActiveAgentRole(undefined);
     } finally {
       setIsExecuting(false);
@@ -593,9 +492,8 @@ function AgentStationApp() {
         }
       }
 
-      // If backend is offline or static hosting, simulate sandbox command runner
-      if (!data) {
-        data = simulateSandboxCommand(command, mission.files, mission.gitBranch);
+      if (!res.ok || !data) {
+        throw new Error(data?.error || `Terminal service unavailable (HTTP ${res.status}). No command was executed.`);
       }
 
       setMission((prev) => ({
@@ -624,10 +522,22 @@ function AgentStationApp() {
       setStreamingTerminalOutput((prev) => (prev && prev.length > startBanner.length ? prev : data.stdout || startBanner));
       showToast(`Command finished with return code ${data.exitCode}`);
     } catch (err: any) {
-      console.warn('Terminal backend fetch failed, using sandbox simulator:', err);
-      const data = simulateSandboxCommand(command, mission.files, mission.gitBranch);
-      setStreamingTerminalOutput(data.stdout);
-      showToast('Command executed in sandbox simulation (exit 0)');
+      const message = err?.message || 'Terminal execution failed. No simulated result was created.';
+      setStreamingTerminalOutput((prev) => `${prev}
+[EXECUTION NOT RUN] ${message}`);
+      setMission((prev) => ({
+        ...prev,
+        execution: {
+          ...prev.execution,
+          command,
+          stdout: `Execution was not run: ${message}`,
+          exitCode: 1,
+          testsPassed: 0,
+          testsFailed: 0,
+          durationMs: 0,
+        },
+      }));
+      showToast(message);
     } finally {
       setIsRunningCommand(false);
       setIsStreamingTerminal(false);
@@ -821,7 +731,7 @@ function AgentStationApp() {
         ) : (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden pt-14 lg:pt-0">
             {/* Mobile View Switcher (Visible on mobile screens < 1024px) */}
-            <div className="lg:hidden fixed bottom-2 left-2 right-2 z-[70] px-1 py-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-700/80 shadow-2xl shadow-black/50">
+            <div className="lg:hidden relative z-10 mx-2 mt-2 mb-2 px-1 py-1.5 bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-700/80 shadow-xl shrink-0">
               <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 w-full max-w-md mx-auto">
                 <button
                   type="button"
@@ -858,6 +768,14 @@ function AgentStationApp() {
                   mobileActiveView === 'chat' ? 'flex' : 'hidden lg:flex'
                 }`}
               >
+                <div className="mx-3 mt-2 mb-1 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 flex items-start gap-2 shrink-0">
+                  <span className="mt-0.5 h-2 w-2 rounded-full bg-amber-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold text-amber-200">No GitHub repository is attached to this task</p>
+                    <p className="text-[10px] leading-relaxed text-slate-400">Agents currently generate files in the AgentStation workspace. The GitHub Hub provides separate sync tools; it does not yet give agents repository file or branch context.</p>
+                  </div>
+                  <button type="button" onClick={() => setIsGitHubModalOpen(true)} className="shrink-0 text-[10px] font-semibold text-blue-300 hover:text-blue-200 underline underline-offset-2">GitHub Hub</button>
+                </div>
                 <ManusConversation
                   mission={mission}
                   isExecuting={isExecuting}

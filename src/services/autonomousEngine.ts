@@ -19,36 +19,31 @@ export interface AutonomousSynthesisOptions {
 export async function executeAutonomousPipeline(
   options: AutonomousSynthesisOptions
 ): Promise<SquadMission> {
-  const { missionId, prompt, aiProvider = 'gemini', ollamaModel, existingFiles } = options;
+  const { missionId, prompt, aiProvider = 'gemini', ollamaModel } = options;
 
-  // 1. First, attempt to contact the full-stack server if available
-  try {
-    const res = await fetch('/api/agents/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        provider: aiProvider,
-        ollamaModel,
-      }),
-    });
+  const res = await fetch('/api/agents/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      missionId,
+      prompt,
+      provider: aiProvider,
+      ollamaModel,
+    }),
+  });
 
-    if (res.ok) {
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await res.json();
-        const generated = data.mission || (data.files ? data : null);
-        if (data.success && generated) {
-          return buildMissionFromGenerated(missionId, prompt, generated);
-        }
-      }
-    }
-  } catch (err) {
-    console.info('Backend server unreachable or static deployment detected. Engaging Autonomous Client-Side Synthesizer.');
+  const contentType = res.headers.get('content-type') || '';
+  const data = contentType.includes('application/json') ? await res.json() : null;
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Agent execution service unavailable (HTTP ${res.status}). No code was generated.`);
   }
 
-  // 2. Client-Side Autonomous Fallback Generator (100% resilient, offline-ready)
-  return synthesizeAutonomousMission(missionId, prompt, existingFiles);
+  const generated = data.mission || (data.files ? data : null);
+  if (!generated || !Array.isArray(generated.files)) {
+    throw new Error('Agent execution returned no valid file artifacts. The task was not completed.');
+  }
+
+  return buildMissionFromGenerated(missionId, prompt, generated);
 }
 
 function buildMissionFromGenerated(
@@ -57,43 +52,41 @@ function buildMissionFromGenerated(
   generated: any
 ): SquadMission {
   const timestamp = new Date().toLocaleTimeString();
-  const newLogs: AgentLogEntry[] = (generated.logs || []).map((l: any, idx: number) => ({
-    id: `gen-log-${Date.now()}-${idx}`,
-    timestamp,
-    role: l.role || 'system',
-    agentName: l.agentName || 'Agent',
-    type: l.type || 'thought',
-    message: l.message || '',
-    details: l.details,
-  }));
-
-  const completeLog: AgentLogEntry = {
-    id: `complete-${Date.now()}`,
+  const testExecution = generated.execution || {
+    command: 'Not run',
+    stdout: 'Runtime execution and automated tests have not been run.',
+    exitCode: -1,
+    testsPassed: 0,
+    testsFailed: 0,
+    durationMs: 0,
+  };
+  const testsPassed = testExecution.exitCode === 0;
+  const testsFailed = testExecution.exitCode > 0;
+  const executionLog: AgentLogEntry = {
+    id: `execution-${Date.now()}`,
     timestamp,
     role: 'system',
     agentName: 'AgentStation Core',
-    type: 'complete',
-    message: `Mission completed successfully! Code artifacts, PyTest sandbox tests, and 1080p promo video compiled.`,
+    type: testsPassed ? 'complete' : 'status',
+    message: testsPassed
+      ? `Generated ${(generated.files || []).length} files and executed the test suite successfully.`
+      : testsFailed
+      ? 'Code was generated, but the real sandbox test run failed. Review the output before using the code.'
+      : 'Code was generated. Automated runtime verification has not been completed.',
+    details: `Command: ${testExecution.command}\nExit code: ${testExecution.exitCode}\n${testExecution.stdout || ''}`,
   };
 
   return {
     id: missionId,
     prompt,
     createdAt: 'Just now',
-    status: 'completed',
-    currentStage: 'Mission Completed & Verified',
+    status: testsFailed ? 'failed' : 'completed',
+    currentStage: testsPassed ? 'Code Generated & Tests Passed' : testsFailed ? 'Code Generated — Tests Failed' : 'Code Generated — Verification Pending',
     progressPercent: 100,
     files: generated.files || [],
-    execution: generated.execution || {
-      command: 'pytest -v tests/',
-      stdout: '============================= test session starts ==============================\ncollected 4 items\n\ntests/test_suite.py::test_initialization PASSED                           [ 25%]\ntests/test_suite.py::test_core_logic PASSED                               [ 50%]\ntests/test_suite.py::test_edge_cases PASSED                               [ 75%]\ntests/test_suite.py::test_performance_and_security PASSED                 [100%]\n\n============================== 4 passed in 0.08s ===============================',
-      exitCode: 0,
-      testsPassed: 4,
-      testsFailed: 0,
-      durationMs: 80,
-    },
+    execution: testExecution,
     video: generated.video || getDefaultVideo(prompt),
-    logs: [completeLog, ...newLogs],
+    logs: [executionLog],
     gitBranch: 'main',
     gitCommitMessage: generated.gitCommitMessage || `feat: implement ${prompt.slice(0, 32)}`,
     objectiveBreakdown: generated.objectiveBreakdown || understandAndPlanObjective(prompt).objective,
