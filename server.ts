@@ -2459,6 +2459,7 @@ app.post("/api/missions/:id/repository/workspace", requireRole(["admin","enginee
     const repositoryWorkspace = {
       workspaceId: workspace.workspaceId,
       baseSha: mission.baseSha,
+      baseCommitSha: workspace.baseCommitSha,
       fileCount: workspace.fileCount,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
@@ -2531,8 +2532,15 @@ app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), 
       return res.status(400).json({ success: false, error: "Explicit confirmation and the reviewed diff hash are required." });
     }
     const workspace = mission.metadata?.repositoryWorkspace;
-    if (!workspace?.workspaceId || workspace.baseSha !== mission.baseSha) {
+    if (!workspace?.workspaceId || workspace.baseSha !== mission.baseSha || !workspace.baseCommitSha) {
       return res.status(409).json({ success: false, error: "The mission workspace is missing or no longer matches its pinned base commit." });
+    }
+    if (workspace.published?.diffHash === req.body?.diffHash && workspace.published?.pullRequestUrl) {
+      return res.setHeader("Cache-Control", "no-store").json({
+        success: true, alreadyPublished: true, branch: workspace.published.branch,
+        commitSha: workspace.published.commitSha, pullRequestNumber: workspace.published.pullRequestNumber,
+        pullRequestUrl: workspace.published.pullRequestUrl, diffHash: workspace.published.diffHash,
+      });
     }
     const lastExecution = workspace.lastExecution;
     if (lastExecution?.diffHash !== req.body.diffHash || lastExecution?.diffTruncated) {
@@ -2553,7 +2561,7 @@ app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), 
     const currentDiff = String(snapshot.diff || "");
     const currentHash = crypto.createHash("sha256").update(currentDiff).digest("hex");
     if (snapshot.diffTruncated || !currentDiff || currentHash !== req.body.diffHash ||
-        snapshot.baseCommitSha !== workspace.baseCommitSha && workspace.baseCommitSha) {
+        snapshot.baseCommitSha !== workspace.baseCommitSha) {
       return res.status(409).json({ success: false, error: "The repository diff changed after review. Review the latest diff and approve it again." });
     }
     const changedFiles = Array.isArray(snapshot.changedFiles) ? snapshot.changedFiles : [];
