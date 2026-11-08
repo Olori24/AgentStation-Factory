@@ -495,6 +495,7 @@ async function handleWorkspaceExecute(req, res) {
     const metadata = JSON.parse(fs.readFileSync(workspaceMetadataPath(body.workspaceId), 'utf8'));
     const baseCommitSha = String(metadata.baseCommitSha || '');
     let diff = '';
+    let diffTruncated = false;
     let changedFiles = [];
     if (/^[a-f0-9]{40}$/i.test(baseCommitSha)) {
       const diffResult = await runContainer({
@@ -502,7 +503,11 @@ async function handleWorkspaceExecute(req, res) {
         runDir: dir,
         timeoutMs: 15000,
       });
-      if (diffResult.exitCode === 0) diff = String(diffResult.stdout || '').slice(0, MAX_OUTPUT_BYTES);
+      if (diffResult.exitCode === 0) {
+        const fullDiff = String(diffResult.stdout || '');
+        diffTruncated = fullDiff.length > 150 * 1024;
+        diff = fullDiff.slice(0, 150 * 1024);
+      }
       else result.stderr = (result.stderr || '') + "\\n[DIFF] Unable to calculate workspace diff from the recorded baseline.";
       const nameStatus = await runContainer({
         command: "git diff --name-status --no-renames " + baseCommitSha + " --",
@@ -516,7 +521,7 @@ async function handleWorkspaceExecute(req, res) {
         }).filter(Boolean).slice(0, MAX_WORKSPACE_FILES);
       }
     }
-    return sendJson(res, 200, { ...result, workspaceId: body.workspaceId, files, diff, baseCommitSha, changedFiles });
+    return sendJson(res, 200, { ...result, workspaceId: body.workspaceId, files, diff, diffTruncated, baseCommitSha, changedFiles });
   } catch (err) {
     return sendJson(res, 400, { error: err?.message || 'workspace execution failed' });
   } finally {
