@@ -19,36 +19,30 @@ export interface AutonomousSynthesisOptions {
 export async function executeAutonomousPipeline(
   options: AutonomousSynthesisOptions
 ): Promise<SquadMission> {
-  const { missionId, prompt, aiProvider = 'gemini', ollamaModel, existingFiles } = options;
+  const { missionId, prompt, aiProvider = 'gemini', ollamaModel } = options;
 
-  // 1. First, attempt to contact the full-stack server if available
-  try {
-    const res = await fetch('/api/agents/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        provider: aiProvider,
-        ollamaModel,
-      }),
-    });
+  const res = await fetch('/api/agents/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      provider: aiProvider,
+      ollamaModel,
+    }),
+  });
 
-    if (res.ok) {
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await res.json();
-        const generated = data.mission || (data.files ? data : null);
-        if (data.success && generated) {
-          return buildMissionFromGenerated(missionId, prompt, generated);
-        }
-      }
-    }
-  } catch (err) {
-    console.info('Backend server unreachable or static deployment detected. Engaging Autonomous Client-Side Synthesizer.');
+  const contentType = res.headers.get('content-type') || '';
+  const data = contentType.includes('application/json') ? await res.json() : null;
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `Agent execution service unavailable (HTTP ${res.status}). No code was generated.`);
   }
 
-  // 2. Client-Side Autonomous Fallback Generator (100% resilient, offline-ready)
-  return synthesizeAutonomousMission(missionId, prompt, existingFiles);
+  const generated = data.mission || (data.files ? data : null);
+  if (!generated || !Array.isArray(generated.files)) {
+    throw new Error('Agent execution returned no valid file artifacts. The task was not completed.');
+  }
+
+  return buildMissionFromGenerated(missionId, prompt, generated);
 }
 
 function buildMissionFromGenerated(
