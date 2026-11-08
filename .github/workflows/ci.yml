@@ -49,6 +49,9 @@ jobs:
       - name: Run pytest suite
         run: python -m pytest -v tests/test_mission_sandbox.py tests/security_static_audit.py
 
+      - name: Agent creation flow (render & logic)
+        run: npx tsx tests/agent_flow_render.tsx
+
   e2e-demo:
     name: End-to-end demo (fresh server)
     runs-on: ubuntu-latest

@@ -14,14 +14,20 @@ import {
   Film,
   Zap,
   Command,
+  LayoutDashboard,
+  CheckCircle2,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import { SquadMission } from '../types';
+import { Badge, EmptyState, Tooltip } from './ui';
 
 interface ManusSidebarProps {
   missions: SquadMission[];
   currentMissionId?: string;
   onSelectMission: (mission: SquadMission) => void;
   onNewTask: () => void;
+  onGoHome?: () => void;
   onDeleteMission?: (id: string) => void;
   isExecuting: boolean;
   isOpen: boolean;
@@ -33,15 +39,27 @@ interface ManusSidebarProps {
   onOpenGrowthFactory?: () => void;
   onOpenAutonomy?: () => void;
   onOpenCommandPalette?: () => void;
+  onOpenAgents?: () => void;
+  onNewAgent?: () => void;
   aiProvider: 'gemini' | 'ollama';
   isMobile?: boolean;
+  isDeckMode?: boolean;
 }
+
+const STATUS_DOT: Record<string, string> = {
+  completed: 'bg-emerald-400',
+  running: 'bg-amber-400 animate-pulse',
+  failed: 'bg-red-400',
+  cancelled: 'bg-slate-500',
+  idle: 'bg-slate-600',
+};
 
 export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   missions,
   currentMissionId,
   onSelectMission,
   onNewTask,
+  onGoHome,
   onDeleteMission,
   isExecuting,
   isOpen,
@@ -53,8 +71,11 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
   onOpenGrowthFactory,
   onOpenAutonomy,
   onOpenCommandPalette,
+  onOpenAgents,
+  onNewAgent,
   aiProvider,
   isMobile = false,
+  isDeckMode = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -67,67 +88,77 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
     return (
       <div className="w-14 bg-slate-950 border-r border-slate-800/80 flex flex-col items-center py-3 justify-between shrink-0 select-none">
         <div className="flex flex-col items-center gap-3">
-          <button
-            onClick={onToggleOpen}
-            title="Expand navigation"
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition"
-          >
-            <PanelLeft className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={onNewTask}
-            title="New Task"
-            disabled={isExecuting}
-            className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-
-          {onOpenCommandPalette && (
+          <Tooltip label="Expand navigation">
             <button
-              onClick={onOpenCommandPalette}
-              title="Command Palette (⌘K)"
+              onClick={onToggleOpen}
+              aria-label="Expand navigation"
               className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition"
             >
-              <Command className="w-4 h-4" />
+              <PanelLeft className="w-5 h-5" />
             </button>
+          </Tooltip>
+
+          {onGoHome && (
+            <Tooltip label="Command Deck">
+              <button
+                onClick={onGoHome}
+                aria-label="Go to Command Deck"
+                className={`p-2 rounded-lg transition ${isDeckMode ? 'text-blue-400 bg-blue-950/50' : 'text-slate-400 hover:text-white hover:bg-slate-800/80'}`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+              </button>
+            </Tooltip>
+          )}
+
+          <Tooltip label="New task">
+            <button
+              onClick={onNewTask}
+              aria-label="New task"
+              disabled={isExecuting}
+              className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </Tooltip>
+
+          {onOpenCommandPalette && (
+            <Tooltip label="Command palette (⌘K)">
+              <button
+                onClick={onOpenCommandPalette}
+                aria-label="Open command palette"
+                className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition"
+              >
+                <Command className="w-4 h-4" />
+              </button>
+            </Tooltip>
           )}
         </div>
 
         <div className="flex flex-col items-center gap-2 text-slate-500">
           {onOpenAutonomy && (
-            <button
-              onClick={onOpenAutonomy}
-              title="Autonomy Command Center & Multi-Agent Fabric"
-              className="p-2 rounded-lg text-emerald-400 hover:bg-emerald-950/60 transition"
-            >
-              <Zap className="w-4 h-4" />
-            </button>
+            <Tooltip label="Autonomy">
+              <button onClick={onOpenAutonomy} aria-label="Autonomy" className="p-2 rounded-lg text-emerald-400 hover:bg-emerald-950/60 transition">
+                <Zap className="w-4 h-4" />
+              </button>
+            </Tooltip>
           )}
           {onOpenGrowthFactory && (
-            <button
-              onClick={onOpenGrowthFactory}
-              title="Growth Factory"
-              className="p-2 rounded-lg text-cyan-400 hover:bg-cyan-950/60 transition"
-            >
-              <Film className="w-4 h-4" />
-            </button>
+            <Tooltip label="Growth Factory">
+              <button onClick={onOpenGrowthFactory} aria-label="Growth Factory" className="p-2 rounded-lg text-cyan-400 hover:bg-cyan-950/60 transition">
+                <Film className="w-4 h-4" />
+              </button>
+            </Tooltip>
           )}
-          <button
-            onClick={onOpenGitHub}
-            title="GitHub Sync"
-            className="p-2 rounded-lg hover:text-slate-200 hover:bg-slate-850 transition"
-          >
-            <Github className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onOpenOllama}
-            title="AI Model Settings"
-            className="p-2 rounded-lg hover:text-slate-200 hover:bg-slate-850 transition"
-          >
-            <Cpu className="w-4 h-4" />
-          </button>
+          <Tooltip label="GitHub sync">
+            <button onClick={onOpenGitHub} aria-label="GitHub sync" className="p-2 rounded-lg hover:text-slate-200 hover:bg-slate-800/80 transition">
+              <Github className="w-4 h-4" />
+            </button>
+          </Tooltip>
+          <Tooltip label="AI engine settings">
+            <button onClick={onOpenOllama} aria-label="AI engine settings" className="p-2 rounded-lg hover:text-slate-200 hover:bg-slate-800/80 transition">
+              <Cpu className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       </div>
     );
@@ -140,90 +171,152 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
         isMobile ? 'fixed inset-y-0 left-0 z-[90] lg:static lg:z-auto shadow-2xl lg:shadow-none' : ''
       } ${isMobile && !isOpen ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}`}
     >
-      {/* Top Header & New Task Button */}
+      {/* Top Header & Primary Action */}
       <div className="p-3.5 pb-2 border-b border-slate-800/70">
-        {/* Brand Bar */}
         <div className="flex items-center justify-between mb-3 px-1">
-          <div className="flex items-center gap-2">
+          <button
+            onClick={onGoHome}
+            className="flex items-center gap-2 group"
+            title="Go to Command Deck"
+          >
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20">
               <Bot className="w-4 h-4 text-white" />
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-sm tracking-tight text-white">AgentStation</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-950/70 text-blue-400 border border-blue-800/60 font-semibold">
-                  SQUAD
-                </span>
-              </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-sm tracking-tight text-white group-hover:text-blue-300 transition">AgentStation</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/70 text-blue-400 border border-blue-800/60 font-semibold">
+                SQUAD
+              </span>
             </div>
-          </div>
+          </button>
 
           <button
             onClick={onToggleOpen}
             title="Collapse navigation"
-            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-850 transition"
+            aria-label="Collapse navigation"
+            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800/80 transition"
           >
             <PanelLeftClose className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Primary + New Task & Command Palette Row */}
+        {/* Primary action row */}
         <div className="flex items-center gap-1.5">
           <button
             onClick={onNewTask}
             disabled={isExecuting}
-            className="flex-1 flex items-center justify-between px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs shadow-lg shadow-blue-600/25 transition disabled:opacity-40"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs shadow-lg shadow-blue-600/25 transition disabled:opacity-40"
           >
-            <div className="flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              <span>New Task</span>
-            </div>
+            <Plus className="w-4 h-4" />
+            <span>New task</span>
           </button>
 
           {onOpenCommandPalette && (
-            <button
-              onClick={onOpenCommandPalette}
-              title="Open Command Palette (⌘K / Ctrl+K)"
-              className="px-2.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-mono flex items-center gap-1 transition"
-            >
-              <Command className="w-3.5 h-3.5 text-blue-400" />
-              <span>K</span>
-            </button>
+            <Tooltip label="Command palette (⌘K)">
+              <button
+                onClick={onOpenCommandPalette}
+                aria-label="Open command palette"
+                className="px-2.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-mono flex items-center gap-1 transition"
+              >
+                <Command className="w-3.5 h-3.5 text-blue-400" />
+                <span>K</span>
+              </button>
+            </Tooltip>
           )}
         </div>
 
-        {/* Search Bar */}
+        {/* Home / Deck entry */}
+        {onGoHome && (
+          <button
+            onClick={onGoHome}
+            className={`mt-2 w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
+              isDeckMode
+                ? 'bg-slate-800/90 text-white border border-slate-700/80'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80 border border-transparent'
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5 text-blue-400" />
+            <span>Command Deck</span>
+          </button>
+        )}
+
+        {/* My agents entry */}
+        {onOpenAgents && (
+          <button
+            onClick={onOpenAgents}
+            className="mt-1 w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-900/80 border border-transparent transition"
+          >
+            <Bot className="w-3.5 h-3.5 text-violet-400" />
+            <span>My agents</span>
+            {onNewAgent && (
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label="Create a new agent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNewAgent();
+                }}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onNewAgent();
+                  }
+                }}
+                className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-violet-950/60 border border-violet-800/60 text-[10px] text-violet-300 hover:bg-violet-900/60 transition"
+              >
+                <Plus className="w-2.5 h-2.5" />
+                New
+              </span>
+            )}
+          </button>
+        )}
+
+        {/* Search */}
         <div className="mt-2.5 relative">
           <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search missions..."
+            placeholder="Search missions…"
             aria-label="Search recent tasks"
             className="w-full py-2 pl-8 pr-2.5 text-xs bg-slate-900/90 text-slate-200 placeholder-slate-500 rounded-lg border border-slate-800/80 focus:outline-none focus:border-blue-500 transition"
           />
         </div>
       </div>
 
-      {/* Task History List */}
-      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 scrollbar-thin min-h-0">
+      {/* Mission list */}
+      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 min-h-0">
         <div className="px-2 py-1 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold flex items-center justify-between">
           <span>Recent missions</span>
           <span>{filteredMissions.length}</span>
         </div>
 
         {filteredMissions.length === 0 ? (
-          <div className="text-center py-8 text-xs text-slate-500 px-3">
-            No matching tasks found.
-          </div>
+          <EmptyState
+            compact
+            icon={<Search className="w-4 h-4" />}
+            title={searchQuery ? 'No matches' : 'No missions yet'}
+            description={searchQuery ? 'Try a different search term.' : 'Start a task to see it here.'}
+          />
         ) : (
           filteredMissions.map((m) => {
-            const isSelected = m.id === currentMissionId;
+            const isSelected = m.id === currentMissionId && !isDeckMode;
             return (
               <div
                 key={m.id}
                 onClick={() => onSelectMission(m)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectMission(m);
+                  }
+                }}
                 className={`group relative flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer transition ${
                   isSelected
                     ? 'bg-slate-800/90 text-white shadow-sm border border-slate-700/80 font-medium'
@@ -232,11 +325,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
               >
                 <div className="min-w-0 flex-1 pr-2">
                   <div className="flex items-center gap-1.5">
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        isSelected ? 'bg-blue-400' : 'bg-slate-600 group-hover:bg-slate-400'
-                      }`}
-                    />
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[m.status] || 'bg-slate-600'}`} />
                     <div className="truncate text-xs text-slate-200 group-hover:text-white">
                       {m.prompt}
                     </div>
@@ -258,7 +347,8 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
                       onDeleteMission(m.id);
                     }}
                     title="Delete task"
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-red-400 transition"
+                    aria-label={`Delete mission: ${m.prompt.slice(0, 40)}`}
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-red-400 transition"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -269,44 +359,34 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
         )}
       </div>
 
-      {/* Footer Settings & Status */}
+      {/* Footer — grouped, quieter */}
       <div className="p-3 border-t border-slate-800/80 space-y-2 bg-slate-950/60">
-        {/* Autonomy & Multi-Agent Fabric */}
-        {onOpenAutonomy && (
-          <button
-            onClick={onOpenAutonomy}
-            className="w-full py-2 px-2.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-[11px] text-emerald-300 border border-emerald-800/60 transition flex items-center justify-between font-medium"
-          >
-            <div className="flex items-center gap-2">
+        <div className="px-1 text-[10px] font-mono uppercase tracking-wider text-slate-600 font-semibold">Workspace</div>
+
+        <div className="grid grid-cols-2 gap-1.5">
+          {onOpenAutonomy && (
+            <button
+              onClick={onOpenAutonomy}
+              className="py-2 px-2 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-[11px] text-emerald-300 border border-emerald-800/60 transition flex items-center justify-center gap-1.5 font-medium"
+            >
               <Zap className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Autonomy & Agent Fabric</span>
-            </div>
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-              24/7
-            </span>
-          </button>
-        )}
-
-        {/* Growth Factory */}
-        {onOpenGrowthFactory && (
-          <button
-            onClick={onOpenGrowthFactory}
-            className="w-full py-2 px-2.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-[11px] text-cyan-300 border border-cyan-900/60 transition flex items-center justify-between font-medium"
-          >
-            <div className="flex items-center gap-2">
+              <span>Autonomy</span>
+            </button>
+          )}
+          {onOpenGrowthFactory && (
+            <button
+              onClick={onOpenGrowthFactory}
+              className="py-2 px-2 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-[11px] text-cyan-300 border border-cyan-900/60 transition flex items-center justify-center gap-1.5 font-medium"
+            >
               <Film className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Growth Factory Studio</span>
-            </div>
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
-              30D
-            </span>
-          </button>
-        )}
+              <span>Growth</span>
+            </button>
+          )}
+        </div>
 
-        {/* Model Status Pill */}
         <button
           onClick={onOpenOllama}
-          className="w-full flex items-center justify-between p-2 rounded-lg bg-slate-900/80 hover:bg-slate-850 border border-slate-800/80 text-[11px] text-slate-300 transition"
+          className="w-full flex items-center justify-between p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800/80 text-[11px] text-slate-300 transition"
         >
           <div className="flex items-center gap-2">
             <Cpu className="w-3.5 h-3.5 text-blue-400" />
@@ -314,13 +394,12 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
               {aiProvider === 'gemini' ? 'Gemini 2.5 Flash' : 'Local Ollama'}
             </span>
           </div>
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
         </button>
 
-        {/* GitHub Repository Sync */}
         <button
           onClick={onOpenGitHub}
-          className="w-full flex items-center justify-between p-2 rounded-lg bg-slate-900/80 hover:bg-slate-850 border border-slate-800/80 text-[11px] text-slate-300 transition"
+          className="w-full flex items-center justify-between p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800/80 text-[11px] text-slate-300 transition"
         >
           <div className="flex items-center gap-2">
             <Github className="w-3.5 h-3.5 text-slate-400" />
@@ -329,7 +408,6 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
           <ExternalLink className="w-3 h-3 text-slate-500" />
         </button>
 
-        {/* Full-Stack Ops & Guide */}
         <div className="flex items-center gap-2 pt-0.5">
           {onOpenFullStack && (
             <button

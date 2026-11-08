@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   X,
@@ -42,6 +42,52 @@ export const UserOnboardingModal: React.FC<UserOnboardingModalProps> = ({
   ollamaModel,
 }) => {
   const [activeTab, setActiveTab] = useState<'usecases' | 'architecture' | 'devops'>('usecases');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const focusableSelector =
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const items = (Array.from(
+          dialogRef.current?.querySelectorAll(focusableSelector) || []
+        ) as HTMLElement[]).filter((item) => item.offsetParent !== null);
+        if (items.length === 0) {
+          e.preventDefault();
+          dialogRef.current?.focus();
+          return;
+        }
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    const first = dialogRef.current?.querySelector<HTMLElement>(focusableSelector);
+    (first || dialogRef.current)?.focus();
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previous?.focus?.();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -114,8 +160,9 @@ export const UserOnboardingModal: React.FC<UserOnboardingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-fade-in font-sans">
-      <div className="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-fade-in font-sans" role="dialog" aria-modal="true" aria-label="AgentStation quickstart">
+      <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
+      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] as-scale-in">
         {/* Header */}
         <div className="px-5 sm:px-6 py-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
           <div className="flex items-center gap-3.5">
@@ -142,6 +189,7 @@ export const UserOnboardingModal: React.FC<UserOnboardingModalProps> = ({
 
           <button
             onClick={onClose}
+            aria-label="Close quickstart"
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
           >
             <X className="w-5 h-5" />
@@ -387,6 +435,12 @@ export const UserOnboardingModal: React.FC<UserOnboardingModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 text-xs font-medium transition"
+            >
+              Skip tour
+            </button>
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow-md shadow-blue-600/20"
