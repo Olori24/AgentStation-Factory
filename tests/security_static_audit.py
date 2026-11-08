@@ -154,3 +154,25 @@ def test_workspace_tool_boundaries_and_audit_redaction():
     assert "redactForAudit" in tools
     assert "projectPath" not in tools
     assert "Sensitive file cannot be included in an artifact" in artifacts
+
+
+def test_github_installation_metadata_is_user_scoped_and_non_secret():
+    db = read("server/db.ts")
+    assert "export interface GitHubConnectionRecord" in db
+    assert "installationId: number" in db
+    assert "accountId: number" in db
+    assert "setGitHubConnectionForUser(userId: string" in db
+    assert "getGitHubConnectionForUser(userId: string" in db
+    assert "removeGitHubConnectionForUser(userId: string" in db
+    connection = db.split("export interface GitHubConnectionRecord", 1)[1].split("export interface UserRecord", 1)[0]
+    assert "accessToken" not in connection
+    assert "refreshToken" not in connection
+    assert "privateKey" not in connection
+
+
+def test_public_user_responses_redact_github_connection_metadata():
+    server = read("server.ts")
+    public_user = server.split("function publicUser", 1)[1].split("\\n}", 1)[0]
+    assert "passwordHash" in public_user
+    assert "githubConnection" in public_user
+    assert "_githubConnection" in public_user
