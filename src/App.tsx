@@ -71,7 +71,27 @@ function AgentStationApp() {
       const saved = localStorage.getItem('agentstation_custom_agents_v1');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return [...DEFAULT_AGENTS, ...parsed];
+        if (Array.isArray(parsed)) {
+          const custom = parsed.filter((agent: any) =>
+            agent &&
+            typeof agent === 'object' &&
+            agent.custom === true &&
+            typeof agent.id === 'string' &&
+            typeof agent.name === 'string' &&
+            typeof agent.roleTitle === 'string' &&
+            typeof agent.badge === 'string' &&
+            typeof agent.specialty === 'string' &&
+            typeof agent.model === 'string' &&
+            ['idle', 'working', 'completed', 'error'].includes(agent.status) &&
+            typeof agent.color === 'string' &&
+            (agent.capabilities === undefined || Array.isArray(agent.capabilities)) &&
+            (agent.tools === undefined || Array.isArray(agent.tools))
+          );
+          if (custom.length !== parsed.length) {
+            localStorage.setItem('agentstation_custom_agents_v1', JSON.stringify(custom));
+          }
+          if (custom.length > 0) return [...DEFAULT_AGENTS, ...custom];
+        }
       }
     } catch {}
     return DEFAULT_AGENTS;
@@ -1274,6 +1294,7 @@ function AgentStationApp() {
             setIsHomePromptMode(false);
             setComputerTab(targetTab);
             setMobileActiveView('workstation');
+            setIsDeckMode(false);
             showToast(`Mounted "${project.name}" campaign into Dossier, Spreadsheet, Outreach & Video Studio!`);
           }}
         />
@@ -1293,6 +1314,7 @@ function AgentStationApp() {
           setComputerTab(tab);
           setMobileActiveView('workstation');
           setIsHomePromptMode(false);
+          setIsDeckMode(false);
         }}
         onOpenAutonomy={() => setIsAutonomyOpen(true)}
         onOpenGrowthFactory={() => setIsGrowthFactoryOpen(true)}
@@ -1349,7 +1371,8 @@ function AgentStationApp() {
         onSelectMission={(m) => {
           setMission(m);
           updateHistoryWithMission(m);
-          setAgents(DEFAULT_AGENTS.map((a) => ({ ...a, status: 'completed' })));
+          setIsDeckMode(false);
+          setAgents((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
           setActiveAgentRole(undefined);
           showToast(`Loaded real-world use case: "${m.prompt.slice(0, 45)}..."`);
         }}
@@ -1373,6 +1396,10 @@ function AgentStationApp() {
         isOpen={isAgentFlowOpen}
         onClose={() => setIsAgentFlowOpen(false)}
         onCreated={handleAgentCreated}
+        onViewAgents={() => {
+          setIsAgentFlowOpen(false);
+          openAgentManager();
+        }}
         initialPresetId={agentFlowPresetId}
       />
 
