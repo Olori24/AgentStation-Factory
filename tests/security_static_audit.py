@@ -265,3 +265,36 @@ def test_github_mission_binding_is_owner_scoped_and_pins_base_sha():
     assert 'missionId={mission.id}' in app
     assert 'Bind repository to this mission' in modal
     assert '/github-binding' in modal
+
+
+
+def test_mission_repository_workspace_isolated_and_repository_grounded():
+    server = read("server.ts")
+    sandbox = read("sandbox/server.mjs")
+    modal = read("src/components/GitHubModal.tsx")
+    app = read("src/App.tsx")
+    assert 'app.post("/api/missions/:id/repository/workspace"' in server
+    assert 'app.post("/api/missions/:id/repository/execute"' in server
+    assert 'mission.userId !== req.user.id' in server
+    assert 'mission.organizationId !== req.user.organizationId' in server
+    assert 'git/trees/" + mission.baseSha + "?recursive=1' in server
+    assert 'isSafeRepositorySnapshotPath(entry.path)' in server
+    assert 'entry.size <= 256 * 1024' in server
+    assert '1200 * 1024' in server
+    assert 'callMissionSandboxWorkspace("/workspace/create"' in server
+    assert 'callMissionSandboxWorkspace("/workspace/execute"' in server
+    assert 'REPOSITORY CONTEXT (read-only source snapshot' in server
+    assert 'files: safeFiles' in server
+    assert 'repositoryWorkspace' in server
+    assert 'workspace/create' in sandbox
+    assert 'workspace/execute' in sandbox
+    assert 'WORKSPACE_ID_RE' in sandbox
+    assert "rel.includes('\\\\')" in sandbox
+    assert 'stat.isSymbolicLink()' in sandbox
+    assert "'--network=none'" in sandbox
+    assert "'--read-only'" in sandbox
+    assert "'--cap-drop=ALL'" in sandbox
+    assert "'--user', '65532:65532'" in sandbox
+    assert 'Bind repository to this mission' in modal
+    assert 'Prepare coding workspace' in modal
+    assert 'missionId={mission.id}' in app
