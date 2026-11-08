@@ -315,7 +315,7 @@ app.get("/api/github/install", authRateLimit, async (req: any, res) => {
     if (process.env.NODE_ENV === "production" && callback.protocol !== "https:") return res.status(503).json({ success: false, error: "GitHub callback must use HTTPS." });
     const state = crypto.randomBytes(32).toString("base64url");
     const expiresAt = Date.now() + 10 * 60 * 1000;
-    const stored = db.createGitHubInstallState({
+    const stored = await db.createGitHubInstallState({
       stateHash: crypto.createHash("sha256").update(state).digest("hex"),
       userId: req.user.id,
       organizationId: req.user.organizationId,
@@ -343,7 +343,7 @@ app.get("/api/github/callback", async (req: any, res) => {
     }
     const stateHash = crypto.createHash("sha256").update(state).digest("hex");
     const sessionHash = crypto.createHash("sha256").update(sessionToken).digest("hex");
-    if (!db.consumeGitHubInstallState(stateHash, req.user.id, req.user.organizationId, sessionHash)) {
+    if (!await db.consumeGitHubInstallState(stateHash, req.user.id, req.user.organizationId, sessionHash)) {
       await db.flush();
       return res.status(400).json({ success: false, error: "GitHub installation state is invalid, expired, already used, or belongs to another session." });
     }
