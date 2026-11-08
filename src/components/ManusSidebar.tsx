@@ -258,6 +258,7 @@ export const ManusSidebar: React.FC<ManusSidebarProps> = ({
                   onNewAgent();
                 }}
                 onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     e.stopPropagation();
