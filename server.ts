@@ -2566,10 +2566,11 @@ app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), 
     }
     const changedFiles = Array.isArray(snapshot.changedFiles) ? snapshot.changedFiles : [];
     const workspaceFiles = Array.isArray(snapshot.files) ? snapshot.files : [];
-    if (!changedFiles.length || changedFiles.length > 200) {
-      return res.status(422).json({ success: false, error: "There are no publishable changes or the patch exceeds the file limit." });
+    if (!changedFiles.length || changedFiles.length > 50) {
+      return res.status(422).json({ success: false, error: "There are no publishable changes or the patch exceeds the 50-file publishing limit." });
     }
     const treeEntries = [];
+    let totalPublishBytes = 0;
     for (const changed of changedFiles) {
       if (!changed || !["A", "M", "D"].includes(changed.status) || !isSafeRepositorySnapshotPath(changed.path)) {
         return res.status(422).json({ success: false, error: "The patch contains an unsupported or sensitive file path." });
@@ -2579,10 +2580,16 @@ app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), 
         continue;
       }
       const file = workspaceFiles.find((item: any) => item?.path === changed.path && typeof item.content === "string");
-      if (!file || Buffer.byteLength(file.content, "utf8") > 1024 * 1024) {
-        return res.status(422).json({ success: false, error: "A changed file is missing or exceeds the publish size limit." });
+      if (!file || Buffer.byteLength(file.content, "utf8") > 1024 * 1024 ||
+          (totalPublishBytes += Buffer.byteLength(file.content, "utf8")) > 5 * 1024 * 1024) {
+        return res.status(422).json({ success: false, error: "A changed file is missing or the patch exceeds the 5 MB publishing limit." });
       }
-      treeEntries.push({ path: changed.path, mode: "100644", type: "blob", content: file.content });
+      treeEntries.push({
+        path: changed.path,
+        mode: file.mode === "100755" ? "100755" : "100644",
+        type: "blob",
+        content: file.content,
+      });
     }
     const apiBase = "https://api.github.com/repos/" + mission.targetRepo;
     const githubRequest = async (method: string, endpoint: string, payload?: any) => {
@@ -2613,17 +2620,17 @@ app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), 
       return res.status(502).json({ success: false, error: "GitHub did not return the pinned base tree." });
     }
     const tree = [];
-    for (const entry of treeEntries) {
-      if (entry.sha === null) {
-        tree.push({ path: entry.path, mode: entry.mode, type: "blob", sha: null });
-      } else {
+    for (let offset = 0; offset < treeEntries.length; offset += 8) {
+      const batch = await Promise.all(treeEntries.slice(offset, offset + 8).map(async (entry: any) => {
+        if (entry.sha === null) return { path: entry.path, mode: entry.mode, type: "blob", sha: null };
         const blob = await githubRequest("POST", "/git/blobs", {
           content: entry.content,
           encoding: "utf-8",
         });
         if (typeof blob.sha !== "string") throw new Error("GitHub did not create a source blob.");
-        tree.push({ path: entry.path, mode: entry.mode, type: "blob", sha: blob.sha });
-      }
+        return { path: entry.path, mode: entry.mode, type: "blob", sha: blob.sha };
+      }));
+      tree.push(...batch);
     }
     const newTree = await githubRequest("POST", "/git/trees", { base_tree: baseTreeSha, tree });
     if (typeof newTree.sha !== "string") throw new Error("GitHub did not create the approved source tree.");
@@ -2635,6 +2642,17 @@ app.post("/api/missions/:id/github/publish", requireRole(["admin","engineer"]), 
     if (typeof commit.sha !== "string") throw new Error("GitHub did not create the approved commit.");
     const missionSlug = String(mission.id).replace(/[^a-zA-Z0-9-]/g, "").slice(0, 12) || "task";
     createdBranch = "agentstation/mission-" + missionSlug + "-" + req.body.diffHash.slice(0, 10);
+    const latestMission = db.getMissionById(mission.id);
+    const latestConnection = db.getGitHubConnectionForUser(req.user.id);
+    if (!latestMission || latestMission.userId !== req.user.id || latestMission.organizationId !== req.user.organizationId ||
+        latestMission.targetRepo !== mission.targetRepo || latestMission.githubRepositoryId !== mission.githubRepositoryId ||
+        latestMission.githubInstallationId !== mission.githubInstallationId || latestMission.branch !== mission.branch ||
+        latestMission.baseSha !== mission.baseSha ||
+        latestMission.metadata?.repositoryWorkspace?.workspaceId !== workspace.workspaceId ||
+        latestMission.metadata?.repositoryWorkspace?.lastExecution?.diffHash !== req.body.diffHash ||
+        latestConnection?.installationId !== mission.githubInstallationId) {
+      return res.status(409).json({ success: false, error: "Mission or GitHub authorization changed during publication. No branch was created." });
+    }
     await githubRequest("POST", "/git/refs", { ref: "refs/heads/" + createdBranch, sha: commit.sha });
     const title = "AgentStation: " + String(mission.title || mission.prompt || "mission changes").replace(/[\r\n]+/g, " ").slice(0, 180);
     const pull = await githubRequest("POST", "/pulls", {
