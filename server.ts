@@ -397,21 +397,15 @@ app.get("/api/github/callback", async (req: any, res) => {
     if (!account || !Number.isSafeInteger(account.id) || typeof account.login !== "string" || !["User", "Organization"].includes(account.type)) {
       return res.status(502).json({ success: false, error: "GitHub returned an invalid installation identity." });
     }
-    const tokenResponse = await fetch("https://api.github.com/app/installations/" + installationId + "/access_tokens", {
-      method: "POST", headers, signal: AbortSignal.timeout(10000), body: JSON.stringify({}),
-    });
-    if (!tokenResponse.ok) return res.status(403).json({ success: false, error: "Could not mint a short-lived GitHub installation token." });
-    const tokenData = await tokenResponse.json() as any;
-    if (typeof tokenData.token !== "string" || !tokenData.token || !tokenData.expires_at) return res.status(502).json({ success: false, error: "GitHub returned an invalid short-lived token response." });
     const saved = db.setGitHubConnectionForUser(callbackUser.id, {
       installationId, accountId: account.id, accountLogin: account.login, accountType: account.type,
       repositorySelection: installation.repository_selection === "all" ? "all" : "selected",
-      permissions: tokenData.permissions && typeof tokenData.permissions === "object" ? tokenData.permissions : {},
+      permissions: installation.permissions && typeof installation.permissions === "object" ? installation.permissions : {},
       connectedAt: new Date().toISOString(),
     });
     if (!saved) return res.status(500).json({ success: false, error: "Could not save the GitHub installation connection." });
     await db.flush();
-    // The installation token is deliberately discarded and is never persisted or returned.
+    // Installation tokens are minted only when a repository operation needs one; none is created here.
     res.clearCookie("as_github_callback", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/github/callback" });
     return res.redirect(303, "/settings?github=connected");
   } catch {
