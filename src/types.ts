@@ -70,6 +70,10 @@ export interface TestExecutionResult {
   testsPassed: number;
   testsFailed: number;
   durationMs: number;
+  /** Unified diff returned by the isolated mission repository workspace. */
+  diff?: string;
+  /** Immutable Git base commit used to calculate diff. */
+  baseSha?: string;
 }
 
 export interface TerminalStreamMessage {
