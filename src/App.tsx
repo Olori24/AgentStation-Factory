@@ -1372,7 +1372,7 @@ function AgentStationApp() {
           setMission(m);
           updateHistoryWithMission(m);
           setIsDeckMode(false);
-          setAgents((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
+          setAgents((prev) => prev.map((a) => ({ ...a, status: a.custom ? a.status : 'completed' })));
           setActiveAgentRole(undefined);
           showToast(`Loaded real-world use case: "${m.prompt.slice(0, 45)}..."`);
         }}
