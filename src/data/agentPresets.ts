@@ -351,6 +351,9 @@ export function draftToAgentProfile(draft: AgentDraft): AgentProfile {
     status: 'idle',
     color: preset.accent,
     custom: true,
+    presetId: draft.presetId,
+    tone: draft.tone,
+    autonomy: draft.autonomy,
     goal: draft.goal.trim(),
     capabilities: [...draft.capabilities],
     tools: [...draft.tools],
@@ -358,7 +361,7 @@ export function draftToAgentProfile(draft: AgentDraft): AgentProfile {
     memory: draft.memory,
     limits: { ...draft.limits },
     schedule: draft.schedule,
-    systemPrompt: draft.systemPrompt.trim(),
+    systemPrompt: draft.systemPrompt.trim() || preset.systemPrompt || 'You are a specialist agent. Follow the assigned goal, use only approved tools, verify your work, and ask for clarification when requirements are ambiguous.',
     createdAt: new Date().toISOString(),
   };
 }
