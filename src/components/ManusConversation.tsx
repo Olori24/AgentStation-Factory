@@ -823,16 +823,17 @@ export const ManusConversation: React.FC<ManusConversationProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Objective Completed by AgentStation</span>
+                    <span>{mission.execution?.exitCode === -1 ? 'Code Generation Finished — Verification Pending' : 'Objective Completed by AgentStation'}</span>
                   </div>
                   <span className="text-[11px] font-mono text-slate-400">
-                    {mission.files?.length || 0} files created • {mission.execution?.testsPassed || 0} tests passed
+                    {mission.files?.length || 0} files created • {mission.execution?.exitCode === -1 ? 'Tests not run' : `${mission.execution?.testsPassed || 0} tests passed`}
                   </span>
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed font-sans">
-                  The objective has been executed and verified in the sandbox.
-                  You can interact with the app, examine artifacts and source code, or run commands in the <strong>AgentStation Workstation</strong> (open in the right panel or tap the Workstation tab on mobile).
+                  {mission.execution?.exitCode === -1
+                    ? <>The provider generated these files, but AgentStation has not executed the project or run its tests. Review the source, then run the required commands in the <strong>AgentStation Workstation</strong> before treating this result as verified.</>
+                    : <>The objective has been executed and verified in the sandbox. You can examine artifacts and source code or run additional commands in the <strong>AgentStation Workstation</strong>.</>}
                 </p>
 
                 {/* Clickable Generated File Chips (Jakob's Law: Cursor / Claude Artifact Deep-Links) */}
