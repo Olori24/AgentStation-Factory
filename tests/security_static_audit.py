@@ -202,12 +202,11 @@ def test_github_installation_flow_is_session_bound_and_fail_closed():
     assert "state_hash char(64) PRIMARY KEY" in migration
 
 
-def test_github_installation_tokens_are_short_lived_and_not_persisted():
+def test_github_installation_tokens_are_deferred_and_never_persisted():
     server = read("server.ts")
     db = read("server/db.ts")
-    assert '"/access_tokens"' in server
-    assert "tokenData.token" in server
-    assert "The installation token is deliberately discarded" in server
+    assert "/access_tokens" not in server
+    assert "Installation tokens are minted only when a repository operation needs one" in server
     connection = db.split("export interface GitHubConnectionRecord", 1)[1].split("export interface UserRecord", 1)[0]
     assert "accessToken" not in connection
     assert "refreshToken" not in connection
