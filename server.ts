@@ -1526,8 +1526,8 @@ async function runGeneratedFileTests(files: any[], missionId?: string, userId?: 
       timeoutMs: 60000,
     });
     const output = `${result.stdout || ""}${result.stderr ? `\n${result.stderr}` : ""}`;
-    const passed = output.match(/(\\d+)\\s+passed/i);
-    const failed = output.match(/(\\d+)\\s+failed/i);
+    const passed = output.match(/(\d+)\s+passed/i);
+    const failed = output.match(/(\d+)\s+failed/i);
     return {
       command,
       stdout: output || (result.exitCode === 0 ? "Command exited successfully with no output." : "Test command returned no output."),
@@ -1838,6 +1838,15 @@ Return a valid JSON object matching EXACTLY this schema:
     } catch (err: any) {
       console.warn("[AgentStation] Squad generation exception:", err?.message);
     }
+  }
+
+  // Never apply generic fallback scaffolding to an existing user repository.
+  // If all model providers fail, leave the mission workspace unchanged.
+  if (repositoryMissionId) {
+    return res.status(503).json({
+      success: false,
+      error: "AI generation providers are unavailable. The repository workspace was left unchanged.",
+    });
   }
 
   // Fallback intelligent generator
