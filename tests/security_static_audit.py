@@ -234,7 +234,7 @@ def test_github_repository_and_branch_selection_are_installation_scoped():
     assert "selectedRepositories?: GitHubRepositorySelection[]" in db
     assert "agentstation-github-repository" in modal
     assert "Select repository branch" in modal
-    assert "legacy push controls are not yet bound" in modal
+    assert "legacy push controls remain separate" in modal
 
 
 def test_github_mission_binding_is_owner_scoped_and_pins_base_sha():
