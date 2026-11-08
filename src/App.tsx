@@ -340,9 +340,9 @@ function AgentStationApp() {
 
     // Reset agents to working
     setAgents((prev) =>
-      prev.map((a) => ({ ...a, status: a.id === 'architect' ? 'working' : 'idle' }))
+      prev.map((a) => ({ ...a, status: a.id === 'developer' ? 'working' : 'idle' }))
     );
-    setActiveAgentRole('architect');
+    setActiveAgentRole('developer');
 
     // Add initial log
     const startLog: AgentLogEntry = {
@@ -351,7 +351,7 @@ function AgentStationApp() {
       role: 'system',
       agentName: 'AgentStation Core',
       type: 'status',
-      message: `Starting multi-agent execution pipeline for: "${promptText}"`,
+      message: `Starting provider-backed code generation and isolated test run for: "${promptText}"`,
     };
 
     setMission((prev) => ({
@@ -419,7 +419,7 @@ function AgentStationApp() {
       }
       setMobileActiveView('chat'); // Keep the conversation visible after the agent responds.
 
-      setAgents((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
+      setAgents((prev) => prev.map((a) => ({ ...a, status: a.id === 'developer' ? 'completed' : a.id === 'qa' ? (finalMission.execution.exitCode === 0 ? 'completed' : finalMission.execution.exitCode > 0 ? 'error' : 'idle') : 'idle' })));
       setActiveAgentRole(undefined);
       showToast(finalMission.execution.exitCode === 0 ? 'Code generated and sandbox tests passed.' : finalMission.execution.exitCode > 0 ? 'Code generated, but sandbox tests failed.' : 'Code generated. Runtime verification is still pending.');
     } catch (err: any) {
@@ -441,7 +441,7 @@ function AgentStationApp() {
         logs: [failLog, ...prev.logs],
       }));
       showToast(`Notice: ${errMsg.slice(0, 50)}`);
-      setAgents((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
+      setAgents((prev) => prev.map((a) => ({ ...a, status: a.id === 'developer' || a.id === 'qa' ? 'error' : 'idle' })));
       setActiveAgentRole(undefined);
     } finally {
       setIsExecuting(false);
