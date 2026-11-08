@@ -1128,10 +1128,10 @@ Return a valid JSON object matching EXACTLY this schema:
   ],
   "execution": {
     "command": "pytest -v tests/",
-    "stdout": "string simulating pytest output",
-    "testsPassed": 4,
+    "stdout": "Tests have not been run. Do not invent test output or pass counts.",
+    "testsPassed": 0,
     "testsFailed": 0,
-    "durationMs": 95
+    "durationMs": 0
   },
   "video": {
     "title": "SHORT TITLE (3-5 words)",
@@ -1166,10 +1166,10 @@ Return a valid JSON object matching EXACTLY this schema:
         "id": "scene-3",
         "sceneIndex": 2,
         "durationSec": 4,
-        "badge": "VERIFIED IN SANDBOX",
-        "heading": "100% TEST COVERAGE",
-        "subheading": "Tested and validated with zero regressions",
-        "bulletPoints": ["All assertions passing", "Dockerized sandbox ready", "Clean modular code"],
+        "badge": "VALIDATION PENDING",
+        "heading": "TESTS NOT YET RUN",
+        "subheading": "Generated tests must be executed before verification can be claimed",
+        "bulletPoints": ["Test suite generated", "Runtime execution pending", "No pass result claimed"],
         "accentColor": "#f59e0b"
       },
       {
@@ -1202,7 +1202,7 @@ Return a valid JSON object matching EXACTLY this schema:
       "role": "qa",
       "agentName": "Sentinel (QA Auditor)",
       "type": "terminal",
-      "message": "Executing automated test suite in isolated sandbox..."
+      "message": "Preparing the test plan. Runtime execution is pending and no test result is claimed."
     },
     {
       "role": "creative",
