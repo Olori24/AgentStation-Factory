@@ -1494,6 +1494,7 @@ async function runGeneratedFileTests(files: any[], missionId?: string, userId?: 
           testsFailed: failed ? Number(failed[1]) : (hasTests && Number(result.exitCode ?? 1) !== 0 ? 1 : 0),
           durationMs: Number(result.durationMs ?? 0),
           diff: String(result.diff || "").slice(0, 150000),
+          baseSha: mission.baseSha,
         };
       }
     } catch (error: any) {
