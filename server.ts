@@ -9,6 +9,7 @@ import { promisify } from "util";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import { db } from "./server/db";
+import { createSign } from "crypto";
 import { authMiddleware, issueSessionToken, requireRole, verifyBootstrapToken, verifyWebhookSignature } from "./server/auth";
 import { streaming } from "./server/streaming";
 import { jobQueue } from "./server/queue";
@@ -277,6 +278,104 @@ app.get("/api/github/meta", (_req, res) => {
     webUrl: "https://github.com/Olori24/AgentStation",
     defaultBranch: "main",
   });
+});
+
+// GitHub App installation: authenticated, session-bound, one-time state.
+function readSessionCookie(req: any): string {
+  const cookieHeader = String(req.headers.cookie || "");
+  const cookie = cookieHeader.split(";").map((part) => part.trim()).find((part) => part.startsWith("as_session="));
+  if (!cookie) return "";
+  try { return decodeURIComponent(cookie.slice("as_session=".length)); } catch { return ""; }
+}
+
+function githubAppJwt(): string {
+  const appId = process.env.GITHUB_APP_ID?.trim();
+  const privateKey = process.env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  if (!appId || !/^\d+$/.test(appId) || !privateKey?.includes("PRIVATE KEY")) throw new Error("GitHub App is not configured");
+  const now = Math.floor(Date.now() / 1000);
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ iat: now - 30, exp: now + 8 * 60, iss: appId })).toString("base64url");
+  const unsigned = header + "." + payload;
+  const signer = createSign("RSA-SHA256");
+  signer.update(unsigned);
+  signer.end();
+  return unsigned + "." + signer.sign(privateKey).toString("base64url");
+}
+
+app.get("/api/github/install", authRateLimit, async (req: any, res) => {
+  try {
+    await db.ready();
+    const slug = process.env.GITHUB_APP_SLUG?.trim();
+    const callbackUrl = process.env.GITHUB_APP_CALLBACK_URL?.trim();
+    const sessionToken = readSessionCookie(req);
+    if (!slug || !/^[a-z0-9-]{1,39}$/i.test(slug) || !callbackUrl || !sessionToken) {
+      return res.status(503).json({ success: false, error: "GitHub App installation is not configured for this session." });
+    }
+    const callback = new URL(callbackUrl);
+    if (process.env.NODE_ENV === "production" && callback.protocol !== "https:") return res.status(503).json({ success: false, error: "GitHub callback must use HTTPS." });
+    const state = crypto.randomBytes(32).toString("base64url");
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const stored = db.createGitHubInstallState({
+      stateHash: crypto.createHash("sha256").update(state).digest("hex"),
+      userId: req.user.id,
+      organizationId: req.user.organizationId,
+      sessionHash: crypto.createHash("sha256").update(sessionToken).digest("hex"),
+      expiresAt,
+      createdAt: Date.now(),
+    });
+    if (!stored) return res.status(503).json({ success: false, error: "Could not create a secure GitHub installation session." });
+    await db.flush();
+    return res.json({ success: true, installUrl: "https://github.com/apps/" + slug + "/installations/new?state=" + encodeURIComponent(state), expiresAt });
+  } catch {
+    return res.status(503).json({ success: false, error: "GitHub installation could not be started." });
+  }
+});
+
+app.get("/api/github/callback", async (req: any, res) => {
+  try {
+    await db.ready();
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    const installationId = Number(req.query.installation_id);
+    const setupAction = typeof req.query.setup_action === "string" ? req.query.setup_action : "";
+    const sessionToken = readSessionCookie(req);
+    if (!state || state.length > 256 || !Number.isSafeInteger(installationId) || installationId <= 0 || !["install", "update"].includes(setupAction) || !sessionToken) {
+      return res.status(400).json({ success: false, error: "Invalid GitHub installation callback." });
+    }
+    const stateHash = crypto.createHash("sha256").update(state).digest("hex");
+    const sessionHash = crypto.createHash("sha256").update(sessionToken).digest("hex");
+    if (!db.consumeGitHubInstallState(stateHash, req.user.id, req.user.organizationId, sessionHash)) {
+      await db.flush();
+      return res.status(400).json({ success: false, error: "GitHub installation state is invalid, expired, already used, or belongs to another session." });
+    }
+    await db.flush();
+    const jwt = githubAppJwt();
+    const headers = { Authorization: "Bearer " + jwt, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "AgentStation" };
+    const installationResponse = await fetch("https://api.github.com/app/installations/" + installationId, { headers, signal: AbortSignal.timeout(10000) });
+    if (!installationResponse.ok) return res.status(403).json({ success: false, error: "GitHub did not authorize this App installation." });
+    const installation = await installationResponse.json() as any;
+    const account = installation?.account;
+    if (!account || !Number.isSafeInteger(account.id) || typeof account.login !== "string" || !["User", "Organization"].includes(account.type)) {
+      return res.status(502).json({ success: false, error: "GitHub returned an invalid installation identity." });
+    }
+    const tokenResponse = await fetch("https://api.github.com/app/installations/" + installationId + "/access_tokens", {
+      method: "POST", headers, signal: AbortSignal.timeout(10000), body: JSON.stringify({}),
+    });
+    if (!tokenResponse.ok) return res.status(403).json({ success: false, error: "Could not mint a short-lived GitHub installation token." });
+    const tokenData = await tokenResponse.json() as any;
+    if (typeof tokenData.token !== "string" || !tokenData.token || !tokenData.expires_at) return res.status(502).json({ success: false, error: "GitHub returned an invalid short-lived token response." });
+    const saved = db.setGitHubConnectionForUser(req.user.id, {
+      installationId, accountId: account.id, accountLogin: account.login, accountType: account.type,
+      repositorySelection: installation.repository_selection === "all" ? "all" : "selected",
+      permissions: tokenData.permissions && typeof tokenData.permissions === "object" ? tokenData.permissions : {},
+      connectedAt: new Date().toISOString(),
+    });
+    if (!saved) return res.status(500).json({ success: false, error: "Could not save the GitHub installation connection." });
+    await db.flush();
+    // The installation token is deliberately discarded and is never persisted or returned.
+    return res.redirect(303, "/settings?github=connected");
+  } catch {
+    return res.status(503).json({ success: false, error: "GitHub installation verification failed. Start the connection again." });
+  }
 });
 
 // Real-time Git Repository Status
