@@ -16,7 +16,7 @@
 #                     --security-opt=no-new-privileges --ipc=none
 #                     --pids-limit=128 --memory=512m --cpus=1
 #                     --ulimit nofile=256:256 --user 65532:65532
-#                   The per-run workspace is deleted after every execution.
+#                   Mission workspaces persist in the private sandbox run root for up to six hours; each command still runs in a throwaway hardened container.
 #
 #   sandbox-image   one-shot helper that builds and tags the hardened execution
 #                   image, so `up --build` needs no separate build step.
