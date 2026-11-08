@@ -837,6 +837,11 @@ git push -u origin main`;
                 Review repository diff · {execution.changedFiles?.length || 0} files · base {execution.baseSha?.slice(0, 8) || 'pinned'}
               </summary>
               {execution.diffTruncated && <p className="px-3 py-2 text-[11px] text-amber-300">This diff exceeds the safe review limit. Publishing is disabled until the change set is narrowed.</p>}
+              {execution.changedFiles?.length ? (
+                <div className="flex flex-wrap gap-1 border-t border-slate-800 px-3 py-2">
+                  {execution.changedFiles.map((file) => <span key={file.path} className="rounded bg-slate-900 px-2 py-1 text-[10px] text-slate-300">{file.status} · {file.path}</span>)}
+                </div>
+              ) : null}
               <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words border-t border-slate-800 px-3 py-2 text-[10px] leading-relaxed text-slate-200">{execution.diff}</pre>
               {execution.diffHash && !execution.diffTruncated && (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 px-3 py-2">
