@@ -1435,14 +1435,79 @@ app.post("/api/terminal/exec", requireRole(["admin","engineer"]), async (req, re
 
 // Run only test suites that are actually present in the generated project.
 // Never trust test output supplied by the language model as execution evidence.
-async function runGeneratedFileTests(files: any[], missionId?: string) {
+async function runGeneratedFileTests(files: any[], missionId?: string, userId?: string) {
   const safeFiles = files
     .filter((file) => file && typeof file.path === "string" && typeof file.content === "string")
     .map((file) => ({ path: file.path, content: file.content }));
 
-  const hasPythonTests = safeFiles.some((file) => /(^|\/)tests\/.*\.py$/i.test(file.path));
-  const hasNodeTests = safeFiles.some((file) => /(^|\/)([^/]+\.)?(test|spec)\.[cm]?js$/i.test(file.path));
-  if (!hasPythonTests && !hasNodeTests) {
+  const hasPythonTests = safeFiles.some((file) => /(^|\\/)tests\\/.*\\.py$/i.test(file.path));
+  const hasNodeTests = safeFiles.some((file) => /(^|\\/)([^/]+\\.)?(test|spec)\\.[cm]?js$/i.test(file.path));
+  const hasTests = hasPythonTests || hasNodeTests;
+  const command = hasPythonTests ? "python3 -m pytest -q tests" : hasNodeTests ? "node --test" : "true";
+
+  // When a mission is repository-bound, apply generated files and execute in
+  // that mission's isolated checkout, never in the app server's shared workspace.
+  if (missionId && userId) {
+    try {
+      await db.ready();
+      const mission = db.getMissionById(missionId);
+      const workspace = mission?.metadata?.repositoryWorkspace;
+      if (mission && mission.userId === userId && mission.baseSha && workspace?.workspaceId &&
+          workspace.baseSha === mission.baseSha) {
+        const result = await callMissionSandboxWorkspace("/workspace/execute", {
+          workspaceId: workspace.workspaceId,
+          command,
+          files: safeFiles,
+          timeoutMs: 60000,
+        });
+        const output = `${result.stdout || ""}${result.stderr ? `\\n${result.stderr}` : ""}`;
+        const passed = output.match(/(\\d+)\\s+passed/i);
+        const failed = output.match(/(\\d+)\\s+failed/i);
+        const current = db.getMissionById(missionId);
+        if (current?.userId === userId && current.metadata?.repositoryWorkspace?.workspaceId === workspace.workspaceId) {
+          db.upsertMission({
+            ...current,
+            metadata: {
+              ...(current.metadata || {}),
+              repositoryWorkspace: {
+                ...workspace,
+                lastExecution: {
+                  command: hasTests ? command : "Not run",
+                  exitCode: hasTests ? Number(result.exitCode ?? 1) : -1,
+                  timedOut: Boolean(result.timedOut),
+                  durationMs: Number(result.durationMs ?? 0),
+                  completedAt: new Date().toISOString(),
+                  returnedFileCount: Array.isArray(result.files) ? result.files.length : 0,
+                },
+              },
+            },
+          });
+          await db.flush();
+        }
+        return {
+          command: hasTests ? command : "Not run",
+          stdout: hasTests
+            ? (output || (result.exitCode === 0 ? "Command exited successfully with no output." : "Test command returned no output."))
+            : "Generated files were applied to the isolated repository workspace. No supported automated test files were generated; runtime verification remains pending.",
+          exitCode: hasTests ? Number(result.exitCode ?? 1) : -1,
+          testsPassed: passed ? Number(passed[1]) : 0,
+          testsFailed: failed ? Number(failed[1]) : (hasTests && Number(result.exitCode ?? 1) !== 0 ? 1 : 0),
+          durationMs: Number(result.durationMs ?? 0),
+        };
+      }
+    } catch (error: any) {
+      return {
+        command: hasTests ? command : "Not run",
+        stdout: `Repository workspace execution failed: ${error?.message || "sandbox unavailable"}`,
+        exitCode: -1,
+        testsPassed: 0,
+        testsFailed: 0,
+        durationMs: 0,
+      };
+    }
+  }
+
+  if (!hasTests) {
     return {
       command: "Not run",
       stdout: "No supported automated test files were generated. Runtime verification is pending.",
@@ -1453,16 +1518,15 @@ async function runGeneratedFileTests(files: any[], missionId?: string) {
     };
   }
 
-  const command = hasPythonTests ? "python3 -m pytest -q tests" : "node --test";
   try {
     const result = await executeSandboxedCommand(command, {
       missionId,
       files: safeFiles,
       timeoutMs: 60000,
     });
-    const output = `${result.stdout || ""}${result.stderr ? `\n${result.stderr}` : ""}`;
-    const passed = output.match(/(\d+)\s+passed/i);
-    const failed = output.match(/(\d+)\s+failed/i);
+    const output = `${result.stdout || ""}${result.stderr ? `\\n${result.stderr}` : ""}`;
+    const passed = output.match(/(\\d+)\\s+passed/i);
+    const failed = output.match(/(\\d+)\\s+failed/i);
     return {
       command,
       stdout: output || (result.exitCode === 0 ? "Command exited successfully with no output." : "Test command returned no output."),
@@ -1489,6 +1553,42 @@ app.post("/api/agents/run", requireRole(["admin","engineer"]), async (req, res) 
   const ollamaUrl = process.env.OLLAMA_URL || (process.env.NODE_ENV !== "production" ? "http://127.0.0.1:11434" : "");
   if (!prompt || typeof prompt !== "string" || prompt.length > 20000) {
     return res.status(400).json({ error: "Missing or invalid prompt" });
+  }
+
+  let repositoryContext = "";
+  let repositoryMissionId: string | undefined;
+  if (typeof missionId === "string" && missionId.trim()) {
+    await db.ready();
+    const linkedMission = db.getMissionById(missionId.trim());
+    if (linkedMission && (linkedMission.userId !== (req as any).user?.id ||
+        linkedMission.organizationId !== (req as any).user?.organizationId)) {
+      return res.status(404).json({ success: false, error: "Mission not found." });
+    }
+    if (linkedMission?.baseSha && linkedMission.targetRepo) {
+      const workspace = linkedMission.metadata?.repositoryWorkspace;
+      if (!workspace?.workspaceId || workspace.baseSha !== linkedMission.baseSha) {
+        return res.status(409).json({ success: false, error: "Prepare the isolated repository workspace in GitHub settings before running this coding mission." });
+      }
+      try {
+        const snapshot = await callMissionSandboxWorkspace("/workspace/execute", {
+          workspaceId: workspace.workspaceId, command: "true", timeoutMs: 10000,
+        });
+        const sourceFiles = Array.isArray(snapshot.files) ? snapshot.files : [];
+        let remaining = 60000;
+        const contextFiles: string[] = [];
+        for (const file of sourceFiles) {
+          if (!file || typeof file.path !== "string" || typeof file.content !== "string") continue;
+          const block = `\\n--- FILE: ${file.path} ---\\n${file.content}`;
+          if (block.length > remaining) continue;
+          contextFiles.push(block);
+          remaining -= block.length;
+        }
+        repositoryContext = `\\n\\nREPOSITORY CONTEXT (read-only source snapshot at commit ${linkedMission.baseSha}):\\nRepository: ${linkedMission.targetRepo}\\nBranch: ${linkedMission.branch}\\nYou are modifying an existing codebase. Treat these files as the source of truth. Preserve architecture and conventions. Return only complete contents for files that need to be added or changed; do not regenerate unrelated files, invent existing APIs, or include credentials.\\n${contextFiles.join("\\n")}\\nEND REPOSITORY CONTEXT.\\n`;
+        repositoryMissionId = linkedMission.id;
+      } catch (error: any) {
+        return res.status(503).json({ success: false, error: `Could not read the isolated repository workspace: ${error?.message || "sandbox unavailable"}` });
+      }
+    }
   }
 
   const ai = getGenAI();
@@ -1630,7 +1730,7 @@ Return a valid JSON object matching EXACTLY this schema:
       "message": "Compiling kinetic typography video with audio voiceover track..."
     }
   ]
-}`;
+}${repositoryContext}`;
 
       // If Ollama is chosen as the provider, attempt local execution first
       if (provider === "ollama") {
@@ -1668,7 +1768,7 @@ Return a valid JSON object matching EXACTLY this schema:
                     missionTitle: parsed.missionTitle || "Autonomous Mission",
                     gitCommitMessage: parsed.gitCommitMessage || `feat: ${parsed.missionTitle || "agent sync"}`,
                     files: parsed.files,
-                    execution: await runGeneratedFileTests(parsed.files, typeof missionId === "string" ? missionId : undefined),
+                    execution: await runGeneratedFileTests(parsed.files, repositoryMissionId || (typeof missionId === "string" ? missionId : undefined), (req as any).user?.id),
                     video: parsed.video || null,
                     logs: parsed.logs || [],
                   },
@@ -1716,7 +1816,7 @@ Return a valid JSON object matching EXACTLY this schema:
                     missionTitle: parsed.missionTitle || `Autonomous ${prompt.slice(0, 30)}`,
                     gitCommitMessage: parsed.gitCommitMessage || `feat: implement ${prompt.slice(0, 40)}`,
                     files: parsed.files,
-                    execution: await runGeneratedFileTests(files, typeof missionId === "string" ? missionId : undefined),
+                    execution: await runGeneratedFileTests(files, repositoryMissionId || (typeof missionId === "string" ? missionId : undefined), (req as any).user?.id),
                     video: parsed.video || null,
                     logs: parsed.logs || [],
                   },
