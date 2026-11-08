@@ -23,6 +23,9 @@ export interface AgentProfile {
      built-in squad definitions and every existing consumer are unchanged. */
   key?: string;
   custom?: boolean;
+  presetId?: string;
+  tone?: 'precise' | 'friendly' | 'bold' | 'formal';
+  autonomy?: 'ask' | 'balanced' | 'autonomous';
   goal?: string;
   capabilities?: string[];
   tools?: string[];
