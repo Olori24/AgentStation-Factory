@@ -83,6 +83,7 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   const [repositoryError, setRepositoryError] = useState<string | null>(null);
   const [isLoadingRepositories, setIsLoadingRepositories] = useState(false);
   const [isSavingRepository, setIsSavingRepository] = useState(false);
+  const [isConnectingGitHub, setIsConnectingGitHub] = useState(false);
   const [isBindingMission, setIsBindingMission] = useState(false);
   const [missionBinding, setMissionBinding] = useState<{repository:string;branch:string;baseSha:string}|null>(null);
   const [workspaceStatus, setWorkspaceStatus] = useState<{fileCount:number;baseSha:string;expiresAt:string}|null>(null);
@@ -161,6 +162,26 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
     ? (customBranchInput.trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, '-') || 'feature/custom')
     : selectedBranch;
 
+
+  const connectGitHubApp = async () => {
+    setIsConnectingGitHub(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch('/api/github/install', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || typeof data.installUrl !== 'string') {
+        throw new Error(data.error || 'GitHub App connection is not configured.');
+      }
+      window.location.assign(data.installUrl);
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Could not start GitHub App connection.');
+      setIsConnectingGitHub(false);
+    }
+  };
 
   const fetchRepositories = async () => {
     setIsLoadingRepositories(true);
@@ -732,6 +753,12 @@ git push -u origin main`;
 
         {/* Installation-scoped repository selection */}
         <div className="px-6 py-3 bg-slate-950/70 border-b border-slate-800 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-semibold text-slate-300">GitHub App authorization</div>
+            <button type="button" onClick={connectGitHubApp} disabled={isConnectingGitHub} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-50">
+              {isConnectingGitHub ? 'Opening GitHub…' : 'Connect / Reconnect GitHub'}
+            </button>
+          </div>
           <div className="flex items-center justify-between gap-3">
             <label htmlFor="agentstation-github-repository" className="text-xs font-semibold text-slate-300">Connected GitHub repository</label>
             <button type="button" onClick={fetchRepositories} disabled={isLoadingRepositories || isSavingRepository} className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50">
