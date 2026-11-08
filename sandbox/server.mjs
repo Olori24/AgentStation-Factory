@@ -510,8 +510,8 @@ async function handleWorkspaceExecute(req, res) {
         timeoutMs: 15000,
       });
       if (nameStatus.exitCode === 0) {
-        changedFiles = String(nameStatus.stdout || '').split('\\n').filter(Boolean).map((line) => {
-          const match = line.match(/^([AMD])\\t(.+)$/);
+        changedFiles = String(nameStatus.stdout || '').split('\n').filter(Boolean).map((line) => {
+          const match = line.match(/^([AMD])\t(.+)$/);
           return match ? { status: match[1], path: match[2] } : null;
         }).filter(Boolean).slice(0, MAX_WORKSPACE_FILES);
       }
