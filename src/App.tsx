@@ -869,6 +869,14 @@ function AgentStationApp() {
                   mobileActiveView === 'chat' ? 'flex' : 'hidden lg:flex'
                 }`}
               >
+                <div className="mx-3 mt-2 mb-1 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 flex items-start gap-2 shrink-0">
+                  <span className="mt-0.5 h-2 w-2 rounded-full bg-amber-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold text-amber-200">No GitHub repository is attached to this task</p>
+                    <p className="text-[10px] leading-relaxed text-slate-400">Agents currently generate files in the AgentStation workspace. The GitHub Hub provides separate sync tools; it does not yet give agents repository file or branch context.</p>
+                  </div>
+                  <button type="button" onClick={() => setIsGitHubModalOpen(true)} className="shrink-0 text-[10px] font-semibold text-blue-300 hover:text-blue-200 underline underline-offset-2">GitHub Hub</button>
+                </div>
                 <ManusConversation
                   mission={mission}
                   isExecuting={isExecuting}
