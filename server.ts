@@ -2113,6 +2113,96 @@ app.post("/api/missions", requireRole(["admin","engineer"]), (req: any, res) => 
   }
 });
 
+// Bind a mission to the caller's verified GitHub App repository and exact branch tip.
+app.post("/api/missions/:id/github-binding", requireRole(["admin","engineer"]), async (req: any, res) => {
+  try {
+    await db.ready();
+    const missionId = String(req.params.id || "").trim();
+    const mission = db.getMissionById(missionId);
+    // Repository credentials are user-scoped. Organization admins must not bind
+    // another member's mission to their own GitHub installation.
+    if (!mission || mission.organizationId !== req.user.organizationId || mission.userId !== req.user.id) {
+      return res.status(404).json({ success: false, error: "Mission not found." });
+    }
+    if (mission.status === "running") {
+      return res.status(409).json({ success: false, error: "Stop the mission before changing its repository binding." });
+    }
+    const connection = db.getGitHubConnectionForUser(req.user.id);
+    const selected = connection?.selectedRepositories?.[0];
+    const requestedBranch = typeof req.body?.branch === "string" ? req.body.branch.trim() : "";
+    if (!connection || !selected || !requestedBranch || requestedBranch !== selected.defaultBranch) {
+      return res.status(409).json({ success: false, error: "Select and verify a repository branch in GitHub settings first." });
+    }
+    const minted = await createUserInstallationToken(req.user.id);
+    if (!minted || minted.connection.installationId !== connection.installationId) {
+      return res.status(409).json({ success: false, error: "GitHub installation is unavailable. Reconnect and retry." });
+    }
+    const branchResponse = await fetch("https://api.github.com/repos/" + selected.fullName + "/branches/" + encodeURIComponent(requestedBranch), {
+      headers: {
+        Authorization: "Bearer " + minted.token,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "AgentStation",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!branchResponse.ok) {
+      return res.status(403).json({ success: false, error: "The selected branch is no longer accessible." });
+    }
+    const branchData = await branchResponse.json() as any;
+    const baseSha = typeof branchData.commit?.sha === "string" ? branchData.commit.sha : "";
+    if (!/^[a-f0-9]{40}$/i.test(baseSha) || branchData.name !== requestedBranch) {
+      return res.status(502).json({ success: false, error: "GitHub returned an invalid branch revision." });
+    }
+    const latestConnection = db.getGitHubConnectionForUser(req.user.id);
+    const latestSelection = latestConnection?.selectedRepositories?.[0];
+    if (!latestConnection || latestConnection.installationId !== connection.installationId ||
+        latestSelection?.id !== selected.id || latestSelection.fullName !== selected.fullName ||
+        latestSelection.defaultBranch !== requestedBranch) {
+      return res.status(409).json({ success: false, error: "GitHub selection changed during binding. Refresh and retry." });
+    }
+    const currentMission = db.getMissionById(missionId);
+    if (!currentMission || currentMission.userId !== req.user.id ||
+        currentMission.organizationId !== req.user.organizationId || currentMission.status === "running") {
+      return res.status(409).json({ success: false, error: "Mission ownership or state changed. Refresh and retry." });
+    }
+    const updated = db.upsertMission({
+      ...currentMission,
+      targetRepo: selected.fullName,
+      branch: requestedBranch,
+      githubRepositoryId: selected.id,
+      githubInstallationId: connection.installationId,
+      baseSha,
+      metadata: {
+        ...(currentMission.metadata || {}),
+        githubBinding: {
+          repositoryId: selected.id,
+          repository: selected.fullName,
+          installationId: connection.installationId,
+          branch: requestedBranch,
+          baseSha,
+          verifiedAt: new Date().toISOString(),
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    });
+    await db.flush();
+    return res.setHeader("Cache-Control", "no-store").json({
+      success: true,
+      mission: {
+        id: updated.id,
+        repository: updated.targetRepo,
+        repositoryId: updated.githubRepositoryId,
+        branch: updated.branch,
+        baseSha: updated.baseSha,
+        boundAt: updated.metadata?.githubBinding?.verifiedAt,
+      },
+    });
+  } catch {
+    return res.status(503).json({ success: false, error: "Mission repository binding is temporarily unavailable." });
+  }
+});
+
 app.delete("/api/missions/:id", requireRole(["admin","engineer"]), (req: any, res) => {
   try {
     const id = String(req.params.id || "").trim();
