@@ -413,6 +413,88 @@ app.get("/api/github/callback", async (req: any, res) => {
   }
 });
 
+// Mint a short-lived token for the authenticated user's own GitHub App installation.
+// The token is intentionally never returned to the browser or persisted.
+async function createUserInstallationToken(userId: string): Promise<{ token: string; connection: any } | null> {
+  const user = db.getUserById(userId);
+  const connection = user?.githubConnection;
+  if (!connection || !Number.isSafeInteger(connection.installationId) || connection.installationId <= 0) return null;
+  const jwt = githubAppJwt();
+  const response = await fetch("https://api.github.com/app/installations/" + connection.installationId + "/access_tokens", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + jwt,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "AgentStation",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ permissions: { contents: "read", metadata: "read" } }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) return null;
+  const payload = await response.json() as any;
+  if (typeof payload?.token !== "string" || !payload.token || !payload.expires_at) return null;
+  return { token: payload.token, connection };
+}
+
+// List only repositories visible to the current user's GitHub App installation.
+app.get("/api/github/repositories", async (req: any, res) => {
+  try {
+    await db.ready();
+    const page = Number(req.query.page || 1);
+    const perPage = Number(req.query.per_page || 50);
+    if (!Number.isSafeInteger(page) || page < 1 || page > 1000 ||
+        !Number.isSafeInteger(perPage) || perPage < 1 || perPage > 100) {
+      return res.status(400).json({ success: false, error: "Invalid repository pagination." });
+    }
+    const minted = await createUserInstallationToken(req.user.id);
+    if (!minted) return res.status(409).json({ success: false, error: "Connect a GitHub App installation before selecting a repository." });
+    const response = await fetch(
+      "https://api.github.com/installation/repositories?per_page=" + perPage + "&page=" + page,
+      {
+        headers: {
+          Authorization: "Bearer " + minted.token,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "AgentStation",
+        },
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    if (!response.ok) return res.status(502).json({ success: false, error: "GitHub repository discovery failed." });
+    const payload = await response.json() as any;
+    const repositories = Array.isArray(payload?.repositories) ? payload.repositories : [];
+    return res.setHeader("Cache-Control", "no-store").json({
+      success: true,
+      installation: {
+        accountLogin: minted.connection.accountLogin,
+        accountType: minted.connection.accountType,
+      },
+      repositories: repositories
+        .filter((item: any) => Number.isSafeInteger(item?.id) && typeof item?.full_name === "string")
+        .map((item: any) => ({
+          id: item.id,
+          fullName: item.full_name,
+          name: item.name,
+          owner: item.owner?.login || "",
+          private: Boolean(item.private),
+          defaultBranch: typeof item.default_branch === "string" ? item.default_branch : null,
+          archived: Boolean(item.archived),
+          permissions: item.permissions && typeof item.permissions === "object"
+            ? { pull: Boolean(item.permissions.pull), push: Boolean(item.permissions.push), admin: Boolean(item.permissions.admin) }
+            : undefined,
+        })),
+      page,
+      perPage,
+      totalCount: Number.isSafeInteger(payload?.total_count) ? payload.total_count : repositories.length,
+      tokenExpiresAt: null,
+    });
+  } catch {
+    return res.status(503).json({ success: false, error: "Repository discovery is temporarily unavailable." });
+  }
+});
+
 // Real-time Git Repository Status
 app.get("/api/github/status", async (_req, res) => {
   try {
