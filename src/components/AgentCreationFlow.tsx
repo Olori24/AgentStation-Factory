@@ -153,8 +153,8 @@ export const AgentCreationFlow: React.FC<AgentCreationFlowProps> = ({
         isOpen={isOpen}
         onClose={onClose}
         maxWidth="max-w-lg"
-        title="Agent created"
-        subtitle="It is ready to take on work"
+        title="Agent saved"
+        subtitle="Configuration saved in this browser"
         icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />}
         footer={
           <>
@@ -188,7 +188,7 @@ export const AgentCreationFlow: React.FC<AgentCreationFlowProps> = ({
             <ul className="space-y-1.5 text-xs text-slate-300">
               <li className="flex items-start gap-2">
                 <Check className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
-                <span>Assign it a task from the Command Deck — it will follow the goal you set.</span>
+                <span>Your configuration is saved in this browser. Custom-agent execution is not connected to the mission runner yet.</span>
               </li>
               <li className="flex items-start gap-2">
                 <Check className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
@@ -196,7 +196,7 @@ export const AgentCreationFlow: React.FC<AgentCreationFlowProps> = ({
               </li>
               <li className="flex items-start gap-2">
                 <Check className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
-                <span>It starts in “{created.schedule === 'manual' ? 'only when I ask' : created.schedule}” mode, so nothing runs on its own.</span>
+                <span>Your selected run schedule is saved as a preference. Automatic scheduling is not connected yet.</span>
               </li>
             </ul>
           </div>
@@ -208,10 +208,10 @@ export const AgentCreationFlow: React.FC<AgentCreationFlowProps> = ({
   /* ----------------------------- creating ---------------------------- */
   if (phase === 'creating') {
     return (
-      <Modal isOpen={isOpen} onClose={() => {}} maxWidth="max-w-md" title="Creating your agent" icon={<Loader2 className="w-4 h-4 animate-spin text-blue-400" />}>
+      <Modal isOpen={isOpen} onClose={() => {}} maxWidth="max-w-md" title="Saving agent configuration" icon={<Loader2 className="w-4 h-4 animate-spin text-blue-400" />}>
         <div className="p-8 flex flex-col items-center justify-center text-center gap-3">
           <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
-          <p className="text-sm font-semibold text-slate-200">Setting up {draft.name.trim() || 'your agent'}…</p>
+          <p className="text-sm font-semibold text-slate-200">Saving {draft.name.trim() || 'your agent'}…</p>
           <p className="text-xs text-slate-500">Applying your configuration and defaults.</p>
         </div>
       </Modal>
@@ -512,8 +512,8 @@ export const AgentCreationFlow: React.FC<AgentCreationFlowProps> = ({
 
               <Field
                 label="When should it run?"
-                tooltip="Scheduled runs happen automatically. “Only when I ask” is the safe default."
-                hint="Scheduled agents keep running until you turn them off."
+                tooltip="This records your preferred cadence. Automatic scheduling is not connected yet."
+                hint="Your selection is saved as configuration only; it will not trigger automatic runs."
               >
                 <Segmented
                   ariaLabel="Schedule"
