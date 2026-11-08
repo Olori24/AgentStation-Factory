@@ -19,6 +19,19 @@ export interface AgentProfile {
   model: string;
   status: 'idle' | 'working' | 'completed' | 'error';
   color: string;
+  /* Optional fields used by user-created agents. All optional so the
+     built-in squad definitions and every existing consumer are unchanged. */
+  key?: string;
+  custom?: boolean;
+  goal?: string;
+  capabilities?: string[];
+  tools?: string[];
+  temperature?: number;
+  memory?: 'none' | 'session' | 'long-term';
+  limits?: { maxSteps: number; timeoutSec: number; maxConcurrency: number };
+  schedule?: 'manual' | 'hourly' | 'daily' | 'weekly';
+  systemPrompt?: string;
+  createdAt?: string;
 }
 
 export interface WorkspaceFile {
