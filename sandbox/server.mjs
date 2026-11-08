@@ -188,6 +188,37 @@ function workspaceMetadataPath(id) {
   return path.join(WORKSPACE_META_ROOT, id + '.json');
 }
 
+const workspaceExpiryTimers = new Map();
+function scheduleWorkspaceExpiry(id, createdAt) {
+  const previous = workspaceExpiryTimers.get(id);
+  if (previous) clearTimeout(previous);
+  const remaining = Math.max(0, 6 * 60 * 60 * 1000 - (Date.now() - createdAt));
+  const timer = setTimeout(() => {
+    fs.rm(getWorkspaceDir(id), { recursive: true, force: true }, () => {});
+    fs.rm(workspaceMetadataPath(id), { force: true }, () => {});
+    workspaceExpiryTimers.delete(id);
+  }, remaining);
+  timer.unref?.();
+  workspaceExpiryTimers.set(id, timer);
+}
+
+for (const entry of fs.readdirSync(WORKSPACE_META_ROOT, { withFileTypes: true })) {
+  if (!entry.isFile() || !/^[a-f0-9]{32}\\.json$/.test(entry.name)) continue;
+  const id = entry.name.slice(0, -5);
+  try {
+    const metadata = JSON.parse(fs.readFileSync(workspaceMetadataPath(id), 'utf8'));
+    const createdAt = Date.parse(metadata.createdAt);
+    if (!Number.isFinite(createdAt) || Date.now() - createdAt >= 6 * 60 * 60 * 1000) {
+      fs.rmSync(getWorkspaceDir(id), { recursive: true, force: true });
+      fs.rmSync(workspaceMetadataPath(id), { force: true });
+    } else {
+      scheduleWorkspaceExpiry(id, createdAt);
+    }
+  } catch {
+    fs.rmSync(workspaceMetadataPath(id), { force: true });
+  }
+}
+
 function readWorkspaceFiles(dir) {
   const files = [];
   let total = 0;
@@ -411,17 +442,13 @@ async function handleWorkspaceCreate(req, res) {
     } finally {
       active = Math.max(0, active - 1);
     }
-    const baseCommitSha = String(initialized?.stdout || '').trim().split(/\\s+/).pop();
+    const baseCommitSha = String(initialized?.stdout || '').trim().split(/\s+/).pop();
     if (initialized?.exitCode !== 0 || !/^[a-f0-9]{40}$/i.test(baseCommitSha)) {
       throw new Error('Could not initialize the isolated workspace baseline.');
     }
     const metadata = { workspaceId, baseCommitSha, createdAt: new Date().toISOString() };
     fs.writeFileSync(workspaceMetadataPath(workspaceId), JSON.stringify(metadata), { mode: 0o600, flag: 'wx' });
-    const timer = setTimeout(() => {
-      fs.rm(dir, { recursive: true, force: true }, () => {});
-      fs.rm(workspaceMetadataPath(workspaceId), { force: true }, () => {});
-    }, 6 * 60 * 60 * 1000);
-    timer.unref?.();
+    scheduleWorkspaceExpiry(workspaceId, Date.now());
     return sendJson(res, 201, { workspaceId, fileCount: body.files.length, baseCommitSha, expiresInSeconds: 21600 });
   } catch (err) {
     if (dir) fs.rm(dir, { recursive: true, force: true }, () => {});
@@ -431,6 +458,7 @@ async function handleWorkspaceCreate(req, res) {
 
 async function handleWorkspaceExecute(req, res) {
   let lockedId = '';
+  let countedActive = false;
   try {
     const raw = await readBody(req);
     const body = JSON.parse(raw || '{}');
@@ -450,6 +478,7 @@ async function handleWorkspaceExecute(req, res) {
     const requested = Number(body.timeoutMs || 60000);
     const timeoutMs = Math.min(Math.max(Number.isFinite(requested) ? requested : 60000, MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
     active += 1;
+    countedActive = true;
     const result = await runContainer({ command, runDir: dir, timeoutMs });
     let files;
     try { files = readWorkspaceFiles(dir); }
@@ -470,7 +499,7 @@ async function handleWorkspaceExecute(req, res) {
   } catch (err) {
     return sendJson(res, 400, { error: err?.message || 'workspace execution failed' });
   } finally {
-    active = Math.max(0, active - 1);
+    if (countedActive) active = Math.max(0, active - 1);
     if (lockedId) activeWorkspaces.delete(lockedId);
   }
 }
