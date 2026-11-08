@@ -215,3 +215,23 @@ def test_github_installation_tokens_are_short_lived_and_never_persisted():
     assert "accessToken" not in connection
     assert "refreshToken" not in connection
     assert "privateKey" not in connection
+
+
+def test_github_repository_and_branch_selection_are_installation_scoped():
+    server = read("server.ts")
+    db = read("server/db.ts")
+    modal = read("src/components/GitHubModal.tsx")
+    assert 'app.get("/api/github/repositories"' in server
+    assert 'app.post("/api/github/repositories/select"' in server
+    assert 'app.get("/api/github/repositories/selected/branches"' in server
+    assert 'app.post("/api/github/repositories/select-branch"' in server
+    assert "createUserInstallationToken(req.user.id)" in server
+    assert "repository.id !== repositoryId" in server
+    assert "repository.full_name?.toLowerCase() !== fullName.toLowerCase()" in server
+    assert "selectedRepositories: [selection]" in server
+    assert "selectedRepositories: [{ ...selected, defaultBranch: branchData.name }]" in server
+    assert "export interface GitHubRepositorySelection" in db
+    assert "selectedRepositories?: GitHubRepositorySelection[]" in db
+    assert "agentstation-github-repository" in modal
+    assert "Select repository branch" in modal
+    assert "legacy push controls are not yet bound" in modal
