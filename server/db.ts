@@ -459,10 +459,24 @@ class RelationalDatabase {
     return true;
   }
 
-  /** Stores only a hash of the one-time GitHub installation state. */
-  public createGitHubInstallState(record: GitHubInstallStateRecord): boolean {
+  /** Stores only a hash of the one-time GitHub installation state. PostgreSQL uses a unique key. */
+  public async createGitHubInstallState(record: GitHubInstallStateRecord): Promise<boolean> {
     if (!this.getUserById(record.userId) || !record.stateHash || !record.sessionHash ||
         !Number.isFinite(record.expiresAt) || record.expiresAt <= Date.now()) return false;
+    if (STORAGE_BACKEND === 'postgres') {
+      const sql = await getPostgresSql();
+      try {
+        await sql.transaction([
+          sql`SELECT set_config('app.organization_id', ${record.organizationId}, true)`,
+          sql`INSERT INTO github_install_states (state_hash, user_id, organization_id, session_hash, expires_at, created_at)
+              VALUES (${record.stateHash}, ${record.userId}, ${record.organizationId}, ${record.sessionHash},
+                      to_timestamp(${record.expiresAt} / 1000.0), to_timestamp(${record.createdAt} / 1000.0))`,
+        ]);
+        return true;
+      } catch {
+        return false;
+      }
+    }
     this.data.githubInstallStates = (this.data.githubInstallStates || []).filter((entry) => entry.expiresAt > Date.now());
     if (this.data.githubInstallStates.some((entry) => entry.stateHash === record.stateHash)) return false;
     this.data.githubInstallStates.push(structuredClone(record));
@@ -470,8 +484,19 @@ class RelationalDatabase {
     return true;
   }
 
-  /** Atomically consumes state once and checks user, organization, session and expiry. */
-  public consumeGitHubInstallState(stateHash: string, userId: string, organizationId: string, sessionHash: string): boolean {
+  /** PostgreSQL DELETE ... RETURNING makes the one-time consume atomic across server instances. */
+  public async consumeGitHubInstallState(stateHash: string, userId: string, organizationId: string, sessionHash: string): Promise<boolean> {
+    if (STORAGE_BACKEND === 'postgres') {
+      const sql = await getPostgresSql();
+      const rows = await sql.transaction([
+        sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+        sql`DELETE FROM github_install_states WHERE state_hash = ${stateHash}
+            RETURNING user_id, organization_id, session_hash, expires_at`,
+      ]);
+      const record = rows[1]?.[0];
+      return Boolean(record && new Date(record.expires_at).getTime() > Date.now() &&
+        record.user_id === userId && record.organization_id === organizationId && record.session_hash === sessionHash);
+    }
     const states = this.data.githubInstallStates || [];
     const index = states.findIndex((entry) => entry.stateHash === stateHash);
     if (index < 0) return false;
