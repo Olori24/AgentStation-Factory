@@ -298,3 +298,27 @@ def test_mission_repository_workspace_isolated_and_repository_grounded():
     assert 'Bind repository to this mission' in modal
     assert 'Prepare coding workspace' in modal
     assert 'missionId={mission.id}' in app
+
+
+
+def test_repository_diff_is_baselined_and_fake_qa_results_are_removed():
+    server = read("server.ts")
+    sandbox = read("sandbox/server.mjs")
+    ui = read("src/components/CodeWorkspace.tsx")
+    types = read("src/types.ts")
+    assert "git init -q" in sandbox
+    assert "Base repository snapshot" in sandbox
+    assert "git diff --no-ext-diff --binary --unified=3" in sandbox
+    assert "baseCommitSha" in sandbox
+    assert "setWorkspaceOwnership(dir)" in sandbox
+    assert "activeWorkspaces" in sandbox
+    assert "countedActive" in sandbox
+    assert 'diff: String(result.diff || "")' in server
+    assert "baseSha: mission.baseSha" in server
+    assert "No test result has been recorded." in server
+    assert "3 passed in 0.07s" not in server
+    assert "100% AUTOMATED QA PASS" not in server
+    assert "No sandbox execution has been recorded for this mission." in ui
+    assert "Actual repository diff" in ui
+    assert "diff?: string" in types
+    assert "baseSha?: string" in types
