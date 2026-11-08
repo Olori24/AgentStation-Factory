@@ -205,6 +205,28 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
     }
   };
 
+  const chooseRepositoryBranch = async (branchName: string) => {
+    if (!branchName || !selectedRepository) return;
+    setIsSavingRepository(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch('/api/github/repositories/select-branch', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: branchName }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Branch selection failed.');
+      setSelectedBranch(data.branch.name);
+      onBranchChange?.(data.branch.name);
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Could not select repository branch.');
+    } finally {
+      setIsSavingRepository(false);
+    }
+  };
+
   const fetchSelectedBranches = async () => {
     try {
       const response = await fetch('/api/github/repositories/selected/branches', { credentials: 'same-origin' });
@@ -682,9 +704,22 @@ git push -u origin main`;
             ))}
           </select>
           {selectedRepository && (
-            <div className="text-[11px] text-emerald-300">
-              Selected: {selectedRepository.fullName}
-              {repositoryBranches.length > 0 ? ` · ${repositoryBranches.length} branches discovered` : ''}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="text-[11px] text-emerald-300 self-center">
+                Selected repository: {selectedRepository.fullName}
+              </div>
+              <select
+                aria-label="Select repository branch"
+                value={repositoryBranches.some((item) => item.name === selectedBranch) ? selectedBranch : (selectedRepository.defaultBranch || '')}
+                onChange={(event) => chooseRepositoryBranch(event.target.value)}
+                disabled={isSavingRepository || repositoryBranches.length === 0}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white disabled:opacity-60"
+              >
+                <option value="">{repositoryBranches.length ? 'Select a branch' : 'Branches unavailable'}</option>
+                {repositoryBranches.map((item) => (
+                  <option key={item.commitSha} value={item.name}>{item.name}{item.protected ? ' · Protected' : ''}</option>
+                ))}
+              </select>
             </div>
           )}
           {repositoryError && <p role="alert" className="text-[11px] text-rose-300">{repositoryError}</p>}
