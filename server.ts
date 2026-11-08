@@ -1440,8 +1440,8 @@ async function runGeneratedFileTests(files: any[], missionId?: string, userId?: 
     .filter((file) => file && typeof file.path === "string" && typeof file.content === "string")
     .map((file) => ({ path: file.path, content: file.content }));
 
-  const hasPythonTests = safeFiles.some((file) => /(^|\\/)tests\\/.*\\.py$/i.test(file.path));
-  const hasNodeTests = safeFiles.some((file) => /(^|\\/)([^/]+\\.)?(test|spec)\\.[cm]?js$/i.test(file.path));
+  const hasPythonTests = safeFiles.some((file) => /(^|\/)tests\/.*\.py$/i.test(file.path));
+  const hasNodeTests = safeFiles.some((file) => /(^|\/)([^/]+\.)?(test|spec)\.[cm]?js$/i.test(file.path));
   const hasTests = hasPythonTests || hasNodeTests;
   const command = hasPythonTests ? "python3 -m pytest -q tests" : hasNodeTests ? "node --test" : "true";
 
@@ -1461,8 +1461,8 @@ async function runGeneratedFileTests(files: any[], missionId?: string, userId?: 
           timeoutMs: 60000,
         });
         const output = `${result.stdout || ""}${result.stderr ? `\\n${result.stderr}` : ""}`;
-        const passed = output.match(/(\\d+)\\s+passed/i);
-        const failed = output.match(/(\\d+)\\s+failed/i);
+        const passed = output.match(/(\d+)\s+passed/i);
+        const failed = output.match(/(\d+)\s+failed/i);
         const current = db.getMissionById(missionId);
         if (current?.userId === userId && current.metadata?.repositoryWorkspace?.workspaceId === workspace.workspaceId) {
           db.upsertMission({
@@ -1583,7 +1583,7 @@ app.post("/api/agents/run", requireRole(["admin","engineer"]), async (req, res) 
           contextFiles.push(block);
           remaining -= block.length;
         }
-        repositoryContext = `\\n\\nREPOSITORY CONTEXT (read-only source snapshot at commit ${linkedMission.baseSha}):\\nRepository: ${linkedMission.targetRepo}\\nBranch: ${linkedMission.branch}\\nYou are modifying an existing codebase. Treat these files as the source of truth. Preserve architecture and conventions. Return only complete contents for files that need to be added or changed; do not regenerate unrelated files, invent existing APIs, or include credentials.\\n${contextFiles.join("\\n")}\\nEND REPOSITORY CONTEXT.\\n`;
+        repositoryContext = `\n\nREPOSITORY CONTEXT (read-only source snapshot at commit ${linkedMission.baseSha}):\\nRepository: ${linkedMission.targetRepo}\\nBranch: ${linkedMission.branch}\\nYou are modifying an existing codebase. Treat these files as the source of truth. Preserve architecture and conventions. Return only complete contents for files that need to be added or changed; do not regenerate unrelated files, invent existing APIs, or include credentials.\\n${contextFiles.join("\\n")}\\nEND REPOSITORY CONTEXT.\\n`;
         repositoryMissionId = linkedMission.id;
       } catch (error: any) {
         return res.status(503).json({ success: false, error: `Could not read the isolated repository workspace: ${error?.message || "sandbox unavailable"}` });
