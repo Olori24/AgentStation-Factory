@@ -364,105 +364,7 @@ function AgentStationApp() {
     }));
 
     try {
-      // Emit initial Atlas SSE telemetry
-      fetch('/api/stream/test-emit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agent: 'Atlas (Architect)',
-          thought: `Decomposing objective into modular architecture & subtasks: "${promptText.slice(0, 60)}"`,
-        }),
-      }).catch(() => {});
-
-      // Simulate sequential hand-offs smoothly
-      setTimeout(() => {
-        setActiveAgentRole('developer');
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.id === 'architect'
-              ? { ...a, status: 'completed' }
-              : a.id === 'developer'
-              ? { ...a, status: 'working' }
-              : a
-          )
-        );
-        fetch('/api/stream/test-emit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agent: 'Cypher (Lead Engineer)',
-            thought: 'Synthesizing typed application modules, interactive UI, and workspace artifacts.',
-          }),
-        }).catch(() => {});
-      }, 900);
-
-      setTimeout(() => {
-        setActiveAgentRole('qa');
-        setComputerTab('terminal');
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.id === 'developer'
-              ? { ...a, status: 'completed' }
-              : a.id === 'qa'
-              ? { ...a, status: 'working' }
-              : a
-          )
-        );
-        fetch('/api/stream/test-emit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agent: 'Sentinel (QA Auditor)',
-            thought: 'Executing automated verification suite and sandbox assertions.',
-          }),
-        }).catch(() => {});
-      }, 1800);
-
-      setTimeout(() => {
-        setActiveAgentRole('creative');
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.id === 'qa'
-              ? { ...a, status: 'completed' }
-              : a.id === 'creative'
-              ? { ...a, status: 'working' }
-              : a
-          )
-        );
-        fetch('/api/stream/test-emit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agent: 'Vesper (Dossier & Strategy)',
-            thought: 'Compiling executive dossier, structured spreadsheet dataset, and outreach sequence.',
-          }),
-        }).catch(() => {});
-      }, 2700);
-
-      setTimeout(() => {
-        setActiveAgentRole('video_producer');
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.id === 'creative'
-              ? { ...a, status: 'completed' }
-              : a.id === 'video_producer'
-              ? { ...a, status: 'working' }
-              : a
-          )
-        );
-      }, 3600);
-
-      // Trigger autonomous task planner to generate actionable subtasks in database
-      fetch('/api/tasks/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          missionId: newMissionId,
-          prompt: promptText,
-        }),
-      }).catch(() => {});
-
-      // Execute mission via autonomous pipeline (attempts server API, falls back gracefully to in-engine synthesizer on error or static hosting)
+      // Run the provider-backed code generation and actual sandbox verification path.
       const finalMission = await executeAutonomousPipeline({
         missionId: newMissionId,
         prompt: promptText,
@@ -496,9 +398,6 @@ function AgentStationApp() {
         return;
       }
 
-      // Retain context from previous logs
-      finalMission.logs = [...finalMission.logs, ...mission.logs];
-
       // Persist all generated mission files to workspace/ disk (Phase 2 + Phase 3 SSE sync)
       if (Array.isArray(finalMission.files) && finalMission.files.length > 0) {
         fetch('/api/files/save-batch', {
@@ -518,11 +417,11 @@ function AgentStationApp() {
       } else {
         setComputerTab('browser');
       }
-      setMobileActiveView('workstation'); // Auto-switch on mobile so user sees the live result!
+      setMobileActiveView('chat'); // Keep the conversation visible after the agent responds.
 
       setAgents((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
       setActiveAgentRole(undefined);
-      showToast('Squad mission completed! Code, tests, and preview are ready.');
+      showToast(finalMission.execution.exitCode === 0 ? 'Code generated and sandbox tests passed.' : finalMission.execution.exitCode > 0 ? 'Code generated, but sandbox tests failed.' : 'Code generated. Runtime verification is still pending.');
     } catch (err: any) {
       console.error('Autonomous squad error:', err);
       const errMsg = err?.message || 'Execution error during multi-agent handoff';
