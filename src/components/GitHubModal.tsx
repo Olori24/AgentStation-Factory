@@ -75,6 +75,13 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'push' | 'branches' | 'workflow' | 'docker' | 'webhooks'>('push');
   const [liveStatus, setLiveStatus] = useState<GitLiveStatus | null>(null);
+  const [availableRepositories, setAvailableRepositories] = useState<Array<{id:number;fullName:string;defaultBranch:string|null;private:boolean;archived:boolean}>>([]);
+  const [selectedRepository, setSelectedRepository] = useState<{id:number;fullName:string;defaultBranch?:string;selectedAt?:string}|null>(null);
+  const [repositoryBranches, setRepositoryBranches] = useState<Array<{name:string;commitSha:string;protected:boolean}>>([]);
+  const [repositoryError, setRepositoryError] = useState<string | null>(null);
+  const [isLoadingRepositories, setIsLoadingRepositories] = useState(false);
+  const [isSavingRepository, setIsSavingRepository] = useState(false);
+
   const [webhooksList, setWebhooksList] = useState<any[]>([]);
   const [isLoadingWebhooks, setIsLoadingWebhooks] = useState<boolean>(false);
   const [isSimulatingWebhook, setIsSimulatingWebhook] = useState<boolean>(false);
@@ -148,6 +155,69 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
     ? (customBranchInput.trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, '-') || 'feature/custom')
     : selectedBranch;
 
+
+  const fetchRepositories = async () => {
+    setIsLoadingRepositories(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch('/api/github/repositories?per_page=100&page=1', { credentials: 'same-origin' });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Unable to load connected repositories.');
+      const repositories = Array.isArray(data.repositories) ? data.repositories : [];
+      setAvailableRepositories(repositories);
+      if (selectedRepository && repositories.some((item: any) => item.id === selectedRepository.id)) return;
+      const stored = await fetch('/api/github/repositories/selected/branches', { credentials: 'same-origin' });
+      if (stored.ok) {
+        const selectedData = await stored.json();
+        if (selectedData.success && selectedData.repository) setSelectedRepository(selectedData.repository);
+      }
+    } catch (error: any) {
+      setRepositoryError(error.message || 'GitHub repository discovery failed.');
+    } finally {
+      setIsLoadingRepositories(false);
+    }
+  };
+
+  const chooseRepository = async (repositoryId: number) => {
+    const repository = availableRepositories.find((item) => item.id === repositoryId);
+    if (!repository) { setSelectedRepository(null); return; }
+    setIsSavingRepository(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch('/api/github/repositories/select', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repositoryId: repository.id, fullName: repository.fullName }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Repository selection failed.');
+      setSelectedRepository(data.repository);
+      const branchResponse = await fetch('/api/github/repositories/selected/branches', { credentials: 'same-origin' });
+      const branchData = await branchResponse.json();
+      if (!branchResponse.ok || !branchData.success) throw new Error(branchData.error || 'Repository selected, but branch discovery failed.');
+      setRepositoryBranches(branchData.branches || []);
+      if (data.repository.defaultBranch) setSelectedBranch(data.repository.defaultBranch);
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Could not select repository.');
+    } finally {
+      setIsSavingRepository(false);
+    }
+  };
+
+  const fetchSelectedBranches = async () => {
+    try {
+      const response = await fetch('/api/github/repositories/selected/branches', { credentials: 'same-origin' });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setSelectedRepository(data.repository);
+        setRepositoryBranches(data.branches || []);
+      }
+    } catch {
+      // Branch discovery remains unavailable until a repository is selected.
+    }
+  };
+
   const fetchStatus = async () => {
     setIsLoadingStatus(true);
     try {
@@ -169,6 +239,8 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchStatus();
+      fetchRepositories();
+      fetchSelectedBranches();
       setPushResult(null);
       setSwitchFeedback(null);
       setSuccessNotification(null);
@@ -585,6 +657,38 @@ git push -u origin main`;
               </span>
             )}
           </button>
+        </div>
+
+        {/* Installation-scoped repository selection */}
+        <div className="px-6 py-3 bg-slate-950/70 border-b border-slate-800 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="agentstation-github-repository" className="text-xs font-semibold text-slate-300">Connected GitHub repository</label>
+            <button type="button" onClick={fetchRepositories} disabled={isLoadingRepositories || isSavingRepository} className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50">
+              {isLoadingRepositories ? 'Refreshing…' : 'Refresh list'}
+            </button>
+          </div>
+          <select
+            id="agentstation-github-repository"
+            value={selectedRepository?.id ? String(selectedRepository.id) : ''}
+            onChange={(event) => chooseRepository(Number(event.target.value))}
+            disabled={isLoadingRepositories || isSavingRepository || availableRepositories.length === 0}
+            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+          >
+            <option value="">{isLoadingRepositories ? 'Loading repositories…' : availableRepositories.length ? 'Select a repository' : 'No connected repositories found'}</option>
+            {availableRepositories.map((repository) => (
+              <option key={repository.id} value={String(repository.id)}>
+                {repository.fullName}{repository.private ? ' · Private' : ''}{repository.archived ? ' · Archived' : ''}
+              </option>
+            ))}
+          </select>
+          {selectedRepository && (
+            <div className="text-[11px] text-emerald-300">
+              Selected: {selectedRepository.fullName}
+              {repositoryBranches.length > 0 ? ` · ${repositoryBranches.length} branches discovered` : ''}
+            </div>
+          )}
+          {repositoryError && <p role="alert" className="text-[11px] text-rose-300">{repositoryError}</p>}
+          <p className="text-[10px] text-slate-500">This selection is verified against your GitHub App installation and saved to your account. Existing legacy push controls are not yet bound to this repository.</p>
         </div>
 
         {/* Modal Content */}
