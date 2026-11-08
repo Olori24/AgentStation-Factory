@@ -206,7 +206,7 @@ def test_github_installation_tokens_are_short_lived_and_never_persisted():
     server = read("server.ts")
     db = read("server/db.ts")
     assert "/access_tokens" in server
-    assert "createUserInstallationToken(userId: string)" in server
+    assert "createUserInstallationToken(userId: string, writeAccess = false)" in server
     assert 'app.get("/api/github/repositories"' in server
     assert "db.getUserById(userId)" in server
     assert "Authorization: \"Bearer \" + minted.token" in server
@@ -325,3 +325,32 @@ def test_repository_diff_is_baselined_and_fake_qa_results_are_removed():
     assert "Actual repository diff" in ui
     assert "diff?: string" in types
     assert "baseSha?: string" in types
+
+
+
+def test_github_pr_publish_requires_exact_explicit_diff_approval():
+    server = read("server.ts")
+    sandbox = read("sandbox/server.mjs")
+    modal = read("src/components/GitHubModal.tsx")
+    app = read("src/App.tsx")
+    assert 'app.post("/api/missions/:id/github/publish"' in server
+    assert 'req.body?.confirmPublish !== true' in server
+    assert 'req.body?.diffHash' in server
+    assert 'lastExecution?.diffHash !== req.body.diffHash' in server
+    assert 'snapshot.diffTruncated' in server
+    assert 'snapshot.baseCommitSha !== workspace.baseCommitSha' in server
+    assert 'createUserInstallationToken(req.user.id, true)' in server
+    assert 'pull_requests: "write"' in server
+    assert 'contents: "write"' in server
+    assert 'mission.userId !== req.user.id' in server
+    assert 'latestMission.metadata?.repositoryWorkspace?.lastExecution?.diffHash !== req.body.diffHash' in server
+    assert 'agentstation/mission-' in server
+    assert 'await githubRequest("POST", "/git/refs"' in server
+    assert 'githubRequest("POST", "/pulls"' in server
+    assert 'base: mission.branch' in server
+    assert 'changedFiles' in sandbox
+    assert 'git diff --name-status --no-renames' in sandbox
+    assert 'Approve & create GitHub PR' in modal
+    assert 'window.confirm(' in modal
+    assert 'confirmPublish: true' in modal
+    assert 'execution={mission.execution}' in app
