@@ -246,7 +246,11 @@ function readWorkspaceFiles(dir) {
       }
       const content = fs.readFileSync(absolute);
       if (content.includes(0)) continue;
-      files.push({ path: rel, content: content.toString('utf8') });
+      files.push({
+        path: rel,
+        content: content.toString('utf8'),
+        mode: (stat.mode & 0o111) !== 0 ? '100755' : '100644',
+      });
     }
   }
   walk(dir, '');
