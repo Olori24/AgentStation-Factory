@@ -2286,9 +2286,9 @@ app.post("/api/missions/:id/repository/workspace", requireRole(["admin","enginee
     }
     const entries = treePayload.tree.filter((entry: any) =>
       entry?.type === "blob" && ["100644", "100755"].includes(entry.mode) &&
-      Number.isSafeInteger(entry.size) && entry.size >= 0 && entry.size <= 512 * 1024 &&
+      Number.isSafeInteger(entry.size) && entry.size >= 0 && entry.size <= 256 * 1024 &&
       isSafeRepositorySnapshotPath(entry.path)
-    ).slice(0, 150);
+    ).slice(0, 100);
     if (!entries.length) return res.status(422).json({ success: false, error: "No eligible text source files were found in this repository snapshot." });
     const files: Array<{path:string;content:string}> = [];
     let totalBytes = 0;
@@ -2309,7 +2309,7 @@ app.post("/api/missions/:id/repository/workspace", requireRole(["admin","enginee
       for (const file of batch) {
         if (!file) continue;
         totalBytes += Buffer.byteLength(file.content, "utf8");
-        if (totalBytes > 5 * 1024 * 1024) return res.status(413).json({ success: false, error: "Repository snapshot exceeds the 5 MB safety limit." });
+        if (totalBytes > 1200 * 1024) return res.status(413).json({ success: false, error: "Repository snapshot exceeds the 1.2 MB safety limit for this request. Use a smaller source subset." });
         files.push(file);
       }
     }
