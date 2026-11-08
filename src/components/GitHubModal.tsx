@@ -24,7 +24,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { GITHUB_REPO_INFO } from '../data/defaults';
-import { WorkspaceFile, CiStatusInfo } from '../types';
+import { WorkspaceFile, CiStatusInfo, TestExecutionResult } from '../types';
 
 interface GitHubModalProps {
   isOpen: boolean;
@@ -34,6 +34,8 @@ interface GitHubModalProps {
   missionFiles?: WorkspaceFile[];
   onBranchChange?: (branch: string) => void;
   onSuccessNotification?: (message: string) => void;
+  missionId?: string;
+  execution?: TestExecutionResult;
 }
 
 export interface RemoteBranchInfo {
@@ -71,10 +73,26 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   missionFiles,
   onBranchChange,
   onSuccessNotification,
+  missionId,
+  execution,
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'push' | 'branches' | 'workflow' | 'docker' | 'webhooks'>('push');
   const [liveStatus, setLiveStatus] = useState<GitLiveStatus | null>(null);
+  const [availableRepositories, setAvailableRepositories] = useState<Array<{id:number;fullName:string;defaultBranch:string|null;private:boolean;archived:boolean}>>([]);
+  const [selectedRepository, setSelectedRepository] = useState<{id:number;fullName:string;defaultBranch?:string;selectedAt?:string}|null>(null);
+  const [repositoryBranches, setRepositoryBranches] = useState<Array<{name:string;commitSha:string;protected:boolean}>>([]);
+  const [repositoryError, setRepositoryError] = useState<string | null>(null);
+  const [isLoadingRepositories, setIsLoadingRepositories] = useState(false);
+  const [isSavingRepository, setIsSavingRepository] = useState(false);
+  const [isConnectingGitHub, setIsConnectingGitHub] = useState(false);
+  const [isPublishingMission, setIsPublishingMission] = useState(false);
+  const [publishedPullRequest, setPublishedPullRequest] = useState<string | null>(null);
+  const [isBindingMission, setIsBindingMission] = useState(false);
+  const [missionBinding, setMissionBinding] = useState<{repository:string;branch:string;baseSha:string}|null>(null);
+  const [workspaceStatus, setWorkspaceStatus] = useState<{fileCount:number;baseSha:string;expiresAt:string}|null>(null);
+  const [isPreparingWorkspace, setIsPreparingWorkspace] = useState(false);
+
   const [webhooksList, setWebhooksList] = useState<any[]>([]);
   const [isLoadingWebhooks, setIsLoadingWebhooks] = useState<boolean>(false);
   const [isSimulatingWebhook, setIsSimulatingWebhook] = useState<boolean>(false);
@@ -148,6 +166,183 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
     ? (customBranchInput.trim().replace(/[^a-zA-Z0-9_\-\.\/]/g, '-') || 'feature/custom')
     : selectedBranch;
 
+
+  const connectGitHubApp = async () => {
+    setIsConnectingGitHub(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch('/api/github/install', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || typeof data.installUrl !== 'string') {
+        throw new Error(data.error || 'GitHub App connection is not configured.');
+      }
+      window.location.assign(data.installUrl);
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Could not start GitHub App connection.');
+      setIsConnectingGitHub(false);
+    }
+  };
+
+  const fetchRepositories = async () => {
+    setIsLoadingRepositories(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch('/api/github/repositories?per_page=100&page=1', { credentials: 'same-origin' });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Unable to load connected repositories.');
+      const repositories = Array.isArray(data.repositories) ? data.repositories : [];
+      setAvailableRepositories(repositories);
+      if (selectedRepository && repositories.some((item: any) => item.id === selectedRepository.id)) return;
+      const stored = await fetch('/api/github/repositories/selected/branches', { credentials: 'same-origin' });
+      if (stored.ok) {
+        const selectedData = await stored.json();
+        if (selectedData.success && selectedData.repository) setSelectedRepository(selectedData.repository);
+      }
+    } catch (error: any) {
+      setRepositoryError(error.message || 'GitHub repository discovery failed.');
+    } finally {
+      setIsLoadingRepositories(false);
+    }
+  };
+
+  const chooseRepository = async (repositoryId: number) => {
+    const repository = availableRepositories.find((item) => item.id === repositoryId);
+    if (!repository) { setSelectedRepository(null); return; }
+    setIsSavingRepository(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch('/api/github/repositories/select', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repositoryId: repository.id, fullName: repository.fullName }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Repository selection failed.');
+      setSelectedRepository(data.repository);
+      const branchResponse = await fetch('/api/github/repositories/selected/branches', { credentials: 'same-origin' });
+      const branchData = await branchResponse.json();
+      if (!branchResponse.ok || !branchData.success) throw new Error(branchData.error || 'Repository selected, but branch discovery failed.');
+      setRepositoryBranches(branchData.branches || []);
+      if (data.repository.defaultBranch) setSelectedBranch(data.repository.defaultBranch);
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Could not select repository.');
+    } finally {
+      setIsSavingRepository(false);
+    }
+  };
+
+  const chooseRepositoryBranch = async (branchName: string) => {
+    if (!branchName || !selectedRepository) return;
+    setIsSavingRepository(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch('/api/github/repositories/select-branch', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: branchName }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Branch selection failed.');
+      setSelectedBranch(data.branch.name);
+      setSelectedRepository((previous) => previous ? { ...previous, defaultBranch: data.branch.name } : previous);
+      onBranchChange?.(data.branch.name);
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Could not select repository branch.');
+    } finally {
+      setIsSavingRepository(false);
+    }
+  };
+
+  const publishMissionPullRequest = async () => {
+    if (!missionId || !execution?.diffHash || execution.diffTruncated) return;
+    const changedCount = execution.changedFiles?.length || 0;
+    const testsPassed = execution.exitCode === 0 && execution.testsPassed > 0;
+    const accepted = window.confirm(
+      `Create a GitHub pull request with ${changedCount} reviewed file changes from base ${execution.baseSha?.slice(0, 8) || 'the pinned commit'}? ${testsPassed ? 'Sandbox tests passed.' : 'Tests are not confirmed as passing.'} This will publish a new branch, not modify the selected base branch directly.`
+    );
+    if (!accepted) return;
+    setIsPublishingMission(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch(`/api/missions/${encodeURIComponent(missionId)}/github/publish`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diffHash: execution.diffHash, confirmPublish: true }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || typeof data.pullRequestUrl !== 'string') {
+        throw new Error(data.error || 'GitHub pull request creation failed.');
+      }
+      setPublishedPullRequest(data.pullRequestUrl);
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Could not publish the approved repository changes.');
+    } finally {
+      setIsPublishingMission(false);
+    }
+  };
+
+  const prepareMissionWorkspace = async () => {
+    if (!missionId) return;
+    setIsPreparingWorkspace(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch(`/api/missions/${encodeURIComponent(missionId)}/repository/workspace`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not prepare the isolated repository workspace.');
+      setWorkspaceStatus({ fileCount: data.fileCount, baseSha: data.baseSha, expiresAt: data.expiresAt });
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Repository workspace preparation failed.');
+    } finally {
+      setIsPreparingWorkspace(false);
+    }
+  };
+
+  const bindRepositoryToMission = async () => {
+    if (!missionId || !selectedRepository || !selectedBranch) return;
+    setIsBindingMission(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch(`/api/missions/${encodeURIComponent(missionId)}/github-binding`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: selectedBranch }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not bind this repository to the mission.');
+      setMissionBinding({ repository: data.mission.repository, branch: data.mission.branch, baseSha: data.mission.baseSha });
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Mission repository binding failed.');
+    } finally {
+      setIsBindingMission(false);
+    }
+  };
+
+  const fetchSelectedBranches = async () => {
+    try {
+      const response = await fetch('/api/github/repositories/selected/branches', { credentials: 'same-origin' });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setSelectedRepository(data.repository);
+        setRepositoryBranches(data.branches || []);
+      }
+    } catch {
+      // Branch discovery remains unavailable until a repository is selected.
+    }
+  };
+
   const fetchStatus = async () => {
     setIsLoadingStatus(true);
     try {
@@ -169,6 +364,8 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchStatus();
+      fetchRepositories();
+      fetchSelectedBranches();
       setPushResult(null);
       setSwitchFeedback(null);
       setSuccessNotification(null);
@@ -585,6 +782,92 @@ git push -u origin main`;
               </span>
             )}
           </button>
+        </div>
+
+        {/* Installation-scoped repository selection */}
+        <div className="px-6 py-3 bg-slate-950/70 border-b border-slate-800 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-semibold text-slate-300">GitHub App authorization</div>
+            <button type="button" onClick={connectGitHubApp} disabled={isConnectingGitHub} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-50">
+              {isConnectingGitHub ? 'Opening GitHub…' : 'Connect / Reconnect GitHub'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="agentstation-github-repository" className="text-xs font-semibold text-slate-300">Connected GitHub repository</label>
+            <button type="button" onClick={fetchRepositories} disabled={isLoadingRepositories || isSavingRepository} className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50">
+              {isLoadingRepositories ? 'Refreshing…' : 'Refresh list'}
+            </button>
+          </div>
+          <select
+            id="agentstation-github-repository"
+            value={selectedRepository?.id ? String(selectedRepository.id) : ''}
+            onChange={(event) => chooseRepository(Number(event.target.value))}
+            disabled={isLoadingRepositories || isSavingRepository || availableRepositories.length === 0}
+            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+          >
+            <option value="">{isLoadingRepositories ? 'Loading repositories…' : availableRepositories.length ? 'Select a repository' : 'No connected repositories found'}</option>
+            {availableRepositories.map((repository) => (
+              <option key={repository.id} value={String(repository.id)}>
+                {repository.fullName}{repository.private ? ' · Private' : ''}{repository.archived ? ' · Archived' : ''}
+              </option>
+            ))}
+          </select>
+          {selectedRepository && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="text-[11px] text-emerald-300 self-center">
+                Selected repository: {selectedRepository.fullName}
+              </div>
+              <select
+                aria-label="Select repository branch"
+                value={repositoryBranches.some((item) => item.name === selectedBranch) ? selectedBranch : (selectedRepository.defaultBranch || '')}
+                onChange={(event) => chooseRepositoryBranch(event.target.value)}
+                disabled={isSavingRepository || repositoryBranches.length === 0}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white disabled:opacity-60"
+              >
+                <option value="">{repositoryBranches.length ? 'Select a branch' : 'Branches unavailable'}</option>
+                {repositoryBranches.map((item) => (
+                  <option key={item.commitSha} value={item.name}>{item.name}{item.protected ? ' · Protected' : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {missionId && execution?.diff && (
+            <details className="rounded-lg border border-slate-800 bg-slate-950/70">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-emerald-300">
+                Review repository diff · {execution.changedFiles?.length || 0} files · base {execution.baseSha?.slice(0, 8) || 'pinned'}
+              </summary>
+              {execution.diffTruncated && <p className="px-3 py-2 text-[11px] text-amber-300">This diff exceeds the safe review limit. Publishing is disabled until the change set is narrowed.</p>}
+              {execution.changedFiles?.length ? (
+                <div className="flex flex-wrap gap-1 border-t border-slate-800 px-3 py-2">
+                  {execution.changedFiles.map((file) => <span key={file.path} className="rounded bg-slate-900 px-2 py-1 text-[10px] text-slate-300">{file.status} · {file.path}</span>)}
+                </div>
+              ) : null}
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words border-t border-slate-800 px-3 py-2 text-[10px] leading-relaxed text-slate-200">{execution.diff}</pre>
+              {execution.diffHash && !execution.diffTruncated && (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 px-3 py-2">
+                  <span className="text-[10px] text-slate-400">SHA-256: {execution.diffHash.slice(0, 16)}… · {execution.exitCode === 0 && execution.testsPassed > 0 ? `${execution.testsPassed} tests passed` : 'Tests not confirmed as passing'}</span>
+                  <button type="button" onClick={publishMissionPullRequest} disabled={isPublishingMission || !execution.changedFiles?.length} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-500 disabled:opacity-50">
+                    {isPublishingMission ? 'Creating GitHub PR…' : 'Approve & create GitHub PR'}
+                  </button>
+                </div>
+              )}
+            </details>
+          )}
+          {publishedPullRequest && <a href={publishedPullRequest} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-emerald-300 underline">Open created GitHub pull request</a>}
+          {missionId && selectedRepository && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={bindRepositoryToMission} disabled={isBindingMission || isSavingRepository || !selectedBranch} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
+                {isBindingMission ? 'Verifying mission binding…' : 'Bind repository to this mission'}
+              </button>
+              {missionBinding && <span className="text-[10px] text-emerald-300">Bound: {missionBinding.repository} · {missionBinding.branch} · {missionBinding.baseSha.slice(0, 8)}</span>}
+              <button type="button" onClick={prepareMissionWorkspace} disabled={isPreparingWorkspace || isBindingMission || !selectedBranch} className="rounded-lg border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-50">
+                {isPreparingWorkspace ? 'Preparing isolated workspace…' : 'Prepare coding workspace'}
+              </button>
+              {workspaceStatus && <span className="text-[10px] text-emerald-300">Workspace ready: {workspaceStatus.fileCount} files · base {workspaceStatus.baseSha.slice(0, 8)}</span>}
+            </div>
+          )}
+          {repositoryError && <p role="alert" className="text-[11px] text-rose-300">{repositoryError}</p>}
+          <p className="text-[10px] text-slate-500">Repository and branch selections are verified against your GitHub App installation. Mission binding records the exact base commit; legacy push controls remain separate and cannot publish this mission's changes.</p>
         </div>
 
         {/* Modal Content */}

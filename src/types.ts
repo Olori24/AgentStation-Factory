@@ -70,6 +70,16 @@ export interface TestExecutionResult {
   testsPassed: number;
   testsFailed: number;
   durationMs: number;
+  /** Unified diff returned by the isolated mission repository workspace. */
+  diff?: string;
+  /** Immutable GitHub base commit used to calculate diff. */
+  baseSha?: string;
+  /** SHA-256 of the exact, untruncated diff shown for approval. */
+  diffHash?: string;
+  /** Changed paths and their Git status (added, modified, deleted). */
+  changedFiles?: Array<{ status: string; path: string }>;
+  /** True when the diff exceeded the safe review display limit. */
+  diffTruncated?: boolean;
 }
 
 export interface TerminalStreamMessage {

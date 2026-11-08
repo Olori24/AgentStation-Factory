@@ -17,12 +17,15 @@
  * - Only reachable on the compose network; requires a shared token.
  * - Per-container limits: no network, read-only rootfs, no capabilities,
  *   non-root user, PID/memory/CPU/file-descriptor caps.
- * - Per-run directory is created, used as a bind mount, then deleted.
+ * - One-off execution directories are deleted after each run; mission workspaces persist with a six-hour TTL.
+ * - Mission workspaces are isolated by random IDs and can only be accessed through the authenticated app-to-sandbox channel.
  * - Output is capped and every container is force-removed after the timeout.
  *
  * Endpoints
  *   GET  /health   -> { status, docker, image, active }
  *   POST /execute  -> { sandboxId, exitCode, stdout, stderr, durationMs, timedOut }
+ *   POST /workspace/create  -> creates a bounded, mission-scoped repository workspace
+ *   POST /workspace/execute -> applies bounded file updates, runs a command, returns a diff
  *
  * Env
  *   SANDBOX_PORT          (default 7070)
@@ -123,6 +126,149 @@ function sendJson(res, status, payload) {
     'Cache-Control': 'no-store',
   });
   res.end(body);
+}
+
+const WORKSPACE_ROOT = path.join(RUN_ROOT, 'workspaces');
+const WORKSPACE_META_ROOT = path.join(RUN_ROOT, 'workspace-meta');
+const WORKSPACE_ID_RE = /^[a-f0-9]{32}$/;
+const activeWorkspaces = new Set();
+fs.mkdirSync(WORKSPACE_META_ROOT, { recursive: true });
+const MAX_WORKSPACE_FILES = 200;
+const MAX_WORKSPACE_FILE_BYTES = 1024 * 1024;
+const MAX_WORKSPACE_TOTAL_BYTES = 10 * 1024 * 1024;
+fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
+
+function getWorkspaceDir(id) {
+  if (typeof id !== 'string' || !WORKSPACE_ID_RE.test(id)) throw new Error('invalid workspace id');
+  const dir = path.resolve(WORKSPACE_ROOT, id);
+  if (path.dirname(dir) !== WORKSPACE_ROOT) throw new Error('invalid workspace id');
+  return dir;
+}
+
+function lstatIfPresent(target) {
+  try { return fs.lstatSync(target); }
+  catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+function isSafeWorkspaceRelativePath(rel) {
+  if (typeof rel !== 'string' || !rel || rel.length > 300 || rel.startsWith('/') ||
+      rel.includes('\0') || rel.includes('\\')) return false;
+  const parts = rel.split('/');
+  if (parts.some((part) => !part || part === '.' || part === '..' ||
+      ['.git', '.aws', '.ssh', '.docker', '.kube', 'node_modules'].includes(part.toLowerCase()))) return false;
+  if (/(^|\/)\.env($|\.)/i.test(rel) ||
+      /(^|\/)(\.npmrc|\.pypirc|\.netrc|id_rsa|id_ed25519)$/i.test(rel) ||
+      /(secret|credential|private[-_]?key|\.pem$|\.p12$|\.pfx$|\.key$|\.jks$|\.keystore$)/i.test(rel)) return false;
+  return true;
+}
+
+function writeWorkspaceFiles(dir, files, overwrite = false) {
+  if (!Array.isArray(files) || files.length > MAX_WORKSPACE_FILES) throw new Error('invalid workspace file list');
+  let total = 0;
+  for (const file of files) {
+    const rel = String(file?.path || '').trim();
+    const content = typeof file?.content === 'string' ? file.content : null;
+    const parts = rel.split('/');
+    if (content === null || !isSafeWorkspaceRelativePath(rel)) {
+      throw new Error('invalid workspace file');
+    }
+    const absolute = path.resolve(dir, rel);
+    const relative = path.relative(dir, absolute);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('workspace file path escapes workspace');
+    let cursor = dir;
+    for (const part of parts.slice(0, -1)) {
+      cursor = path.join(cursor, part);
+      if (fs.existsSync(cursor) && (!fs.lstatSync(cursor).isDirectory() || fs.lstatSync(cursor).isSymbolicLink())) {
+        throw new Error('workspace path contains a non-directory or symbolic link');
+      }
+    }
+    const targetStat = lstatIfPresent(absolute);
+    if (targetStat && (!targetStat.isFile() || targetStat.isSymbolicLink())) {
+      throw new Error('workspace target is not a regular file');
+    }
+    const bytes = Buffer.byteLength(content, 'utf8');
+    if (bytes > MAX_WORKSPACE_FILE_BYTES || (total += bytes) > MAX_WORKSPACE_TOTAL_BYTES) throw new Error('workspace snapshot exceeds size limits');
+    fs.mkdirSync(path.dirname(absolute), { recursive: true });
+    fs.writeFileSync(absolute, content, { encoding: 'utf8', flag: overwrite ? 'w' : 'wx' });
+  }
+}
+
+function setWorkspaceOwnership(dir) {
+  const stat = fs.lstatSync(dir);
+  if (stat.isSymbolicLink()) throw new Error('workspace contains a symbolic link');
+  if (stat.isDirectory()) {
+    fs.chownSync(dir, 65532, 65532);
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) setWorkspaceOwnership(path.join(dir, entry.name));
+  } else if (stat.isFile()) {
+    fs.chownSync(dir, 65532, 65532);
+  }
+}
+
+function workspaceMetadataPath(id) {
+  return path.join(WORKSPACE_META_ROOT, id + '.json');
+}
+
+const workspaceExpiryTimers = new Map();
+function scheduleWorkspaceExpiry(id, createdAt) {
+  const previous = workspaceExpiryTimers.get(id);
+  if (previous) clearTimeout(previous);
+  const remaining = Math.max(0, 6 * 60 * 60 * 1000 - (Date.now() - createdAt));
+  const timer = setTimeout(() => {
+    fs.rm(getWorkspaceDir(id), { recursive: true, force: true }, () => {});
+    fs.rm(workspaceMetadataPath(id), { force: true }, () => {});
+    workspaceExpiryTimers.delete(id);
+  }, remaining);
+  timer.unref?.();
+  workspaceExpiryTimers.set(id, timer);
+}
+
+for (const entry of fs.readdirSync(WORKSPACE_META_ROOT, { withFileTypes: true })) {
+  if (!entry.isFile() || !/^[a-f0-9]{32}\.json$/.test(entry.name)) continue;
+  const id = entry.name.slice(0, -5);
+  try {
+    const metadata = JSON.parse(fs.readFileSync(workspaceMetadataPath(id), 'utf8'));
+    const createdAt = Date.parse(metadata.createdAt);
+    if (!Number.isFinite(createdAt) || Date.now() - createdAt >= 6 * 60 * 60 * 1000) {
+      fs.rmSync(getWorkspaceDir(id), { recursive: true, force: true });
+      fs.rmSync(workspaceMetadataPath(id), { force: true });
+    } else {
+      scheduleWorkspaceExpiry(id, createdAt);
+    }
+  } catch {
+    fs.rmSync(workspaceMetadataPath(id), { force: true });
+  }
+}
+
+function readWorkspaceFiles(dir) {
+  const files = [];
+  let total = 0;
+  const ignored = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'coverage', 'vendor']);
+  function walk(current, prefix) {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const absolute = path.join(current, entry.name);
+      const rel = prefix ? prefix + '/' + entry.name : entry.name;
+      if (ignored.has(entry.name) || !isSafeWorkspaceRelativePath(rel)) continue;
+      const stat = fs.lstatSync(absolute);
+      if (stat.isSymbolicLink()) throw new Error('workspace contains a symbolic link; refusing to export it');
+      if (stat.isDirectory()) { walk(absolute, rel); continue; }
+      if (!stat.isFile()) continue;
+      if (files.length >= MAX_WORKSPACE_FILES || stat.size > MAX_WORKSPACE_FILE_BYTES || (total += stat.size) > MAX_WORKSPACE_TOTAL_BYTES) {
+        throw new Error('workspace output exceeds export limits');
+      }
+      const content = fs.readFileSync(absolute);
+      if (content.includes(0)) continue;
+      files.push({
+        path: rel,
+        content: content.toString('utf8'),
+        mode: (stat.mode & 0o111) !== 0 ? '100755' : '100644',
+      });
+    }
+  }
+  walk(dir, '');
+  return files;
 }
 
 /** Write the mission's files into the per-run directory, refusing path escapes. */
@@ -290,6 +436,118 @@ async function probe(force = false) {
   return probeCache;
 }
 
+function authorizeInternalRequest(req, res) {
+  if (!TOKEN) return true;
+  const presented = String(req.headers['x-sandbox-token'] || '').trim();
+  const a = Buffer.from(presented);
+  const b = Buffer.from(TOKEN);
+  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (!ok) { sendJson(res, 401, { error: 'unauthorized' }); return false; }
+  return true;
+}
+
+async function handleWorkspaceCreate(req, res) {
+  let dir = '';
+  try {
+    const raw = await readBody(req);
+    const body = JSON.parse(raw || '{}');
+    const workspaceId = crypto.randomBytes(16).toString('hex');
+    dir = getWorkspaceDir(workspaceId);
+    fs.mkdirSync(dir, { recursive: false });
+    writeWorkspaceFiles(dir, body.files);
+    setWorkspaceOwnership(dir);
+    if (active >= MAX_CONCURRENCY) throw new Error('sandbox service is at capacity');
+    if (!(await ensureImage())) throw new Error('sandbox execution image unavailable');
+    active += 1;
+    let initialized;
+    try {
+      initialized = await runContainer({
+        command: "git init -q && git config user.name AgentStation && git config user.email noreply@agentstation.local && git add -A && git commit -qm 'Base repository snapshot' && git rev-parse HEAD",
+        runDir: dir,
+        timeoutMs: 15000,
+      });
+    } finally {
+      active = Math.max(0, active - 1);
+    }
+    const baseCommitSha = String(initialized?.stdout || '').trim().split(/\s+/).pop();
+    if (initialized?.exitCode !== 0 || !/^[a-f0-9]{40}$/i.test(baseCommitSha)) {
+      throw new Error('Could not initialize the isolated workspace baseline.');
+    }
+    const metadata = { workspaceId, baseCommitSha, createdAt: new Date().toISOString() };
+    fs.writeFileSync(workspaceMetadataPath(workspaceId), JSON.stringify(metadata), { mode: 0o600, flag: 'wx' });
+    scheduleWorkspaceExpiry(workspaceId, Date.now());
+    return sendJson(res, 201, { workspaceId, fileCount: body.files.length, baseCommitSha, expiresInSeconds: 21600 });
+  } catch (err) {
+    if (dir) fs.rm(dir, { recursive: true, force: true }, () => {});
+    return sendJson(res, 400, { error: err?.message || 'workspace creation failed' });
+  }
+}
+
+async function handleWorkspaceExecute(req, res) {
+  let lockedId = '';
+  let countedActive = false;
+  try {
+    const raw = await readBody(req);
+    const body = JSON.parse(raw || '{}');
+    const dir = getWorkspaceDir(body.workspaceId);
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return sendJson(res, 404, { error: 'workspace not found or expired' });
+    lockedId = body.workspaceId;
+    if (activeWorkspaces.has(lockedId)) return sendJson(res, 409, { error: 'workspace is already executing another task' });
+    activeWorkspaces.add(lockedId);
+    if (Array.isArray(body.files) && body.files.length) {
+      writeWorkspaceFiles(dir, body.files, true);
+      setWorkspaceOwnership(dir);
+    }
+    const command = typeof body.command === 'string' ? body.command.trim() : '';
+    if (!command || command.length > 20000) return sendJson(res, 400, { error: 'invalid command' });
+    if (active >= MAX_CONCURRENCY) return sendJson(res, 429, { error: 'sandbox service is at capacity' });
+    if (!(await ensureImage())) return sendJson(res, 503, { error: 'sandbox execution image unavailable' });
+    const requested = Number(body.timeoutMs || 60000);
+    const timeoutMs = Math.min(Math.max(Number.isFinite(requested) ? requested : 60000, MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
+    active += 1;
+    countedActive = true;
+    const result = await runContainer({ command, runDir: dir, timeoutMs });
+    let files;
+    try { files = readWorkspaceFiles(dir); }
+    catch (err) { return sendJson(res, 413, { error: err?.message || 'workspace export failed', execution: result }); }
+    const metadata = JSON.parse(fs.readFileSync(workspaceMetadataPath(body.workspaceId), 'utf8'));
+    const baseCommitSha = String(metadata.baseCommitSha || '');
+    let diff = '';
+    let diffTruncated = false;
+    let changedFiles = [];
+    if (/^[a-f0-9]{40}$/i.test(baseCommitSha)) {
+      const diffResult = await runContainer({
+        command: "git diff --no-ext-diff --binary --unified=3 " + baseCommitSha + " --",
+        runDir: dir,
+        timeoutMs: 15000,
+      });
+      if (diffResult.exitCode === 0) {
+        const fullDiff = String(diffResult.stdout || '');
+        diffTruncated = fullDiff.length > 150 * 1024;
+        diff = fullDiff.slice(0, 150 * 1024);
+      }
+      else result.stderr = (result.stderr || '') + "\\n[DIFF] Unable to calculate workspace diff from the recorded baseline.";
+      const nameStatus = await runContainer({
+        command: "git diff --name-status --no-renames " + baseCommitSha + " --",
+        runDir: dir,
+        timeoutMs: 15000,
+      });
+      if (nameStatus.exitCode === 0) {
+        changedFiles = String(nameStatus.stdout || '').split('\n').filter(Boolean).map((line) => {
+          const match = line.match(/^([AMD])\t(.+)$/);
+          return match ? { status: match[1], path: match[2] } : null;
+        }).filter(Boolean).slice(0, MAX_WORKSPACE_FILES);
+      }
+    }
+    return sendJson(res, 200, { ...result, workspaceId: body.workspaceId, files, diff, diffTruncated, baseCommitSha, changedFiles });
+  } catch (err) {
+    return sendJson(res, 400, { error: err?.message || 'workspace execution failed' });
+  } finally {
+    if (countedActive) active = Math.max(0, active - 1);
+    if (lockedId) activeWorkspaces.delete(lockedId);
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
@@ -311,16 +569,11 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  if (req.method === 'POST' && url.pathname === '/execute') {
-    if (TOKEN) {
-      const presented = String(req.headers['x-sandbox-token'] || '').trim();
-      // Constant-time compare to avoid leaking the token via timing.
-      const a = Buffer.from(presented);
-      const b = Buffer.from(TOKEN);
-      const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-      if (!ok) return sendJson(res, 401, { error: 'unauthorized' });
-    }
-    return handleExecute(req, res);
+  if (req.method === 'POST' && ['/execute', '/workspace/create', '/workspace/execute'].includes(url.pathname)) {
+    if (!authorizeInternalRequest(req, res)) return;
+    if (url.pathname === '/execute') return handleExecute(req, res);
+    if (url.pathname === '/workspace/create') return handleWorkspaceCreate(req, res);
+    return handleWorkspaceExecute(req, res);
   }
 
   sendJson(res, 404, { error: 'not found' });

@@ -154,3 +154,208 @@ def test_workspace_tool_boundaries_and_audit_redaction():
     assert "redactForAudit" in tools
     assert "projectPath" not in tools
     assert "Sensitive file cannot be included in an artifact" in artifacts
+
+
+def test_github_installation_metadata_is_user_scoped_and_non_secret():
+    db = read("server/db.ts")
+    assert "export interface GitHubConnectionRecord" in db
+    assert "installationId: number" in db
+    assert "accountId: number" in db
+    assert "setGitHubConnectionForUser(userId: string" in db
+    assert "getGitHubConnectionForUser(userId: string" in db
+    assert "removeGitHubConnectionForUser(userId: string" in db
+    connection = db.split("export interface GitHubConnectionRecord", 1)[1].split("export interface UserRecord", 1)[0]
+    assert "accessToken" not in connection
+    assert "refreshToken" not in connection
+    assert "privateKey" not in connection
+
+
+def test_public_user_responses_redact_github_connection_metadata():
+    server = read("server.ts")
+    public_user = server.split("function publicUser", 1)[1].split("\n}", 1)[0]
+    assert "passwordHash" in public_user
+    assert "githubConnection" in public_user
+    assert "_githubConnection" in public_user
+
+
+def test_github_installation_flow_is_session_bound_and_fail_closed():
+    server = read("server.ts")
+    db = read("server/db.ts")
+    migration = read("db/migrations/007_github_install_states.sql")
+    assert 'app.get("/api/github/install", authRateLimit' in server
+    assert 'app.get("/api/github/callback"' in server
+    assert '"/github/callback"' in server
+    assert "GITHUB_APP_ID" in server
+    assert "GITHUB_APP_PRIVATE_KEY" in server
+    assert "GITHUB_APP_SLUG" in server
+    assert "GITHUB_APP_CALLBACK_URL" in server
+    assert "as_github_callback" in server
+    assert 'sameSite: "lax"' in server
+    assert "verifyGitHubCallbackTicket" in server
+    assert "createGitHubInstallState" in db
+    assert "consumeGitHubInstallState" in db
+    assert "DELETE FROM github_install_states" in db
+    assert "RETURNING user_id, organization_id, session_hash, expires_at" in db
+    assert "github_install_states_tenant_isolation" in migration
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "FORCE ROW LEVEL SECURITY" in migration
+    assert "state_hash char(64) PRIMARY KEY" in migration
+
+
+def test_github_installation_tokens_are_short_lived_and_never_persisted():
+    server = read("server.ts")
+    db = read("server/db.ts")
+    assert "/access_tokens" in server
+    assert "createUserInstallationToken(userId: string, writeAccess = false)" in server
+    assert 'app.get("/api/github/repositories"' in server
+    assert "db.getUserById(userId)" in server
+    assert "Authorization: \"Bearer \" + minted.token" in server
+    assert "res.setHeader(" in server and '"Cache-Control", "no-store"' in server
+    connection = db.split("export interface GitHubConnectionRecord", 1)[1].split("export interface UserRecord", 1)[0]
+    assert "accessToken" not in connection
+    assert "refreshToken" not in connection
+    assert "privateKey" not in connection
+
+
+def test_github_repository_and_branch_selection_are_installation_scoped():
+    server = read("server.ts")
+    db = read("server/db.ts")
+    modal = read("src/components/GitHubModal.tsx")
+    assert 'app.get("/api/github/repositories"' in server
+    assert 'app.post("/api/github/repositories/select"' in server
+    assert 'app.get("/api/github/repositories/selected/branches"' in server
+    assert 'app.post("/api/github/repositories/select-branch"' in server
+    assert "createUserInstallationToken(req.user.id)" in server
+    assert "repository.id !== repositoryId" in server
+    assert "repository.full_name?.toLowerCase() !== fullName.toLowerCase()" in server
+    assert "selectedRepositories: [selection]" in server
+    assert "selectedRepositories: [{ ...selected, defaultBranch: branchData.name }]" in server
+    assert "export interface GitHubRepositorySelection" in db
+    assert "selectedRepositories?: GitHubRepositorySelection[]" in db
+    assert "agentstation-github-repository" in modal
+    assert "Select repository branch" in modal
+    assert "legacy push controls remain separate" in modal
+
+
+def test_github_mission_binding_is_owner_scoped_and_pins_base_sha():
+    server = read("server.ts")
+    db = read("server/db.ts")
+    route = server.split('app.post("/api/missions/:id/github-binding"', 1)[1].split('app.delete("/api/missions/:id"', 1)[0]
+    mission = db.split("export interface DbMissionRecord", 1)[1].split("export interface WorkspaceFileRecord", 1)[0]
+    assert 'mission.userId !== req.user.id' in route
+    assert 'mission.organizationId !== req.user.organizationId' in route
+    assert 'createUserInstallationToken(req.user.id)' in route
+    assert 'requestedBranch !== selected.defaultBranch' in route
+    assert 'branchData.commit?.sha' in route
+    assert 'githubRepositoryId: selected.id' in route
+    assert 'githubInstallationId: connection.installationId' in route
+    assert 'baseSha,' in route
+    assert 'currentMission.status === "running"' in route
+    assert "githubRepositoryId?: number" in mission
+    assert "githubInstallationId?: number" in mission
+    assert "baseSha?: string" in mission
+    assert '"Cache-Control", "no-store"' in route
+    assert 'targetRepo: existing?.targetRepo' in server
+    assert 'githubRepositoryId: existing?.githubRepositoryId' in server
+    assert 'githubInstallationId: existing?.githubInstallationId' in server
+    assert 'baseSha: existing?.baseSha' in server
+    assert '_clientGithubBinding' in server
+    modal = read("src/components/GitHubModal.tsx")
+    app = read("src/App.tsx")
+    assert 'missionId={mission.id}' in app
+    assert 'Bind repository to this mission' in modal
+    assert '/github-binding' in modal
+
+
+
+def test_mission_repository_workspace_isolated_and_repository_grounded():
+    server = read("server.ts")
+    sandbox = read("sandbox/server.mjs")
+    modal = read("src/components/GitHubModal.tsx")
+    app = read("src/App.tsx")
+    assert 'app.post("/api/missions/:id/repository/workspace"' in server
+    assert 'app.post("/api/missions/:id/repository/execute"' in server
+    assert 'mission.userId !== req.user.id' in server
+    assert 'mission.organizationId !== req.user.organizationId' in server
+    assert 'git/trees/" + mission.baseSha + "?recursive=1' in server
+    assert 'isSafeRepositorySnapshotPath(entry.path)' in server
+    assert 'entry.size <= 256 * 1024' in server
+    assert '1200 * 1024' in server
+    assert 'callMissionSandboxWorkspace("/workspace/create"' in server
+    assert 'callMissionSandboxWorkspace("/workspace/execute"' in server
+    assert 'REPOSITORY CONTEXT (read-only source snapshot' in server
+    assert 'files: safeFiles' in server
+    assert 'repositoryWorkspace' in server
+    assert 'workspace/create' in sandbox
+    assert 'workspace/execute' in sandbox
+    assert 'WORKSPACE_ID_RE' in sandbox
+    assert "rel.includes('\\\\')" in sandbox
+    assert 'stat.isSymbolicLink()' in sandbox
+    assert "'--network=none'" in sandbox
+    assert "'--read-only'" in sandbox
+    assert "'--cap-drop=ALL'" in sandbox
+    assert "'--user', '65532:65532'" in sandbox
+    assert 'Bind repository to this mission' in modal
+    assert 'Prepare coding workspace' in modal
+    assert 'missionId={mission.id}' in app
+    assert 'Connect / Reconnect GitHub' in modal
+    assert "fetch('/api/github/install'" in modal
+    assert 'window.location.assign(data.installUrl)' in modal
+
+
+
+def test_repository_diff_is_baselined_and_fake_qa_results_are_removed():
+    server = read("server.ts")
+    sandbox = read("sandbox/server.mjs")
+    ui = read("src/components/CodeWorkspace.tsx")
+    types = read("src/types.ts")
+    assert "git init -q" in sandbox
+    assert "Base repository snapshot" in sandbox
+    assert "git diff --no-ext-diff --binary --unified=3" in sandbox
+    assert "baseCommitSha" in sandbox
+    assert "setWorkspaceOwnership(dir)" in sandbox
+    assert "activeWorkspaces" in sandbox
+    assert "countedActive" in sandbox
+    assert 'diff: String(result.diff || "")' in server
+    assert "baseSha: mission.baseSha" in server
+    assert "No test result has been recorded." in server
+    assert "3 passed in 0.07s" not in server
+    assert "100% AUTOMATED QA PASS" not in server
+    assert "No sandbox execution has been recorded for this mission." in ui
+    assert "Actual repository diff" in ui
+    assert "diff?: string" in types
+    assert "baseSha?: string" in types
+
+
+
+def test_github_pr_publish_requires_exact_explicit_diff_approval():
+    server = read("server.ts")
+    sandbox = read("sandbox/server.mjs")
+    modal = read("src/components/GitHubModal.tsx")
+    app = read("src/App.tsx")
+    assert 'app.post("/api/missions/:id/github/publish"' in server
+    assert 'req.body?.confirmPublish !== true' in server
+    assert 'req.body?.diffHash' in server
+    assert 'lastExecution?.diffHash !== req.body.diffHash' in server
+    assert 'snapshot.diffTruncated' in server
+    assert 'snapshot.baseCommitSha !== workspace.baseCommitSha' in server
+    assert 'createUserInstallationToken(req.user.id, true)' in server
+    assert 'pull_requests: "write"' in server
+    assert 'contents: "write"' in server
+    assert 'mission.userId !== req.user.id' in server
+    assert 'latestMission.metadata?.repositoryWorkspace?.lastExecution?.diffHash !== req.body.diffHash' in server
+    assert 'agentstation/mission-' in server
+    assert 'await githubRequest("POST", "/git/refs"' in server
+    assert 'githubRequest("POST", "/pulls"' in server
+    assert 'base: mission.branch' in server
+    assert 'changedFiles' in sandbox
+    assert 'git diff --name-status --no-renames' in sandbox
+    assert 'isSafeWorkspaceRelativePath' in sandbox
+    assert "'.git'" in sandbox
+    assert r"\.npmrc" in sandbox
+    assert 'changedFiles.length > 50' in server
+    assert '5 * 1024 * 1024' in server
+    assert 'Approve & create GitHub PR' in modal
+    assert 'window.confirm(' in modal
+    assert 'confirmPublish: true' in modal
+    assert 'execution={mission.execution}' in app

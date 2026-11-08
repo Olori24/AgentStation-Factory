@@ -2,11 +2,42 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
+export interface GitHubRepositorySelection {
+  id: number;
+  fullName: string;
+  defaultBranch?: string;
+  selectedAt?: string;
+}
+
+/** Non-secret GitHub App installation metadata. Installation tokens are minted just-in-time and never persisted here. */
+
+export interface GitHubConnectionRecord {
+  installationId: number;
+  accountId: number;
+  accountLogin: string;
+  accountType: 'User' | 'Organization';
+  repositorySelection: 'all' | 'selected';
+  selectedRepositories?: GitHubRepositorySelection[];
+  permissions?: Record<string, string>;
+  connectedAt: string;
+}
+
+export interface GitHubInstallStateRecord {
+  stateHash: string;
+  userId: string;
+  organizationId: string;
+  sessionHash: string;
+  expiresAt: number;
+  createdAt: number;
+}
+
 export interface UserRecord {
   id: string;
   email: string;
   name: string;
   passwordHash?: string;
+  /** Public-safe installation metadata only; never store installation access tokens here. */
+  githubConnection?: GitHubConnectionRecord;
   role: 'admin' | 'engineer' | 'reviewer';
   avatar: string;
   organizationId: string;
@@ -31,6 +62,12 @@ export interface DbMissionRecord {
   status: 'draft' | 'running' | 'completed' | 'failed' | string;
   targetRepo?: string;
   branch?: string;
+  /** Verified GitHub repository identity captured when this mission is bound. */
+  githubRepositoryId?: number;
+  /** GitHub App installation ID; metadata only, never an installation token. */
+  githubInstallationId?: number;
+  /** Immutable branch tip SHA captured at mission binding time. */
+  baseSha?: string;
   filesCount?: number;
   durationMs?: number;
   currentStage?: string;
@@ -173,6 +210,7 @@ export interface DatabaseSchema {
   files: WorkspaceFileRecord[];
   logs: AgentLogRecord[];
   jobs: JobRecord[];
+  githubInstallStates: GitHubInstallStateRecord[];
   systemMetrics: {
     totalMissionsSynthesized: number;
     totalSandboxExecutions: number;
@@ -284,6 +322,7 @@ class RelationalDatabase {
     files: [],
     logs: [],
     jobs: [],
+    githubInstallStates: [],
     systemMetrics: {
       totalMissionsSynthesized: 0,
       totalSandboxExecutions: 0,
@@ -332,6 +371,7 @@ class RelationalDatabase {
           settings: parsed.settings || [],
           users: parsed.users?.length ? parsed.users : DEFAULT_USERS,
           organizations: parsed.organizations?.length ? parsed.organizations : [DEFAULT_ORG],
+          githubInstallStates: parsed.githubInstallStates || [],
         };
       } else {
         this.saveImmediately();
@@ -399,6 +439,79 @@ class RelationalDatabase {
 
   public getUserByEmail(email: string): UserRecord | undefined {
     return this.data.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  }
+
+  /** Returns only non-secret GitHub App installation metadata for the specified owner. */
+  public getGitHubConnectionForUser(userId: string): GitHubConnectionRecord | undefined {
+    const connection = this.getUserById(userId)?.githubConnection;
+    return connection ? structuredClone(connection) : undefined;
+  }
+
+  /** Associates installation metadata with one user; installation access tokens must never be persisted. */
+  public setGitHubConnectionForUser(userId: string, connection: GitHubConnectionRecord): boolean {
+    const user = this.getUserById(userId);
+    if (!user || !Number.isSafeInteger(connection.installationId) || connection.installationId <= 0 ||
+        !Number.isSafeInteger(connection.accountId) || connection.accountId <= 0 ||
+        !connection.accountLogin.trim() || !['User', 'Organization'].includes(connection.accountType) ||
+        !['all', 'selected'].includes(connection.repositorySelection)) return false;
+    user.githubConnection = structuredClone(connection);
+    this.scheduleSave();
+    return true;
+  }
+
+  public removeGitHubConnectionForUser(userId: string): boolean {
+    const user = this.getUserById(userId);
+    if (!user?.githubConnection) return false;
+    delete user.githubConnection;
+    this.scheduleSave();
+    return true;
+  }
+
+  /** Stores only a hash of the one-time GitHub installation state. PostgreSQL uses a unique key. */
+  public async createGitHubInstallState(record: GitHubInstallStateRecord): Promise<boolean> {
+    if (!this.getUserById(record.userId) || !record.stateHash || !record.sessionHash ||
+        !Number.isFinite(record.expiresAt) || record.expiresAt <= Date.now()) return false;
+    if (STORAGE_BACKEND === 'postgres') {
+      const sql = await getPostgresSql();
+      try {
+        await sql.transaction([
+          sql`SELECT set_config('app.organization_id', ${record.organizationId}, true)`,
+          sql`INSERT INTO github_install_states (state_hash, user_id, organization_id, session_hash, expires_at, created_at)
+              VALUES (${record.stateHash}, ${record.userId}, ${record.organizationId}, ${record.sessionHash},
+                      to_timestamp(${record.expiresAt} / 1000.0), to_timestamp(${record.createdAt} / 1000.0))`,
+        ]);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    this.data.githubInstallStates = (this.data.githubInstallStates || []).filter((entry) => entry.expiresAt > Date.now());
+    if (this.data.githubInstallStates.some((entry) => entry.stateHash === record.stateHash)) return false;
+    this.data.githubInstallStates.push(structuredClone(record));
+    this.scheduleSave();
+    return true;
+  }
+
+  /** PostgreSQL DELETE ... RETURNING makes the one-time consume atomic across server instances. */
+  public async consumeGitHubInstallState(stateHash: string, userId: string, organizationId: string, sessionHash: string): Promise<boolean> {
+    if (STORAGE_BACKEND === 'postgres') {
+      const sql = await getPostgresSql();
+      const rows = await sql.transaction([
+        sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+        sql`DELETE FROM github_install_states WHERE state_hash = ${stateHash}
+            RETURNING user_id, organization_id, session_hash, expires_at`,
+      ]);
+      const record = rows[1]?.[0];
+      return Boolean(record && new Date(record.expires_at).getTime() > Date.now() &&
+        record.user_id === userId && record.organization_id === organizationId && record.session_hash === sessionHash);
+    }
+    const states = this.data.githubInstallStates || [];
+    const index = states.findIndex((entry) => entry.stateHash === stateHash);
+    if (index < 0) return false;
+    const [record] = states.splice(index, 1);
+    this.scheduleSave();
+    return record.expiresAt > Date.now() && record.userId === userId &&
+      record.organizationId === organizationId && record.sessionHash === sessionHash;
   }
 
   public addOrganization(organization: OrganizationRecord): void {

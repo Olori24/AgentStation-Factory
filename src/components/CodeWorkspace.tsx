@@ -127,12 +127,12 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
   };
 
   const safeExecution = execution || {
-    command: 'pytest -v tests/',
-    stdout: 'Execution environment ready. All unit tests verified.',
-    testsPassed: 4,
+    command: 'Not run',
+    stdout: 'No sandbox execution has been recorded for this mission.',
+    testsPassed: 0,
     testsFailed: 0,
-    durationMs: 75,
-    exitCode: 0,
+    durationMs: 0,
+    exitCode: -1,
   };
 
   const displayOutput =
@@ -393,14 +393,14 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
         <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-900/50 border border-blue-700/50 text-blue-300 uppercase">${currentFile?.language || 'code'}</span>
       </div>
       <p class="text-xs text-slate-400 mt-2">
-        This file is verified in the sandboxed test runner. Below is the active runtime artifact:
+        This file is shown from the current workspace. The actual sandbox validation status is reported below:
       </p>
       <div class="mt-3 p-3 rounded-lg bg-slate-950 font-mono text-xs text-slate-300 overflow-x-auto max-h-72 border border-slate-800">
         <pre>${escapedCode}</pre>
       </div>
     </div>
-    <div class="p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-      <span>✓ PyTest sandbox validation status: <strong>${safeExecution.testsPassed} assertions passed</strong> (0 errors)</span>
+    <div class="p-3 rounded-lg ${safeExecution.exitCode === 0 && safeExecution.testsPassed > 0 ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' : safeExecution.exitCode > 0 ? 'bg-rose-950/40 border-rose-500/30 text-rose-300' : 'bg-amber-950/40 border-amber-500/30 text-amber-300'} text-xs flex items-center gap-2">
+      <span>${safeExecution.exitCode === 0 && safeExecution.testsPassed > 0 ? '✓' : safeExecution.exitCode > 0 ? '!' : '…'} Sandbox validation: <strong>${safeExecution.exitCode === 0 && safeExecution.testsPassed > 0 ? `${safeExecution.testsPassed} tests passed` : safeExecution.exitCode > 0 ? `${safeExecution.testsFailed} tests failed` : 'Pending / not verified'}</strong></span>
     </div>
   </div>
 </body>
@@ -946,6 +946,15 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({
       {/* 2. CODE DIFF TAB (With Side-by-Side & Unified Diff Modes — Jakob's Law: GitHub / VS Code Diff) */}
       {activeTab === 'diff' && currentFile && (
         <div className="flex-1 flex flex-col min-h-0 bg-slate-950">
+          {safeExecution.diff && (
+            <details open className="max-h-72 shrink-0 border-b border-slate-800 bg-slate-950">
+              <summary className="cursor-pointer px-4 py-2 text-xs font-semibold text-emerald-300">
+                Actual repository diff · pinned base {safeExecution.baseSha || 'commit'}
+              </summary>
+              {safeExecution.diffTruncated && <p className="px-4 py-2 text-xs text-amber-300">Diff truncated at the review limit. Do not approve or publish this incomplete patch.</p>}
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words px-4 py-3 text-[11px] leading-relaxed text-slate-200">{safeExecution.diff}</pre>
+            </details>
+          )}
           <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-2 text-xs font-mono flex-wrap">
             <div className="flex items-center gap-2">
               <FolderGit2 className="w-3.5 h-3.5 text-purple-400" />
