@@ -142,6 +142,14 @@ function getWorkspaceDir(id) {
   return dir;
 }
 
+function lstatIfPresent(target) {
+  try { return fs.lstatSync(target); }
+  catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 function writeWorkspaceFiles(dir, files, overwrite = false) {
   if (!Array.isArray(files) || files.length > MAX_WORKSPACE_FILES) throw new Error('invalid workspace file list');
   let total = 0;
@@ -163,7 +171,8 @@ function writeWorkspaceFiles(dir, files, overwrite = false) {
         throw new Error('workspace path contains a non-directory or symbolic link');
       }
     }
-    if (fs.existsSync(absolute) && (!fs.lstatSync(absolute).isFile() || fs.lstatSync(absolute).isSymbolicLink())) {
+    const targetStat = lstatIfPresent(absolute);
+    if (targetStat && (!targetStat.isFile() || targetStat.isSymbolicLink())) {
       throw new Error('workspace target is not a regular file');
     }
     const bytes = Buffer.byteLength(content, 'utf8');
