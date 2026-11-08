@@ -2,11 +2,31 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
+export interface GitHubRepositorySelection {
+  id: number;
+  fullName: string;
+  defaultBranch?: string;
+}
+
+/** Non-secret GitHub App installation metadata. Installation tokens are minted just-in-time and never persisted here. */
+export interface GitHubConnectionRecord {
+  installationId: number;
+  accountId: number;
+  accountLogin: string;
+  accountType: 'User' | 'Organization';
+  repositorySelection: 'all' | 'selected';
+  selectedRepositories?: GitHubRepositorySelection[];
+  permissions?: Record<string, string>;
+  connectedAt: string;
+}
+
 export interface UserRecord {
   id: string;
   email: string;
   name: string;
   passwordHash?: string;
+  /** Public-safe installation metadata only; never store installation access tokens here. */
+  githubConnection?: GitHubConnectionRecord;
   role: 'admin' | 'engineer' | 'reviewer';
   avatar: string;
   organizationId: string;
@@ -399,6 +419,32 @@ class RelationalDatabase {
 
   public getUserByEmail(email: string): UserRecord | undefined {
     return this.data.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  }
+
+  /** Returns only non-secret GitHub App installation metadata for the specified owner. */
+  public getGitHubConnectionForUser(userId: string): GitHubConnectionRecord | undefined {
+    const connection = this.getUserById(userId)?.githubConnection;
+    return connection ? structuredClone(connection) : undefined;
+  }
+
+  /** Associates installation metadata with one user; installation access tokens must never be persisted. */
+  public setGitHubConnectionForUser(userId: string, connection: GitHubConnectionRecord): boolean {
+    const user = this.getUserById(userId);
+    if (!user || !Number.isSafeInteger(connection.installationId) || connection.installationId <= 0 ||
+        !Number.isSafeInteger(connection.accountId) || connection.accountId <= 0 ||
+        !connection.accountLogin.trim() || !['User', 'Organization'].includes(connection.accountType) ||
+        !['all', 'selected'].includes(connection.repositorySelection)) return false;
+    user.githubConnection = structuredClone(connection);
+    this.scheduleSave();
+    return true;
+  }
+
+  public removeGitHubConnectionForUser(userId: string): boolean {
+    const user = this.getUserById(userId);
+    if (!user?.githubConnection) return false;
+    delete user.githubConnection;
+    this.scheduleSave();
+    return true;
   }
 
   public addOrganization(organization: OrganizationRecord): void {
