@@ -211,7 +211,7 @@ app.post("/api/auth/logout", (req, res) => {
 });
 
 app.use("/api", (req, res, next) => {
-  if (req.path === "/health" || req.path === "/auth/signup" || req.path === "/auth/login" || req.path === "/auth/bootstrap" || req.path === "/github/webhook" || req.path === "/autonomy/heartbeat") return next();
+  if (req.path === "/health" || req.path === "/auth/signup" || req.path === "/auth/login" || req.path === "/auth/bootstrap" || req.path === "/github/webhook" || req.path === "/github/callback" || req.path === "/autonomy/heartbeat") return next();
   return authMiddleware(req as any, res, next);
 });
 app.use("/api/growth", growthRouter);
@@ -281,11 +281,38 @@ app.get("/api/github/meta", (_req, res) => {
 });
 
 // GitHub App installation: authenticated, session-bound, one-time state.
-function readSessionCookie(req: any): string {
-  const cookieHeader = String(req.headers.cookie || "");
-  const cookie = cookieHeader.split(";").map((part) => part.trim()).find((part) => part.startsWith("as_session="));
+function readCookie(req: any, name: string): string {
+  const prefix = name + "=";
+  const cookie = String(req.headers.cookie || "").split(";").map((part) => part.trim()).find((part) => part.startsWith(prefix));
   if (!cookie) return "";
-  try { return decodeURIComponent(cookie.slice("as_session=".length)); } catch { return ""; }
+  try { return decodeURIComponent(cookie.slice(prefix.length)); } catch { return ""; }
+}
+
+function readSessionCookie(req: any): string {
+  return readCookie(req, "as_session");
+}
+
+function signGitHubCallbackTicket(payload: string): string {
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret) throw new Error("SESSION_SECRET is required for GitHub callback state");
+  return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+function verifyGitHubCallbackTicket(value: string): any | null {
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret || !value || value.length > 2048) return null;
+  const separator = value.lastIndexOf(".");
+  if (separator <= 0) return null;
+  const payload = value.slice(0, separator);
+  const signature = value.slice(separator + 1);
+  const expected = signGitHubCallbackTicket(payload);
+  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!parsed.userId || !parsed.organizationId || !parsed.sessionHash || !parsed.stateHash ||
+        !Number.isFinite(parsed.expiresAt) || parsed.expiresAt <= Date.now()) return null;
+    return parsed;
+  } catch { return null; }
 }
 
 function githubAppJwt(): string {
@@ -314,16 +341,22 @@ app.get("/api/github/install", authRateLimit, async (req: any, res) => {
     const callback = new URL(callbackUrl);
     if (process.env.NODE_ENV === "production" && callback.protocol !== "https:") return res.status(503).json({ success: false, error: "GitHub callback must use HTTPS." });
     const state = crypto.randomBytes(32).toString("base64url");
+    const stateHash = crypto.createHash("sha256").update(state).digest("hex");
+    const sessionHash = crypto.createHash("sha256").update(sessionToken).digest("hex");
     const expiresAt = Date.now() + 10 * 60 * 1000;
     const stored = await db.createGitHubInstallState({
-      stateHash: crypto.createHash("sha256").update(state).digest("hex"),
-      userId: req.user.id,
-      organizationId: req.user.organizationId,
-      sessionHash: crypto.createHash("sha256").update(sessionToken).digest("hex"),
-      expiresAt,
-      createdAt: Date.now(),
+      stateHash, userId: req.user.id, organizationId: req.user.organizationId,
+      sessionHash, expiresAt, createdAt: Date.now(),
     });
     if (!stored) return res.status(503).json({ success: false, error: "Could not create a secure GitHub installation session." });
+    const ticketPayload = Buffer.from(JSON.stringify({
+      userId: req.user.id, organizationId: req.user.organizationId, sessionHash, stateHash, expiresAt,
+    })).toString("base64url");
+    const callbackTicket = ticketPayload + "." + signGitHubCallbackTicket(ticketPayload);
+    res.cookie("as_github_callback", callbackTicket, {
+      httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax",
+      maxAge: 10 * 60 * 1000, path: "/api/github/callback",
+    });
     await db.flush();
     return res.json({ success: true, installUrl: "https://github.com/apps/" + slug + "/installations/new?state=" + encodeURIComponent(state), expiresAt });
   } catch {
@@ -337,17 +370,24 @@ app.get("/api/github/callback", async (req: any, res) => {
     const state = typeof req.query.state === "string" ? req.query.state : "";
     const installationId = Number(req.query.installation_id);
     const setupAction = typeof req.query.setup_action === "string" ? req.query.setup_action : "";
-    const sessionToken = readSessionCookie(req);
-    if (!state || state.length > 256 || !Number.isSafeInteger(installationId) || installationId <= 0 || !["install", "update"].includes(setupAction) || !sessionToken) {
+    const ticket = verifyGitHubCallbackTicket(readCookie(req, "as_github_callback"));
+    if (!state || state.length > 256 || !Number.isSafeInteger(installationId) || installationId <= 0 ||
+        !["install", "update"].includes(setupAction) || !ticket ||
+        crypto.createHash("sha256").update(state).digest("hex") !== ticket.stateHash) {
+      res.clearCookie("as_github_callback", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/github/callback" });
       return res.status(400).json({ success: false, error: "Invalid GitHub installation callback." });
     }
-    const stateHash = crypto.createHash("sha256").update(state).digest("hex");
-    const sessionHash = crypto.createHash("sha256").update(sessionToken).digest("hex");
-    if (!await db.consumeGitHubInstallState(stateHash, req.user.id, req.user.organizationId, sessionHash)) {
+    if (!await db.consumeGitHubInstallState(ticket.stateHash, ticket.userId, ticket.organizationId, ticket.sessionHash)) {
       await db.flush();
+      res.clearCookie("as_github_callback", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/github/callback" });
       return res.status(400).json({ success: false, error: "GitHub installation state is invalid, expired, already used, or belongs to another session." });
     }
     await db.flush();
+    const callbackUser = db.getUserById(ticket.userId);
+    if (!callbackUser || callbackUser.organizationId !== ticket.organizationId) {
+      res.clearCookie("as_github_callback", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/github/callback" });
+      return res.status(404).json({ success: false, error: "Account not found." });
+    }
     const jwt = githubAppJwt();
     const headers = { Authorization: "Bearer " + jwt, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "AgentStation" };
     const installationResponse = await fetch("https://api.github.com/app/installations/" + installationId, { headers, signal: AbortSignal.timeout(10000) });
@@ -363,7 +403,7 @@ app.get("/api/github/callback", async (req: any, res) => {
     if (!tokenResponse.ok) return res.status(403).json({ success: false, error: "Could not mint a short-lived GitHub installation token." });
     const tokenData = await tokenResponse.json() as any;
     if (typeof tokenData.token !== "string" || !tokenData.token || !tokenData.expires_at) return res.status(502).json({ success: false, error: "GitHub returned an invalid short-lived token response." });
-    const saved = db.setGitHubConnectionForUser(req.user.id, {
+    const saved = db.setGitHubConnectionForUser(callbackUser.id, {
       installationId, accountId: account.id, accountLogin: account.login, accountType: account.type,
       repositorySelection: installation.repository_selection === "all" ? "all" : "selected",
       permissions: tokenData.permissions && typeof tokenData.permissions === "object" ? tokenData.permissions : {},
@@ -372,6 +412,7 @@ app.get("/api/github/callback", async (req: any, res) => {
     if (!saved) return res.status(500).json({ success: false, error: "Could not save the GitHub installation connection." });
     await db.flush();
     // The installation token is deliberately discarded and is never persisted or returned.
+    res.clearCookie("as_github_callback", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/github/callback" });
     return res.redirect(303, "/settings?github=connected");
   } catch {
     return res.status(503).json({ success: false, error: "GitHub installation verification failed. Start the connection again." });
