@@ -24,7 +24,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { GITHUB_REPO_INFO } from '../data/defaults';
-import { WorkspaceFile, CiStatusInfo } from '../types';
+import { WorkspaceFile, CiStatusInfo, TestExecutionResult } from '../types';
 
 interface GitHubModalProps {
   isOpen: boolean;
@@ -35,6 +35,7 @@ interface GitHubModalProps {
   onBranchChange?: (branch: string) => void;
   onSuccessNotification?: (message: string) => void;
   missionId?: string;
+  execution?: TestExecutionResult;
 }
 
 export interface RemoteBranchInfo {
@@ -73,6 +74,7 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   onBranchChange,
   onSuccessNotification,
   missionId,
+  execution,
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'push' | 'branches' | 'workflow' | 'docker' | 'webhooks'>('push');
@@ -84,6 +86,8 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   const [isLoadingRepositories, setIsLoadingRepositories] = useState(false);
   const [isSavingRepository, setIsSavingRepository] = useState(false);
   const [isConnectingGitHub, setIsConnectingGitHub] = useState(false);
+  const [isPublishingMission, setIsPublishingMission] = useState(false);
+  const [publishedPullRequest, setPublishedPullRequest] = useState<string | null>(null);
   const [isBindingMission, setIsBindingMission] = useState(false);
   const [missionBinding, setMissionBinding] = useState<{repository:string;branch:string;baseSha:string}|null>(null);
   const [workspaceStatus, setWorkspaceStatus] = useState<{fileCount:number;baseSha:string;expiresAt:string}|null>(null);
@@ -252,6 +256,35 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
       setRepositoryError(error.message || 'Could not select repository branch.');
     } finally {
       setIsSavingRepository(false);
+    }
+  };
+
+  const publishMissionPullRequest = async () => {
+    if (!missionId || !execution?.diffHash || execution.diffTruncated) return;
+    const changedCount = execution.changedFiles?.length || 0;
+    const testsPassed = execution.exitCode === 0 && execution.testsPassed > 0;
+    const accepted = window.confirm(
+      `Create a GitHub pull request with ${changedCount} reviewed file changes from base ${execution.baseSha?.slice(0, 8) || 'the pinned commit'}? ${testsPassed ? 'Sandbox tests passed.' : 'Tests are not confirmed as passing.'} This will publish a new branch, not modify the selected base branch directly.`
+    );
+    if (!accepted) return;
+    setIsPublishingMission(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch(`/api/missions/${encodeURIComponent(missionId)}/github/publish`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diffHash: execution.diffHash, confirmPublish: true }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || typeof data.pullRequestUrl !== 'string') {
+        throw new Error(data.error || 'GitHub pull request creation failed.');
+      }
+      setPublishedPullRequest(data.pullRequestUrl);
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Could not publish the approved repository changes.');
+    } finally {
+      setIsPublishingMission(false);
     }
   };
 
@@ -798,6 +831,24 @@ git push -u origin main`;
               </select>
             </div>
           )}
+          {missionId && execution?.diff && (
+            <details className="rounded-lg border border-slate-800 bg-slate-950/70">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-emerald-300">
+                Review repository diff · {execution.changedFiles?.length || 0} files · base {execution.baseSha?.slice(0, 8) || 'pinned'}
+              </summary>
+              {execution.diffTruncated && <p className="px-3 py-2 text-[11px] text-amber-300">This diff exceeds the safe review limit. Publishing is disabled until the change set is narrowed.</p>}
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words border-t border-slate-800 px-3 py-2 text-[10px] leading-relaxed text-slate-200">{execution.diff}</pre>
+              {execution.diffHash && !execution.diffTruncated && (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 px-3 py-2">
+                  <span className="text-[10px] text-slate-400">SHA-256: {execution.diffHash.slice(0, 16)}… · {execution.exitCode === 0 && execution.testsPassed > 0 ? `${execution.testsPassed} tests passed` : 'Tests not confirmed as passing'}</span>
+                  <button type="button" onClick={publishMissionPullRequest} disabled={isPublishingMission || !execution.changedFiles?.length} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-500 disabled:opacity-50">
+                    {isPublishingMission ? 'Creating GitHub PR…' : 'Approve & create GitHub PR'}
+                  </button>
+                </div>
+              )}
+            </details>
+          )}
+          {publishedPullRequest && <a href={publishedPullRequest} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-emerald-300 underline">Open created GitHub pull request</a>}
           {missionId && selectedRepository && (
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={bindRepositoryToMission} disabled={isBindingMission || isSavingRepository || !selectedBranch} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
