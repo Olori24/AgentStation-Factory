@@ -1493,6 +1493,7 @@ async function runGeneratedFileTests(files: any[], missionId?: string, userId?: 
           testsPassed: passed ? Number(passed[1]) : 0,
           testsFailed: failed ? Number(failed[1]) : (hasTests && Number(result.exitCode ?? 1) !== 0 ? 1 : 0),
           durationMs: Number(result.durationMs ?? 0),
+          diff: String(result.diff || "").slice(0, 150000),
         };
       }
     } catch (error: any) {
@@ -2193,6 +2194,31 @@ tests/test_${slug || "app"}.py::test_empty_payload_raises PASSED        [100%]
       },
     ],
   };
+
+  fallbackMission.execution = await runGeneratedFileTests(
+    fallbackMission.files,
+    repositoryMissionId || (typeof missionId === "string" ? missionId : undefined),
+    (req as any).user?.id
+  );
+  const validationPassed = fallbackMission.execution.exitCode === 0 && fallbackMission.execution.testsPassed > 0;
+  fallbackMission.video.scenes[2] = {
+    ...fallbackMission.video.scenes[2],
+    badge: validationPassed ? "VERIFIED IN SANDBOX" : "VALIDATION PENDING",
+    heading: validationPassed ? "TESTS EXECUTED" : "TESTS NOT VERIFIED",
+    subheading: validationPassed
+      ? "The generated test suite completed successfully in the isolated sandbox."
+      : "Execution evidence is pending or tests did not pass. No successful test result is claimed.",
+    bulletPoints: validationPassed
+      ? [`${fallbackMission.execution.testsPassed} tests passed`, "Isolated sandbox execution completed", "Exit code 0 recorded"]
+      : ["Generated files prepared", "Sandbox result not confirmed as passing", "Review execution output before approval"],
+  };
+  fallbackMission.logs = fallbackMission.logs.map((log: any) =>
+    log.role === "qa"
+      ? { ...log, message: validationPassed
+          ? `Executed in isolated sandbox: ${fallbackMission.execution.testsPassed} tests passed.`
+          : `Verification pending or unsuccessful: ${fallbackMission.execution.stdout}` }
+      : log
+  );
 
   res.json({ success: true, mission: fallbackMission, source: "generator" });
 });
