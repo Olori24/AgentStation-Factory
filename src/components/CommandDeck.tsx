@@ -118,7 +118,7 @@ export const CommandDeck: React.FC<CommandDeckProps> = ({
           value={completed.length}
           tone="emerald"
           hint={`${totalTests} tests passed across all work`}
-          onClick={() => latestCompleted && onSelectMission(latestCompleted)}
+          onClick={latestCompleted ? () => onSelectMission(latestCompleted) : undefined}
         />
         <StatTile
           icon={<FileCode className="w-4 h-4" />}
