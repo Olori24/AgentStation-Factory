@@ -262,9 +262,9 @@ export const Modal: React.FC<{
         return;
       }
       if (e.key === 'Tab') {
-        const items = Array.from(
-          panelRef.current?.querySelectorAll<HTMLElement>(focusableSelector) || []
-        ).filter((item) => item.offsetParent !== null);
+        const items = (Array.from(
+          panelRef.current?.querySelectorAll(focusableSelector) || []
+        ) as HTMLElement[]).filter((item) => item.offsetParent !== null);
         if (items.length === 0) {
           e.preventDefault();
           panelRef.current?.focus();
