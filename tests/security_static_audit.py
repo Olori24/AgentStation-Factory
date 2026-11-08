@@ -235,3 +235,23 @@ def test_github_repository_and_branch_selection_are_installation_scoped():
     assert "agentstation-github-repository" in modal
     assert "Select repository branch" in modal
     assert "legacy push controls are not yet bound" in modal
+
+
+def test_github_mission_binding_is_owner_scoped_and_pins_base_sha():
+    server = read("server.ts")
+    db = read("server/db.ts")
+    route = server.split('app.post("/api/missions/:id/github-binding"', 1)[1].split('app.delete("/api/missions/:id"', 1)[0]
+    mission = db.split("export interface DbMissionRecord", 1)[1].split("export interface WorkspaceFileRecord", 1)[0]
+    assert 'mission.userId !== req.user.id' in route
+    assert 'mission.organizationId !== req.user.organizationId' in route
+    assert 'createUserInstallationToken(req.user.id)' in route
+    assert 'requestedBranch !== selected.defaultBranch' in route
+    assert 'branchData.commit?.sha' in route
+    assert 'githubRepositoryId: selected.id' in route
+    assert 'githubInstallationId: connection.installationId' in route
+    assert 'baseSha,' in route
+    assert 'currentMission.status === "running"' in route
+    assert "githubRepositoryId?: number" in mission
+    assert "githubInstallationId?: number" in mission
+    assert "baseSha?: string" in mission
+    assert '"Cache-Control", "no-store"' in route
