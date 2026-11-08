@@ -9,6 +9,13 @@ export interface GitHubRepositorySelection {
 }
 
 /** Non-secret GitHub App installation metadata. Installation tokens are minted just-in-time and never persisted here. */
+export interface GitHubRepositorySelection {
+  id: number;
+  fullName: string;
+  defaultBranch?: string;
+  selectedAt: string;
+}
+
 export interface GitHubConnectionRecord {
   installationId: number;
   accountId: number;
