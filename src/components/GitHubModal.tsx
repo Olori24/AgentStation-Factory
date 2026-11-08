@@ -34,6 +34,7 @@ interface GitHubModalProps {
   missionFiles?: WorkspaceFile[];
   onBranchChange?: (branch: string) => void;
   onSuccessNotification?: (message: string) => void;
+  missionId?: string;
 }
 
 export interface RemoteBranchInfo {
@@ -71,6 +72,7 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   missionFiles,
   onBranchChange,
   onSuccessNotification,
+  missionId,
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'push' | 'branches' | 'workflow' | 'docker' | 'webhooks'>('push');
@@ -81,6 +83,8 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
   const [repositoryError, setRepositoryError] = useState<string | null>(null);
   const [isLoadingRepositories, setIsLoadingRepositories] = useState(false);
   const [isSavingRepository, setIsSavingRepository] = useState(false);
+  const [isBindingMission, setIsBindingMission] = useState(false);
+  const [missionBinding, setMissionBinding] = useState<{repository:string;branch:string;baseSha:string}|null>(null);
 
   const [webhooksList, setWebhooksList] = useState<any[]>([]);
   const [isLoadingWebhooks, setIsLoadingWebhooks] = useState<boolean>(false);
@@ -219,11 +223,33 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Branch selection failed.');
       setSelectedBranch(data.branch.name);
+      setSelectedRepository((previous) => previous ? { ...previous, defaultBranch: data.branch.name } : previous);
       onBranchChange?.(data.branch.name);
     } catch (error: any) {
       setRepositoryError(error.message || 'Could not select repository branch.');
     } finally {
       setIsSavingRepository(false);
+    }
+  };
+
+  const bindRepositoryToMission = async () => {
+    if (!missionId || !selectedRepository || !selectedBranch) return;
+    setIsBindingMission(true);
+    setRepositoryError(null);
+    try {
+      const response = await fetch(`/api/missions/${encodeURIComponent(missionId)}/github-binding`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: selectedBranch }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not bind this repository to the mission.');
+      setMissionBinding({ repository: data.mission.repository, branch: data.mission.branch, baseSha: data.mission.baseSha });
+    } catch (error: any) {
+      setRepositoryError(error.message || 'Mission repository binding failed.');
+    } finally {
+      setIsBindingMission(false);
     }
   };
 
@@ -722,8 +748,16 @@ git push -u origin main`;
               </select>
             </div>
           )}
+          {missionId && selectedRepository && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={bindRepositoryToMission} disabled={isBindingMission || isSavingRepository || !selectedBranch} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
+                {isBindingMission ? 'Verifying mission binding…' : 'Bind repository to this mission'}
+              </button>
+              {missionBinding && <span className="text-[10px] text-emerald-300">Bound: {missionBinding.repository} · {missionBinding.branch} · {missionBinding.baseSha.slice(0, 8)}</span>}
+            </div>
+          )}
           {repositoryError && <p role="alert" className="text-[11px] text-rose-300">{repositoryError}</p>}
-          <p className="text-[10px] text-slate-500">This selection is verified against your GitHub App installation and saved to your account. Existing legacy push controls are not yet bound to this repository.</p>
+          <p className="text-[10px] text-slate-500">Repository and branch selections are verified against your GitHub App installation. Mission binding records the exact base commit; legacy push controls remain separate and cannot publish this mission's changes.</p>
         </div>
 
         {/* Modal Content */}
