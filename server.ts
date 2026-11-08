@@ -2099,21 +2099,12 @@ pytest tests/
       },
     ],
     execution: {
-      command: `pytest -v tests/test_${slug || "app"}.py`,
-      stdout: `============================= test session starts ==============================
-platform linux -- Python 3.11.8, pytest-7.4.4
-rootdir: /workspace
-collected 3 items
-
-tests/test_${slug || "app"}.py::test_engine_initialization PASSED        [ 33%]
-tests/test_${slug || "app"}.py::test_workflow_execution PASSED          [ 66%]
-tests/test_${slug || "app"}.py::test_empty_payload_raises PASSED        [100%]
-
-============================== 3 passed in 0.07s ===============================
-[DevOps QA]: Clean execution. All tests verified in container sandbox.`,
-      testsPassed: 3,
+      command: "Not run",
+      stdout: "Verification pending. No test result has been recorded.",
+      testsPassed: 0,
       testsFailed: 0,
-      durationMs: 72,
+      durationMs: 0,
+      exitCode: -1,
     },
     video: {
       title: titleWords,
@@ -2148,10 +2139,10 @@ tests/test_${slug || "app"}.py::test_empty_payload_raises PASSED        [100%]
           id: "scene-3",
           sceneIndex: 2,
           durationSec: 4,
-          badge: "VERIFIED IN SANDBOX",
-          heading: "100% AUTOMATED QA PASS",
-          subheading: "Every function executed and proven in our sandbox container.",
-          bulletPoints: ["All unit tests passed", "Docker sandbox ready", "Zero runtime exceptions"],
+          badge: "VALIDATION PENDING",
+          heading: "TESTS NOT YET RUN",
+          subheading: "Generated tests must be executed before verification can be claimed.",
+          bulletPoints: ["Test suite generated", "Runtime execution pending", "No pass result claimed"],
           accentColor: "#f59e0b",
         },
         {
@@ -2188,7 +2179,7 @@ tests/test_${slug || "app"}.py::test_empty_payload_raises PASSED        [100%]
         role: "qa",
         agentName: "Sentinel (QA Auditor)",
         type: "terminal",
-        message: `Executed test suite in isolated sandbox. 3 passed in 0.07s.`,
+        message: "Preparing the test plan. Runtime verification is pending; no test result is claimed.",
       },
       {
         role: "creative",
