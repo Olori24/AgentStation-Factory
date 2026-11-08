@@ -495,6 +495,89 @@ app.get("/api/github/repositories", async (req: any, res) => {
   }
 });
 
+// Verify a repository against the current user's installation before binding it to their account.
+app.post("/api/github/repositories/select", async (req: any, res) => {
+  try {
+    await db.ready();
+    const repositoryId = Number(req.body?.repositoryId);
+    const fullName = typeof req.body?.fullName === "string" ? req.body.fullName.trim() : "";
+    if (!Number.isSafeInteger(repositoryId) || repositoryId <= 0 ||
+        !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(fullName)) {
+      return res.status(400).json({ success: false, error: "Choose a valid GitHub repository." });
+    }
+    const minted = await createUserInstallationToken(req.user.id);
+    if (!minted) return res.status(409).json({ success: false, error: "Connect a GitHub App installation first." });
+    const verify = await fetch("https://api.github.com/repos/" + fullName, {
+      headers: {
+        Authorization: "Bearer " + minted.token,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "AgentStation",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!verify.ok) return res.status(404).json({ success: false, error: "Repository is not accessible to this installation." });
+    const repository = await verify.json() as any;
+    if (repository.id !== repositoryId || repository.full_name?.toLowerCase() !== fullName.toLowerCase()) {
+      return res.status(409).json({ success: false, error: "Repository identity changed. Refresh the repository list." });
+    }
+    const current = db.getGitHubConnectionForUser(req.user.id);
+    if (!current || current.installationId !== minted.connection.installationId) {
+      return res.status(409).json({ success: false, error: "GitHub installation changed. Reconnect and try again." });
+    }
+    const selection = {
+      id: repository.id,
+      fullName: repository.full_name,
+      defaultBranch: typeof repository.default_branch === "string" ? repository.default_branch : undefined,
+      selectedAt: new Date().toISOString(),
+    };
+    const updated = {
+      ...current,
+      selectedRepositories: [selection],
+    };
+    if (!db.setGitHubConnectionForUser(req.user.id, updated)) {
+      return res.status(500).json({ success: false, error: "Could not save repository selection." });
+    }
+    return res.setHeader("Cache-Control", "no-store").json({ success: true, repository: selection });
+  } catch {
+    return res.status(503).json({ success: false, error: "Repository selection is temporarily unavailable." });
+  }
+});
+
+app.get("/api/github/repositories/selected/branches", async (req: any, res) => {
+  try {
+    await db.ready();
+    const connection = db.getGitHubConnectionForUser(req.user.id);
+    const selected = connection?.selectedRepositories?.[0];
+    if (!connection || !selected) return res.status(409).json({ success: false, error: "Select a repository first." });
+    const minted = await createUserInstallationToken(req.user.id);
+    if (!minted || minted.connection.installationId !== connection.installationId) {
+      return res.status(409).json({ success: false, error: "GitHub installation is unavailable. Reconnect and retry." });
+    }
+    const response = await fetch("https://api.github.com/repos/" + selected.fullName + "/branches?per_page=100", {
+      headers: {
+        Authorization: "Bearer " + minted.token,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "AgentStation",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return res.status(502).json({ success: false, error: "Could not retrieve repository branches." });
+    const branches = await response.json() as any;
+    return res.setHeader("Cache-Control", "no-store").json({
+      success: true,
+      repository: selected,
+      branches: Array.isArray(branches)
+        ? branches.filter((item: any) => typeof item?.name === "string" && item.commit?.sha)
+          .map((item: any) => ({ name: item.name, commitSha: item.commit.sha, protected: Boolean(item.protected) }))
+        : [],
+    });
+  } catch {
+    return res.status(503).json({ success: false, error: "Branch discovery is temporarily unavailable." });
+  }
+});
+
 // Real-time Git Repository Status
 app.get("/api/github/status", async (_req, res) => {
   try {
