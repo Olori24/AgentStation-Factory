@@ -1070,9 +1070,59 @@ app.post("/api/terminal/exec", requireRole(["admin","engineer"]), async (req, re
   }
 });
 
+// Run only test suites that are actually present in the generated project.
+// Never trust test output supplied by the language model as execution evidence.
+async function runGeneratedFileTests(files: any[], missionId?: string) {
+  const safeFiles = files
+    .filter((file) => file && typeof file.path === "string" && typeof file.content === "string")
+    .map((file) => ({ path: file.path, content: file.content }));
+
+  const hasPythonTests = safeFiles.some((file) => /(^|\\/)tests\\/.*\\.py$/i.test(file.path));
+  const hasNodeTests = safeFiles.some((file) => /(^|\\/)([^/]+\\.)?(test|spec)\\.[cm]?js$/i.test(file.path));
+  if (!hasPythonTests && !hasNodeTests) {
+    return {
+      command: "Not run",
+      stdout: "No supported automated test files were generated. Runtime verification is pending.",
+      exitCode: -1,
+      testsPassed: 0,
+      testsFailed: 0,
+      durationMs: 0,
+    };
+  }
+
+  const command = hasPythonTests ? "python3 -m pytest -q tests" : "node --test";
+  try {
+    const result = await executeSandboxedCommand(command, {
+      missionId,
+      files: safeFiles,
+      timeoutMs: 60000,
+    });
+    const output = `${result.stdout || ""}${result.stderr ? `\\n${result.stderr}` : ""}`;
+    const passed = output.match(/(\\d+)\\s+passed/i);
+    const failed = output.match(/(\\d+)\\s+failed/i);
+    return {
+      command,
+      stdout: output || (result.exitCode === 0 ? "Command exited successfully with no output." : "Test command returned no output."),
+      exitCode: result.exitCode,
+      testsPassed: passed ? Number(passed[1]) : 0,
+      testsFailed: failed ? Number(failed[1]) : (result.exitCode === 0 ? 0 : 1),
+      durationMs: result.durationMs,
+    };
+  } catch (error: any) {
+    return {
+      command,
+      stdout: `Tests were not executed: ${error?.message || "sandbox unavailable"}`,
+      exitCode: -1,
+      testsPassed: 0,
+      testsFailed: 0,
+      durationMs: 0,
+    };
+  }
+}
+
 // Run Autonomous Multi-Agent Squad
 app.post("/api/agents/run", requireRole(["admin","engineer"]), async (req, res) => {
-  const { prompt, provider = "gemini", ollamaModel = "llama3" } = req.body || {};
+  const { prompt, provider = "gemini", ollamaModel = "llama3", missionId } = req.body || {};
   const ollamaUrl = process.env.OLLAMA_URL || (process.env.NODE_ENV !== "production" ? "http://127.0.0.1:11434" : "");
   if (!prompt || typeof prompt !== "string" || prompt.length > 20000) {
     return res.status(400).json({ error: "Missing or invalid prompt" });
@@ -1255,14 +1305,7 @@ Return a valid JSON object matching EXACTLY this schema:
                     missionTitle: parsed.missionTitle || "Autonomous Mission",
                     gitCommitMessage: parsed.gitCommitMessage || `feat: ${parsed.missionTitle || "agent sync"}`,
                     files: parsed.files,
-                    execution: {
-                      command: "Not run",
-                      stdout: "Code generation completed. Tests have not been executed in a runtime.",
-                      exitCode: -1,
-                      testsPassed: 0,
-                      testsFailed: 0,
-                      durationMs: 0,
-                    },
+                    execution: await runGeneratedFileTests(parsed.files, typeof missionId === "string" ? missionId : undefined),
                     video: parsed.video || null,
                     logs: parsed.logs || [],
                   },
@@ -1310,14 +1353,7 @@ Return a valid JSON object matching EXACTLY this schema:
                     missionTitle: parsed.missionTitle || `Autonomous ${prompt.slice(0, 30)}`,
                     gitCommitMessage: parsed.gitCommitMessage || `feat: implement ${prompt.slice(0, 40)}`,
                     files: parsed.files,
-                    execution: {
-                      command: "Not run",
-                      stdout: "Code generation completed. Tests have not been executed in a runtime.",
-                      exitCode: -1,
-                      testsPassed: 0,
-                      testsFailed: 0,
-                      durationMs: 0,
-                    },
+                    execution: await runGeneratedFileTests(files, typeof missionId === "string" ? missionId : undefined),
                     video: parsed.video || null,
                     logs: parsed.logs || [],
                   },
